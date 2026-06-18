@@ -400,6 +400,16 @@
                 
                 <!-- Canvas Floating Header Toolbar -->
                 <div class="absolute top-4 left-4 z-20 flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-md">
+                    <!-- Undo / Redo -->
+                    <button id="undo-btn" onclick="triggerUndo()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Undo (Ctrl+Z)" disabled>
+                        <i data-lucide="undo-2" class="w-4 h-4"></i>
+                    </button>
+                    <button id="redo-btn" onclick="triggerRedo()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed" title="Redo (Ctrl+Y)" disabled>
+                        <i data-lucide="redo-2" class="w-4 h-4"></i>
+                    </button>
+
+                    <div class="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1"></div>
+
                     <button onclick="zoomIn()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg transition-all" title="Zoom In">
                         <i data-lucide="zoom-in" class="w-4 h-4"></i>
                     </button>
@@ -843,6 +853,13 @@
         }
 
         // --- HISTORY MANAGEMENT ---
+        function syncUndoRedoUI() {
+            const undoBtn = document.getElementById('undo-btn');
+            const redoBtn = document.getElementById('redo-btn');
+            if (undoBtn) undoBtn.disabled = undoStack.length <= 1;
+            if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+        }
+
         function pushHistory() {
             const stateClone = JSON.stringify(state);
             // Don't push duplicates
@@ -853,6 +870,7 @@
                 undoStack.shift();
             }
             redoStack = []; // Clear redo on action
+            syncUndoRedoUI();
         }
 
         function triggerUndo() {
@@ -863,6 +881,7 @@
                 state = JSON.parse(prev);
                 initSliders();
                 updateUI();
+                syncUndoRedoUI();
             }
         }
 
@@ -873,6 +892,7 @@
                 state = JSON.parse(next);
                 initSliders();
                 updateUI();
+                syncUndoRedoUI();
             }
         }
 
