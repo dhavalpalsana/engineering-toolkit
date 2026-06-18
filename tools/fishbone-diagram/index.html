@@ -1271,9 +1271,7 @@
             }
 
             return lines;
-        }
-
-        // Stores dynamically-computed SVG canvas dimensions for fitCanvas()
+        }        // Stores dynamically-computed SVG canvas dimensions for fitCanvas()
         let _svgW = 1000, _svgH = 600;
 
         function renderFishbone() {
@@ -1284,272 +1282,270 @@
             const boneOffset = state.layout?.boneOffset || 110;
 
             const textPrimaryColor = isDark ? '#f8fafc' : '#0f172a';
-            const textMutedColor = isDark ? '#94a3b8' : '#475569';
-            const boneColor = isDark ? '#334155' : '#cbd5e1';
+            const textMutedColor   = isDark ? '#94a3b8' : '#475569';
+            const boneColor        = isDark ? '#334155' : '#cbd5e1';
 
-            const C = state.categories.length;
+            const C           = state.categories.length;
+            const causeFontSz = Math.round(10 * fontScale);
+            const LINE_H      = causeFontSz + 3.5;   // px per wrapped line
+            const CAUSE_PAD   = 11;                   // vertical gap between successive cause blocks
+            const START_PAD   = 18;                   // gap from bone tip to first cause
+            const USABLE_FRAC = 0.82;                 // causes use this fraction of bone span
 
-            // --- DYNAMIC LAYOUT COMPUTATION ---
-            // Min vertical span each cause needs (px between consecutive cause ticks)
-            const MIN_CAUSE_SPACING = 24;
-            // Min horizontal clearance between adjacent category bones
-            const MIN_CAT_SPACING = 140;
+            // Layout constants – xMin=240 ensures the leftmost category always has
+            // at least ~130 px of cause-label space before the canvas edge.
+            const spineStart      = 60;
+            const xMin            = 240;
+            const MIN_CAT_SPACING = 150;
+            const headW           = 180;
+            const headMargin      = 20;
 
-            const maxCausesPerBone = C === 0 ? 0 : Math.max(...state.categories.map(c => c.causes.length));
+            // ── PHASE 1: compute minBoneVSpan from actual wrapped-text heights ──────
+            // We use branchWidth as a conservative estimate of cause width; for most
+            // categories the real available width will be ≥ this, so wrapping produces
+            // ≤ lines ⟹ actual height ≤ estimated ⟹ no overflow.
+            const maxBoneTextH = C === 0 ? 0 : Math.max(...state.categories.map(cat =>
+                cat.causes.reduce((sum, cause) => {
+                    const obj   = getCauseObj(cause);
+                    const lines = svgWrapText(obj.text, branchWidth - 6, causeFontSz);
+                    return sum + lines.length * LINE_H + CAUSE_PAD;
+                }, START_PAD)   // begin accumulation with the initial gap from bone tip
+            ));
 
-            // Height: driven by how many causes we need to fit without overlap.
-            // The bone runs from yOuter → spineY. Causes are spread over ~62% of its
-            // vertical length. Minimum vertical bone span = maxCauses * MIN_CAUSE_SPACING / 0.62.
-            const minBoneVSpan = Math.max(225, Math.ceil(maxCausesPerBone * MIN_CAUSE_SPACING / 0.62));
-            const SVG_PAD_V = 80;  // headroom above/below bone tip for category label
-            const svgHeight = Math.max(600, 2 * (minBoneVSpan + SVG_PAD_V));
-            const spineY = svgHeight / 2;  // spine always runs through vertical centre
-            const yOuterTop = spineY - minBoneVSpan;
+            const minBoneVSpan = Math.max(225, Math.ceil(maxBoneTextH / USABLE_FRAC));
+            const SVG_PAD_V    = 90;
+            const svgHeight    = Math.max(600, 2 * (minBoneVSpan + SVG_PAD_V));
+            const spineY       = svgHeight / 2;
+            const yOuterTop    = spineY - minBoneVSpan;
             const yOuterBottom = spineY + minBoneVSpan;
 
-            // Width: driven by how many categories we need to fit side-by-side.
-            const headW = 180;
-            const headMargin = 20;
+            // ── Width: expand to fit all categories without crowding ─────────────────
             const minCatSpread = C > 1 ? (C - 1) * MIN_CAT_SPACING : 0;
-            const spineStart = 60;
-            const xMin = 130;
-            // xMax must leave room for head box at the right end
-            const xMax = Math.max(720, xMin + minCatSpread);
-            const spineEnd = xMax + boneOffset + headMargin;  // spine tip before head
-            const svgWidth = Math.max(1000, spineEnd + headW + 30);
+            const xMax         = Math.max(720, xMin + minCatSpread);
+            const spineEnd     = xMax + boneOffset + headMargin;
+            const svgWidth     = Math.max(1000, spineEnd + headW + 30);
+            const spineSpacing = C > 1 ? (xMax - xMin) / (C - 1) : 0;
 
-            // Cache for fitCanvas
             _svgW = svgWidth;
             _svgH = svgHeight;
-
-            // Update SVG viewBox to match computed canvas size
             svgElement.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
 
-            let g = "";
+            let g = '';
 
-            // --- 1. SPINE ---
+            // ── 1. SPINE ─────────────────────────────────────────────────────────────
             g += `
                 <g class="spine-group">
-                    <line x1="${spineStart}" y1="${spineY}" x2="${spineEnd}" y2="${spineY}" 
+                    <line x1="${spineStart}" y1="${spineY}" x2="${spineEnd}" y2="${spineY}"
                           stroke="${pal.primary}" stroke-width="4.5" stroke-linecap="round" />
-                    <path d="M${spineEnd},${spineY} L${spineEnd - 16},${spineY - 10} L${spineEnd - 12},${spineY} L${spineEnd - 16},${spineY + 10} Z" 
+                    <path d="M${spineEnd},${spineY} L${spineEnd-16},${spineY-10} L${spineEnd-12},${spineY} L${spineEnd-16},${spineY+10} Z"
                           fill="${pal.primary}" />
                 </g>
             `;
 
-            // --- 2. EFFECT (THE HEAD) ---
-            const headX = spineEnd + 15;
-            const headY = spineY;
-            const headH = 90;
-            
-            const effectFontSize = Math.round(13 * fontScale);
-            const wrappedEffect = svgWrapText(state.effect, headW - 20, effectFontSize);
-            const effectBoxY = headY - headH / 2;
+            // ── 2. EFFECT (HEAD) ─────────────────────────────────────────────────────
+            const headX        = spineEnd + 15;
+            const headH        = 90;
+            const effectFontSz = Math.round(13 * fontScale);
+            const wrappedEff   = svgWrapText(state.effect, headW - 20, effectFontSz);
+            const effBoxY      = spineY - headH / 2;
 
-            let headShape = "";
+            let headShape = '';
             if (state.shapeStyle === 'hexagon') {
-                const rx1 = headX;
-                const rx2 = headX + 30;
-                const rx3 = headX + headW - 30;
-                const rx4 = headX + headW;
-                const ry1 = effectBoxY;
-                const ry2 = headY;
-                const ry3 = effectBoxY + headH;
-                headShape = `<polygon points="${rx1},${ry2} ${rx2},${ry1} ${rx3},${ry1} ${rx4},${ry2} ${rx3},${ry3} ${rx2},${ry3}" 
-                                      fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2.5" filter="url(#box-shadow)" />`;
+                headShape = `<polygon points="${headX},${spineY} ${headX+30},${effBoxY} ${headX+headW-30},${effBoxY} ${headX+headW},${spineY} ${headX+headW-30},${effBoxY+headH} ${headX+30},${effBoxY+headH}"
+                                       fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2.5" filter="url(#box-shadow)" />`;
             } else if (state.shapeStyle === 'sharp') {
-                headShape = `<rect x="${headX}" y="${effectBoxY}" width="${headW}" height="${headH}" 
+                headShape = `<rect x="${headX}" y="${effBoxY}" width="${headW}" height="${headH}"
                                    fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2" filter="url(#box-shadow)" />`;
             } else {
-                headShape = `<rect x="${headX}" y="${effectBoxY}" width="${headW}" height="${headH}" rx="16" ry="16" 
+                headShape = `<rect x="${headX}" y="${effBoxY}" width="${headW}" height="${headH}" rx="16" ry="16"
                                    fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2.5" filter="url(#box-shadow)" />`;
             }
 
-            g += `
-                <g class="head-group cursor-pointer select-none" onclick="triggerInlineEdit({type: 'effect'}, event)">
-                    ${headShape}
-                    <text font-family="'Plus Jakarta Sans', sans-serif" font-size="${effectFontSize}" font-weight="700" fill="${pal.textOnPrimary}">
-            `;
-            
-            const lineSpacing = effectFontSize + 4;
-            const totalTextHeight = wrappedEffect.length * lineSpacing;
-            const startTextY = headY - totalTextHeight / 2 + effectFontSize - 2;
+            const effLineSp  = effectFontSz + 4;
+            const effTotalH  = wrappedEff.length * effLineSp;
+            const effStartY  = spineY - effTotalH / 2 + effectFontSz - 2;
 
-            wrappedEffect.forEach((line, idx) => {
-                g += `<tspan x="${headX + headW / 2}" y="${startTextY + idx * lineSpacing}" text-anchor="middle">${escapeHtml(line)}</tspan>`;
+            g += `<g class="head-group cursor-pointer select-none" onclick="triggerInlineEdit({type:'effect'},event)">
+                      ${headShape}
+                      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="${effectFontSz}" font-weight="700" fill="${pal.textOnPrimary}">`;
+            wrappedEff.forEach((line, i) => {
+                g += `<tspan x="${headX + headW/2}" y="${effStartY + i * effLineSp}" text-anchor="middle">${escapeHtml(line)}</tspan>`;
             });
-            g += `
-                    </text>
-                    <rect x="${headX}" y="${effectBoxY}" width="${headW}" height="${headH}" fill="transparent" stroke="transparent" class="hover:stroke-teal-300 hover:stroke-[2] transition-all" />
-                </g>
-            `;
+            g += `</text>
+                  <rect x="${headX}" y="${effBoxY}" width="${headW}" height="${headH}"
+                        fill="transparent" stroke="transparent" class="hover:stroke-teal-300 hover:stroke-[2] transition-all" />
+                </g>`;
 
-            // --- 3. CATEGORIES & CAUSES (RIBS) ---
+            // ── 3. CATEGORIES & CAUSES ───────────────────────────────────────────────
             if (C > 0) {
-                const spineSpacing = C > 1 ? (xMax - xMin) / (C - 1) : 0;
-
                 state.categories.forEach((cat, idx) => {
-                    const isTop = idx % 2 === 0;
-                    const xConn = C > 1 ? xMin + idx * spineSpacing : (xMin + xMax) / 2;
-                    
+                    const isTop  = idx % 2 === 0;
+                    const yDir   = isTop ? 1 : -1;   // +1 = downward for top bones, -1 = upward for bottom
                     const yOuter = isTop ? yOuterTop : yOuterBottom;
+                    const xConn  = C > 1 ? xMin + idx * spineSpacing : (xMin + xMax) / 2;
                     const xOuter = xConn - boneOffset;
 
-                    g += `
-                        <line x1="${xOuter}" y1="${yOuter}" x2="${xConn}" y2="${spineY}" 
-                              stroke="${pal.primary}" stroke-width="3" stroke-linecap="round" />
-                    `;
+                    // Left boundary for causes: right edge of the previous same-side bone
+                    const prevSameIdx = idx - 2;
+                    const xLeft = prevSameIdx < 0
+                        ? spineStart + 5
+                        : (xMin + prevSameIdx * spineSpacing) + 20;
 
-                    const catW = 145;
-                    const catH = 42;
-                    const catBoxX = xOuter - catW / 2;
-                    const catBoxY = isTop ? yOuter - catH : yOuter;
+                    // Main bone line
+                    g += `<line x1="${xOuter}" y1="${yOuter}" x2="${xConn}" y2="${spineY}"
+                                stroke="${pal.primary}" stroke-width="3" stroke-linecap="round" />`;
 
-                    let catShape = "";
-                    const borderStrokeColor = isDark ? pal.primaryLight : pal.primary;
-                    const fillBoxColor = isDark ? '#111827' : '#ffffff';
+                    // ── Category label box ───────────────────────────────────────────
+                    const catW   = 145;
+                    const catH   = 42;
+                    const catBX  = xOuter - catW / 2;
+                    const catBY  = isTop ? yOuter - catH : yOuter;
+                    const catFSz = Math.round(11 * fontScale);
+                    const bdrClr = isDark ? pal.primaryLight : pal.primary;
+                    const fillClr= isDark ? '#111827' : '#ffffff';
 
+                    let catShape = '';
                     if (state.shapeStyle === 'hexagon') {
-                        const cx1 = xOuter - catW / 2;
-                        const cx2 = xOuter - catW / 2 + 12;
-                        const cx3 = xOuter + catW / 2 - 12;
-                        const cx4 = xOuter + catW / 2;
-                        const cy1 = catBoxY;
-                        const cy2 = catBoxY + catH / 2;
-                        const cy3 = catBoxY + catH;
-                        catShape = `<polygon points="${cx1},${cy2} ${cx2},${cy1} ${cx3},${cy1} ${cx4},${cy2} ${cx3},${cy3} ${cx2},${cy3}" 
-                                             fill="${fillBoxColor}" stroke="${borderStrokeColor}" stroke-width="2" filter="url(#box-shadow)" />`;
+                        catShape = `<polygon points="${catBX},${catBY+catH/2} ${catBX+12},${catBY} ${catBX+catW-12},${catBY} ${catBX+catW},${catBY+catH/2} ${catBX+catW-12},${catBY+catH} ${catBX+12},${catBY+catH}"
+                                             fill="${fillClr}" stroke="${bdrClr}" stroke-width="2" filter="url(#box-shadow)" />`;
                     } else if (state.shapeStyle === 'sharp') {
-                        catShape = `<rect x="${catBoxX}" y="${catBoxY}" width="${catW}" height="${catH}" 
-                                           fill="${fillBoxColor}" stroke="${borderStrokeColor}" stroke-width="1.5" filter="url(#box-shadow)" />`;
+                        catShape = `<rect x="${catBX}" y="${catBY}" width="${catW}" height="${catH}"
+                                          fill="${fillClr}" stroke="${bdrClr}" stroke-width="1.5" filter="url(#box-shadow)" />`;
                     } else {
-                        catShape = `<rect x="${catBoxX}" y="${catBoxY}" width="${catW}" height="${catH}" rx="10" ry="10" 
-                                           fill="${fillBoxColor}" stroke="${borderStrokeColor}" stroke-width="2" filter="url(#box-shadow)" />`;
+                        catShape = `<rect x="${catBX}" y="${catBY}" width="${catW}" height="${catH}" rx="10" ry="10"
+                                          fill="${fillClr}" stroke="${bdrClr}" stroke-width="2" filter="url(#box-shadow)" />`;
                     }
 
-                    const catFontSize = Math.round(11 * fontScale);
-                    const wrappedCat = svgWrapText(cat.name, catW - 12, catFontSize);
+                    const wrCat    = svgWrapText(cat.name, catW - 12, catFSz);
+                    const catTSp   = catFSz + 3;
+                    const catTH    = wrCat.length * catTSp;
+                    const catTY    = catBY + catH/2 - catTH/2 + catFSz - 2;
+                    const plusX    = catBX + catW - 18;
+                    const plusY    = catBY + 4;
 
-                    g += `
-                        <g class="category-box group/cat cursor-pointer select-none" onclick="triggerInlineEdit({type: 'category', index: ${idx}}, event)">
-                            ${catShape}
-                            <text font-family="'Plus Jakarta Sans', sans-serif" font-size="${catFontSize}" font-weight="700" fill="${textPrimaryColor}">
-                    `;
-
-                    const catTextSpacing = catFontSize + 3;
-                    const catTextHeight = wrappedCat.length * catTextSpacing;
-                    const catTextStartY = catBoxY + catH / 2 - catTextHeight / 2 + catFontSize - 2;
-
-                    wrappedCat.forEach((line, lIdx) => {
-                        g += `<tspan x="${xOuter}" y="${catTextStartY + lIdx * catTextSpacing}" text-anchor="middle">${escapeHtml(line)}</tspan>`;
+                    g += `<g class="category-box group/cat cursor-pointer select-none" onclick="triggerInlineEdit({type:'category',index:${idx}},event)">
+                              ${catShape}
+                              <text font-family="'Plus Jakarta Sans',sans-serif" font-size="${catFSz}" font-weight="700" fill="${textPrimaryColor}">`;
+                    wrCat.forEach((line, li) => {
+                        g += `<tspan x="${xOuter}" y="${catTY + li * catTSp}" text-anchor="middle">${escapeHtml(line)}</tspan>`;
                     });
+                    g += `</text>
+                          <!-- Delete button -->
+                          <g class="opacity-0 group-hover/cat:opacity-100 transition-opacity" onclick="event.stopPropagation();deleteCategory(${idx});">
+                              <circle cx="${catBX+10}" cy="${catBY+10}" r="7.5" fill="#ef4444"/>
+                              <line x1="${catBX+7.5}" y1="${catBY+7.5}" x2="${catBX+12.5}" y2="${catBY+12.5}" stroke="#fff" stroke-width="1.5"/>
+                              <line x1="${catBX+12.5}" y1="${catBY+7.5}" x2="${catBX+7.5}" y2="${catBY+12.5}" stroke="#fff" stroke-width="1.5"/>
+                          </g>
+                          <!-- Add cause button -->
+                          <g class="opacity-0 group-hover/cat:opacity-100 transition-opacity" onclick="event.stopPropagation();addCause(${idx});">
+                              <circle cx="${plusX}" cy="${plusY+6}" r="7.5" fill="${pal.primary}"/>
+                              <line x1="${plusX-4.5}" y1="${plusY+6}" x2="${plusX+4.5}" y2="${plusY+6}" stroke="#fff" stroke-width="1.5"/>
+                              <line x1="${plusX}" y1="${plusY+1.5}" x2="${plusX}" y2="${plusY+10.5}" stroke="#fff" stroke-width="1.5"/>
+                          </g>
+                      </g>`;
 
-                    const plusX = catBoxX + catW - 18;
-                    const plusY = catBoxY + 4;
-                    
-                    g += `
-                            </text>
-                            
-                            <!-- Delete button (x) -->
-                            <g class="opacity-0 group-hover/cat:opacity-100 transition-opacity" onclick="event.stopPropagation(); deleteCategory(${idx});">
-                                <circle cx="${catBoxX + 10}" cy="${catBoxY + 10}" r="7.5" fill="#ef4444" />
-                                <line x1="${catBoxX + 7.5}" y1="${catBoxY + 7.5}" x2="${catBoxX + 12.5}" y2="${catBoxY + 12.5}" stroke="#ffffff" stroke-width="1.5" />
-                                <line x1="${catBoxX + 12.5}" y1="${catBoxY + 7.5}" x2="${catBoxX + 7.5}" y2="${catBoxY + 12.5}" stroke="#ffffff" stroke-width="1.5" />
-                            </g>
-
-                            <!-- Add cause button (+) -->
-                            <g class="opacity-0 group-hover/cat:opacity-100 transition-opacity" onclick="event.stopPropagation(); addCause(${idx});">
-                                <circle cx="${plusX}" cy="${plusY + 6}" r="7.5" fill="${pal.primary}" />
-                                <line x1="${plusX - 4.5}" y1="${plusY + 6}" x2="${plusX + 4.5}" y2="${plusY + 6}" stroke="#ffffff" stroke-width="1.5" />
-                                <line x1="${plusX}" y1="${plusY + 1.5}" x2="${plusX}" y2="${plusY + 10.5}" stroke="#ffffff" stroke-width="1.5" />
-                            </g>
-                        </g>
-                    `;
-
-                    // --- 3B. CAUSES ---
+                    // ── 3B. CAUSES – height-aware stacking ──────────────────────────
+                    // Unlike the old uniform-t formula, we accumulate actual rendered
+                    // text heights so that the attachment line of cause[i+1] always sits
+                    // below the top edge of cause[i]'s text block, guaranteeing zero overlap.
                     const M = cat.causes.length;
                     if (M > 0) {
+                        // Pass 1 – estimate heights (conservative: wrap at branchWidth)
+                        const estHeights = cat.causes.map(cause => {
+                            const obj   = getCauseObj(cause);
+                            const lines = svgWrapText(obj.text, branchWidth - 6, causeFontSz);
+                            return lines.length * LINE_H;
+                        });
+
+                        const totalEstH = estHeights.reduce((s, h) => s + h + CAUSE_PAD, START_PAD);
+                        const usableSpan = minBoneVSpan * USABLE_FRAC;
+                        // If all causes together need more space than the usable bone span,
+                        // compress everything uniformly so nothing falls off the bone.
+                        const hScale = totalEstH > usableSpan ? usableSpan / totalEstH : 1.0;
+
+                        // Pass 2 – render, using the actual available width per attachment
+                        let accumY = START_PAD * hScale;   // distance from yOuter along bone
+
                         cat.causes.forEach((cause, causeIdx) => {
-                            const t = M === 1 ? 0.5 : 0.19 + (causeIdx / (M - 0.5)) * 0.68;
-                            
-                            let xStart, yStart;
-                            if (isTop) {
-                                xStart = xOuter + t * (xConn - xOuter);
-                                yStart = yOuter + t * (spineY - yOuter);
-                            } else {
-                                xStart = xOuter + t * (xConn - xOuter);
-                                yStart = yOuter - t * (yOuter - spineY);
-                            }
+                            const scaledH   = estHeights[causeIdx] * hScale;
+                            const scaledPad = CAUSE_PAD * hScale;
 
-                            const xEnd = xStart - branchWidth;
-                            const yEnd = yStart;
+                            accumY += scaledH; // accumY is now at the LINE (bottom of text block)
 
-                            const lineDashedAttr = state.lineStyle === 'dashed' ? 'stroke-dasharray="4,3"' : '';
+                            // Y of the horizontal tick line on the diagram
+                            const yTick = yOuter + yDir * accumY;
 
-                            g += `
-                                <line x1="${xStart}" y1="${yStart}" x2="${xEnd}" y2="${yEnd}" 
-                                      stroke="${boneColor}" stroke-width="1.5" ${lineDashedAttr} />
-                            `;
+                            // Fraction t along the bone (0 = tip, 1 = spine junction)
+                            const t = Math.min(0.93, Math.max(0.04, accumY / minBoneVSpan));
+                            const xAttach = xOuter + t * (xConn - xOuter);
 
-                            const causeFontSize = Math.round(10 * fontScale);
-                            const causeObj = getCauseObj(cause);
-                            const wrappedCause = svgWrapText(causeObj.text, branchWidth - 10, causeFontSize);
-                            
-                            const textSpacing = causeFontSize + 3.5;
-                            const triggerY = yEnd - 3 - wrappedCause.length * textSpacing;
-                            const triggerH = wrappedCause.length * textSpacing + 6;
+                            // Horizontal space available to the left of the attachment:
+                            // from xAttach to xLeft, capped at branchWidth + 80 px
+                            const availW = Math.max(60, xAttach - xLeft - 5);
+                            const useW   = Math.min(branchWidth + 80, availW);
+                            const xLineL = Math.max(xLeft + 4, xAttach - useW); // left end of tick line
 
-                            // Custom color-coding based on status
-                            let currentTextColor = textMutedColor;
-                            const status = causeObj.status;
-                            const config = STATUS_CONFIG[status];
-                            let statusBackgroundRect = "";
-                            let strikethroughLine = "";
+                            // Re-wrap with the real available width
+                            const obj         = getCauseObj(cause);
+                            const finalLines  = svgWrapText(obj.text, useW - 6, causeFontSz);
+                            const textSp      = causeFontSz + 3.5;
+                            const triggerY    = yTick - 3 - finalLines.length * textSp;
+                            const triggerH    = finalLines.length * textSp + 6;
 
-                            if (config) {
-                                const fill = isDark ? config.bgDark : config.bgLight;
-                                const stroke = isDark ? config.borderDark : config.borderLight;
-                                currentTextColor = isDark ? config.textDark : config.textLight;
-                                statusBackgroundRect = `<rect x="${xEnd - 4}" y="${triggerY + 2}" width="${branchWidth + 8}" height="${triggerH - 4}" rx="6" ry="6" fill="${fill}" stroke="${stroke}" stroke-width="1.2" />`;
-                                
+                            // Status colour coding
+                            const status = obj.status;
+                            const cfg    = STATUS_CONFIG[status];
+                            let textClr  = textMutedColor;
+                            let sRect    = '';
+                            let strikeT  = '';
+
+                            if (cfg) {
+                                const bgFill = isDark ? cfg.bgDark   : cfg.bgLight;
+                                const bgStrk = isDark ? cfg.borderDark : cfg.borderLight;
+                                textClr = isDark ? cfg.textDark : cfg.textLight;
+                                sRect   = `<rect x="${xLineL-4}" y="${triggerY+2}" width="${useW+8}" height="${triggerH-4}"
+                                                 rx="6" ry="6" fill="${bgFill}" stroke="${bgStrk}" stroke-width="1.2"/>`;
                                 if (status === 'ruled-out') {
-                                    strikethroughLine = `<line x1="${xEnd + 2}" y1="${triggerY + triggerH / 2}" x2="${xStart - 4}" y2="${triggerY + triggerH / 2}" stroke="${currentTextColor}" stroke-width="1.5" opacity="0.6" />`;
+                                    strikeT = `<line x1="${xLineL+2}" y1="${triggerY+triggerH/2}"
+                                                     x2="${xAttach-4}" y2="${triggerY+triggerH/2}"
+                                                     stroke="${textClr}" stroke-width="1.5" opacity="0.6"/>`;
                                 }
                             }
 
-                            // No comment bubble drawn on canvas as per user request
-                            let commentIcon = "";
+                            const lineDashed = state.lineStyle === 'dashed' ? 'stroke-dasharray="4,3"' : '';
 
-                            g += `
-                                <g class="cause-text-group group/cause cursor-pointer select-none" 
-                                   onclick="triggerInlineEdit({type: 'cause', catIndex: ${idx}, causeIndex: ${causeIdx}}, event)"
-                                   onmouseenter="showCauseTooltip(event, ${idx}, ${causeIdx})"
-                                   onmousemove="showCauseTooltip(event, ${idx}, ${causeIdx})"
-                                   onmouseleave="hideCauseTooltip()">
-                                    ${statusBackgroundRect}
-                                    ${commentIcon}
-                            `;
+                            // Tick line from bone to left edge of text area
+                            g += `<line x1="${xAttach}" y1="${yTick}" x2="${xLineL}" y2="${yTick}"
+                                        stroke="${boneColor}" stroke-width="1.5" ${lineDashed}/>`;
 
-                            wrappedCause.forEach((cLine, lineIdx) => {
-                                const yLine = yEnd - 3 - (wrappedCause.length - 1 - lineIdx) * textSpacing;
-                                g += `<text x="${xEnd + 2}" y="${yLine}" font-family="'Plus Jakarta Sans', sans-serif" font-size="${causeFontSize}" font-weight="600" fill="${currentTextColor}">${escapeHtml(cLine)}</text>`;
+                            g += `<g class="cause-text-group group/cause cursor-pointer select-none"
+                                     onclick="triggerInlineEdit({type:'cause',catIndex:${idx},causeIndex:${causeIdx}},event)"
+                                     onmouseenter="showCauseTooltip(event,${idx},${causeIdx})"
+                                     onmousemove="showCauseTooltip(event,${idx},${causeIdx})"
+                                     onmouseleave="hideCauseTooltip()">
+                                      ${sRect}`;
+
+                            finalLines.forEach((cLine, li) => {
+                                const yLine = yTick - 3 - (finalLines.length - 1 - li) * textSp;
+                                g += `<text x="${xLineL+2}" y="${yLine}"
+                                            font-family="'Plus Jakarta Sans',sans-serif"
+                                            font-size="${causeFontSz}" font-weight="600"
+                                            fill="${textClr}">${escapeHtml(cLine)}</text>`;
                             });
 
-                            if (strikethroughLine) {
-                                g += strikethroughLine;
-                            }
+                            if (strikeT) g += strikeT;
 
-                            g += `
-                                    <!-- Delete cross -->
-                                    <g class="opacity-0 group-hover/cause:opacity-100 transition-opacity" onclick="event.stopPropagation(); deleteCause(${idx}, ${causeIdx});">
-                                        <circle cx="${xEnd - 8}" cy="${yEnd - 6}" r="5.5" fill="#ef4444" />
-                                        <line x1="${xEnd - 10}" y1="${yEnd - 8}" x2="${xEnd - 6}" y2="${yEnd - 4}" stroke="#ffffff" stroke-width="1.2" />
-                                        <line x1="${xEnd - 6}" y1="${yEnd - 8}" x2="${xEnd - 10}" y2="${yEnd - 4}" stroke="#ffffff" stroke-width="1.2" />
-                                    </g>
-                                    
-                                    <rect x="${xEnd}" y="${triggerY}" width="${branchWidth}" height="${triggerH}" fill="transparent" class="hover:stroke-teal-400 hover:stroke-[1] hover:stroke-dasharray-[2,2]" />
-                                </g>
-                            `;
+                            g += `<g class="opacity-0 group-hover/cause:opacity-100 transition-opacity"
+                                     onclick="event.stopPropagation();deleteCause(${idx},${causeIdx});">
+                                      <circle cx="${xLineL-8}" cy="${yTick-6}" r="5.5" fill="#ef4444"/>
+                                      <line x1="${xLineL-10}" y1="${yTick-8}" x2="${xLineL-6}" y2="${yTick-4}" stroke="#fff" stroke-width="1.2"/>
+                                      <line x1="${xLineL-6}" y1="${yTick-8}" x2="${xLineL-10}" y2="${yTick-4}" stroke="#fff" stroke-width="1.2"/>
+                                  </g>
+                                  <rect x="${xLineL}" y="${triggerY}" width="${useW}" height="${triggerH}"
+                                        fill="transparent" class="hover:stroke-teal-400 hover:stroke-[1]"/>
+                              </g>`;
+
+                            accumY += scaledPad; // advance to next cause slot
                         });
                     }
                 });
