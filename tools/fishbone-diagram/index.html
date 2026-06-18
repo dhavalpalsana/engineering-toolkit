@@ -1273,6 +1273,9 @@
             return lines;
         }
 
+        // Stores dynamically-computed SVG canvas dimensions for fitCanvas()
+        let _svgW = 1000, _svgH = 600;
+
         function renderFishbone() {
             const pal = PALETTES[state.theme] || PALETTES.teal;
             const isDark = document.documentElement.classList.contains('dark');
@@ -1284,12 +1287,47 @@
             const textMutedColor = isDark ? '#94a3b8' : '#475569';
             const boneColor = isDark ? '#334155' : '#cbd5e1';
 
+            const C = state.categories.length;
+
+            // --- DYNAMIC LAYOUT COMPUTATION ---
+            // Min vertical span each cause needs (px between consecutive cause ticks)
+            const MIN_CAUSE_SPACING = 24;
+            // Min horizontal clearance between adjacent category bones
+            const MIN_CAT_SPACING = 140;
+
+            const maxCausesPerBone = C === 0 ? 0 : Math.max(...state.categories.map(c => c.causes.length));
+
+            // Height: driven by how many causes we need to fit without overlap.
+            // The bone runs from yOuter → spineY. Causes are spread over ~62% of its
+            // vertical length. Minimum vertical bone span = maxCauses * MIN_CAUSE_SPACING / 0.62.
+            const minBoneVSpan = Math.max(225, Math.ceil(maxCausesPerBone * MIN_CAUSE_SPACING / 0.62));
+            const SVG_PAD_V = 80;  // headroom above/below bone tip for category label
+            const svgHeight = Math.max(600, 2 * (minBoneVSpan + SVG_PAD_V));
+            const spineY = svgHeight / 2;  // spine always runs through vertical centre
+            const yOuterTop = spineY - minBoneVSpan;
+            const yOuterBottom = spineY + minBoneVSpan;
+
+            // Width: driven by how many categories we need to fit side-by-side.
+            const headW = 180;
+            const headMargin = 20;
+            const minCatSpread = C > 1 ? (C - 1) * MIN_CAT_SPACING : 0;
+            const spineStart = 60;
+            const xMin = 130;
+            // xMax must leave room for head box at the right end
+            const xMax = Math.max(720, xMin + minCatSpread);
+            const spineEnd = xMax + boneOffset + headMargin;  // spine tip before head
+            const svgWidth = Math.max(1000, spineEnd + headW + 30);
+
+            // Cache for fitCanvas
+            _svgW = svgWidth;
+            _svgH = svgHeight;
+
+            // Update SVG viewBox to match computed canvas size
+            svgElement.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+
             let g = "";
 
             // --- 1. SPINE ---
-            const spineStart = 60;
-            const spineEnd = 790;
-            const spineY = 300;
             g += `
                 <g class="spine-group">
                     <line x1="${spineStart}" y1="${spineY}" x2="${spineEnd}" y2="${spineY}" 
@@ -1301,8 +1339,7 @@
 
             // --- 2. EFFECT (THE HEAD) ---
             const headX = spineEnd + 15;
-            const headY = 300;
-            const headW = 180;
+            const headY = spineY;
             const headH = 90;
             
             const effectFontSize = Math.round(13 * fontScale);
@@ -1348,17 +1385,14 @@
             `;
 
             // --- 3. CATEGORIES & CAUSES (RIBS) ---
-            const C = state.categories.length;
             if (C > 0) {
-                const xMin = 130;
-                const xMax = 720;
                 const spineSpacing = C > 1 ? (xMax - xMin) / (C - 1) : 0;
 
                 state.categories.forEach((cat, idx) => {
                     const isTop = idx % 2 === 0;
-                    const xConn = C > 1 ? xMin + idx * spineSpacing : 420;
+                    const xConn = C > 1 ? xMin + idx * spineSpacing : (xMin + xMax) / 2;
                     
-                    const yOuter = isTop ? 75 : 525;
+                    const yOuter = isTop ? yOuterTop : yOuterBottom;
                     const xOuter = xConn - boneOffset;
 
                     g += `
@@ -1436,7 +1470,7 @@
                     const M = cat.causes.length;
                     if (M > 0) {
                         cat.causes.forEach((cause, causeIdx) => {
-                            const t = M === 1 ? 0.5 : 0.23 + (causeIdx / (M - 0.5)) * 0.62;
+                            const t = M === 1 ? 0.5 : 0.19 + (causeIdx / (M - 0.5)) * 0.68;
                             
                             let xStart, yStart;
                             if (isTop) {
@@ -1605,14 +1639,15 @@
             const contW = container.clientWidth;
             const contH = container.clientHeight;
 
-            const scaleW = contW / 1020;
-            const scaleH = contH / 620;
+            // Use the dynamically computed SVG dimensions (updated each renderFishbone call)
+            const scaleW = contW / (_svgW + 20);
+            const scaleH = contH / (_svgH + 20);
 
             scale = Math.min(scaleW, scaleH, 1.2);
-            scale = Math.max(scale, 0.45);
+            scale = Math.max(scale, 0.25);
 
-            translateX = (contW - 1000 * scale) / 2;
-            translateY = (contH - 600 * scale) / 2;
+            translateX = (contW - _svgW * scale) / 2;
+            translateY = (contH - _svgH * scale) / 2;
 
             applyTransform();
         }
