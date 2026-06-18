@@ -477,6 +477,13 @@
         </div>
     </footer>
 
+    <!-- Cause Metadata Tooltip -->
+    <div id="cause-tooltip" class="absolute hidden bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-sm text-white text-xs rounded-xl p-3 shadow-2xl border border-slate-700 dark:border-slate-800 z-50 max-w-xs pointer-events-none transition-all duration-100 flex flex-col gap-1.5">
+        <div id="tooltip-status" class="font-bold text-[10px] uppercase tracking-wider"></div>
+        <div id="tooltip-text" class="text-xs font-semibold leading-snug"></div>
+        <div id="tooltip-comment" class="text-[11px] text-slate-300 italic border-t border-slate-800 dark:border-slate-850 pt-1.5 mt-0.5"></div>
+    </div>
+
     <!-- Custom Alert Container -->
     <div id="alert-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 transform transition-all">
@@ -599,6 +606,131 @@
             }
         };
 
+        // Status definitions and styling configs
+        const STATUS_CONFIG = {
+            'todo': {
+                label: 'To-Do',
+                bgLight: 'rgba(241, 245, 249, 0.65)',
+                bgDark: 'rgba(30, 41, 59, 0.45)',
+                textLight: '#475569',
+                textDark: '#cbd5e1',
+                borderLight: '#cbd5e1',
+                borderDark: '#475569'
+            },
+            'under-investigation': {
+                label: 'Under Investigation',
+                bgLight: 'rgba(254, 243, 199, 0.7)',
+                bgDark: 'rgba(120, 53, 4, 0.35)',
+                textLight: '#b45309',
+                textDark: '#fde047',
+                borderLight: '#f59e0b',
+                borderDark: '#b45309'
+            },
+            'ruled-out': {
+                label: 'Ruled Out',
+                bgLight: 'rgba(254, 226, 226, 0.7)',
+                bgDark: 'rgba(153, 27, 27, 0.35)',
+                textLight: '#b91c1c',
+                textDark: '#fca5a5',
+                borderLight: '#f87171',
+                borderDark: '#b91c1c'
+            },
+            'confirmed-cause': {
+                label: 'Confirmed Cause',
+                bgLight: 'rgba(209, 250, 229, 0.75)',
+                bgDark: 'rgba(6, 95, 70, 0.35)',
+                textLight: '#047857',
+                textDark: '#6ee7b7',
+                borderLight: '#34d399',
+                borderDark: '#047857'
+            }
+        };
+
+        function getCauseObj(cause) {
+            if (!cause) {
+                return { text: '', status: '', comment: '' };
+            }
+            if (typeof cause === 'string') {
+                return { text: cause, status: '', comment: '' };
+            }
+            return {
+                text: cause.text || '',
+                status: cause.status || '',
+                comment: cause.comment || ''
+            };
+        }
+
+        function normalizeState() {
+            if (!state.categories) state.categories = [];
+            state.categories.forEach(cat => {
+                if (!cat.causes) cat.causes = [];
+                cat.causes = cat.causes.map(cause => getCauseObj(cause));
+            });
+        }
+
+        function showCauseTooltip(event, catIdx, causeIdx) {
+            const cause = state.categories[catIdx].causes[causeIdx];
+            const causeObj = getCauseObj(cause);
+            const text = causeObj.text || '';
+            const status = causeObj.status || '';
+            const comment = causeObj.comment || '';
+
+            if (!status && !comment) return;
+
+            const tooltip = document.getElementById('cause-tooltip');
+            const tooltipStatus = document.getElementById('tooltip-status');
+            const tooltipText = document.getElementById('tooltip-text');
+            const tooltipComment = document.getElementById('tooltip-comment');
+            
+            tooltipText.textContent = text;
+
+            if (status) {
+                const config = STATUS_CONFIG[status];
+                tooltipStatus.textContent = config ? config.label : status;
+                
+                let colorClass = 'text-slate-400';
+                if (status === 'todo') colorClass = 'text-slate-400';
+                else if (status === 'under-investigation') colorClass = 'text-amber-400';
+                else if (status === 'ruled-out') colorClass = 'text-rose-400';
+                else if (status === 'confirmed-cause') colorClass = 'text-emerald-400';
+                
+                tooltipStatus.className = `font-bold text-[10px] uppercase tracking-wider ${colorClass}`;
+                tooltipStatus.classList.remove('hidden');
+            } else {
+                tooltipStatus.classList.add('hidden');
+            }
+
+            if (comment) {
+                tooltipComment.textContent = `Comment: ${comment}`;
+                tooltipComment.classList.remove('hidden');
+            } else {
+                tooltipComment.classList.add('hidden');
+            }
+
+            tooltip.classList.remove('hidden');
+            
+            const mouseX = event.clientX;
+            const mouseY = event.clientY;
+            
+            let posX = mouseX + 15;
+            let posY = mouseY + 15;
+            
+            if (posX + 200 > window.innerWidth) {
+                posX = mouseX - 220;
+            }
+            if (posY + 100 > window.innerHeight) {
+                posY = mouseY - 110;
+            }
+            
+            tooltip.style.left = `${posX}px`;
+            tooltip.style.top = `${posY}px`;
+        }
+
+        function hideCauseTooltip() {
+            const tooltip = document.getElementById('cause-tooltip');
+            if (tooltip) tooltip.classList.add('hidden');
+        }
+
         // Application State
         let state = {
             effect: PRESETS.software.effect,
@@ -680,6 +812,12 @@
             syncThemeUI();
             updateUI();
             fitCanvas(); // Auto-scale to show first screen nicely
+
+            // Listen for window resize to refit canvas
+            window.addEventListener('resize', fitCanvas);
+
+            // Re-fit once page resources are fully loaded and layouts settled
+            window.addEventListener('load', fitCanvas);
 
             // Lucide initialize
             lucide.createIcons();
@@ -883,7 +1021,11 @@
         function addCause(categoryIndex, causeVal = "") {
             pushHistory();
             const causeText = causeVal.trim() || `New Cause`;
-            state.categories[categoryIndex].causes.push(causeText);
+            state.categories[categoryIndex].causes.push({
+                text: causeText,
+                status: '',
+                comment: ''
+            });
             updateUI();
             
             if (causeVal === "") {
@@ -896,7 +1038,34 @@
 
         function updateCauseText(categoryIndex, causeIndex, val) {
             pushHistory();
-            state.categories[categoryIndex].causes[causeIndex] = val;
+            const cause = state.categories[categoryIndex].causes[causeIndex];
+            if (typeof cause === 'string') {
+                state.categories[categoryIndex].causes[causeIndex] = { text: val, status: '', comment: '' };
+            } else {
+                cause.text = val;
+            }
+            updateUI();
+        }
+
+        function updateCauseStatus(categoryIndex, causeIndex, status) {
+            pushHistory();
+            const cause = state.categories[categoryIndex].causes[causeIndex];
+            if (typeof cause === 'string') {
+                state.categories[categoryIndex].causes[causeIndex] = { text: cause, status: status, comment: '' };
+            } else {
+                cause.status = status;
+            }
+            updateUI();
+        }
+
+        function updateCauseComment(categoryIndex, causeIndex, comment) {
+            pushHistory();
+            const cause = state.categories[categoryIndex].causes[causeIndex];
+            if (typeof cause === 'string') {
+                state.categories[categoryIndex].causes[causeIndex] = { text: cause, status: '', comment: comment };
+            } else {
+                cause.comment = comment;
+            }
             updateUI();
         }
 
@@ -938,17 +1107,36 @@
                     causesContainer.innerHTML = `<p class="text-[10px] text-slate-400 font-medium italic p-1">No causes registered. Click plus icon to add.</p>`;
                 } else {
                     cat.causes.forEach((cause, causeIdx) => {
-                        const causeRow = document.createElement("div");
-                        causeRow.className = "flex items-start gap-1.5 group";
-                        causeRow.innerHTML = `
-                            <textarea rows="1" onchange="updateCauseText(${catIdx}, ${causeIdx}, this.value)"
-                                      class="w-full bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-850 hover:border-slate-300 dark:hover:border-slate-700 focus:border-teal-500 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium resize-none leading-normal overflow-hidden">${escapeHtml(cause)}</textarea>
-                            <button onclick="deleteCause(${catIdx}, ${causeIdx})" class="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 rounded-lg transition-all self-stretch flex items-center shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete Cause">
-                                <i data-lucide="x" class="w-3 h-3"></i>
-                            </button>
+                        const causeObj = getCauseObj(cause);
+                        const causeCard = document.createElement("div");
+                        causeCard.className = "border border-slate-200 dark:border-slate-800 rounded-xl p-2 bg-white dark:bg-slate-900/50 space-y-1.5 group shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-700";
+                        
+                        causeCard.innerHTML = `
+                            <!-- Cause Text Row -->
+                            <div class="flex items-start gap-1.5">
+                                <textarea rows="1" onchange="updateCauseText(${catIdx}, ${causeIdx}, this.value)"
+                                          class="w-full bg-transparent border-0 hover:bg-slate-50 dark:hover:bg-slate-950 focus:bg-slate-50 dark:focus:bg-slate-950 focus:ring-1 focus:ring-teal-500 rounded px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none font-medium resize-none leading-normal overflow-hidden">${escapeHtml(causeObj.text)}</textarea>
+                                <button onclick="deleteCause(${catIdx}, ${causeIdx})" class="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 rounded-lg transition-all shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete Cause">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                            <!-- Status & Comment Row -->
+                            <div class="flex items-center gap-1.5 text-[10px] pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+                                <select onchange="updateCauseStatus(${catIdx}, ${causeIdx}, this.value)" 
+                                        class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 shrink-0 cursor-pointer max-w-[110px]">
+                                    <option value="" ${causeObj.status === '' ? 'selected' : ''}>No Status</option>
+                                    <option value="todo" ${causeObj.status === 'todo' ? 'selected' : ''}>To-Do</option>
+                                    <option value="under-investigation" ${causeObj.status === 'under-investigation' ? 'selected' : ''}>Under Investigation</option>
+                                    <option value="ruled-out" ${causeObj.status === 'ruled-out' ? 'selected' : ''}>Ruled Out</option>
+                                    <option value="confirmed-cause" ${causeObj.status === 'confirmed-cause' ? 'selected' : ''}>Confirmed Cause</option>
+                                </select>
+                                <input type="text" placeholder="Add comments/notes..." value="${escapeHtml(causeObj.comment)}" 
+                                       onchange="updateCauseComment(${catIdx}, ${causeIdx}, this.value)" 
+                                       class="w-full bg-slate-50/50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-0.5 text-[10px] text-slate-600 dark:text-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white dark:focus:bg-slate-950" />
+                            </div>
                         `;
 
-                        const textarea = causeRow.querySelector('textarea');
+                        const textarea = causeCard.querySelector('textarea');
                         textarea.addEventListener('input', function() {
                             this.style.height = 'auto';
                             this.style.height = this.scrollHeight + 'px';
@@ -958,7 +1146,7 @@
                             textarea.style.height = textarea.scrollHeight + 'px';
                         }, 10);
 
-                        causesContainer.appendChild(causeRow);
+                        causesContainer.appendChild(causeCard);
                     });
                 }
 
@@ -983,6 +1171,7 @@
 
         // --- DYNAMIC SVG RENDERING ---
         function updateUI() {
+            normalizeState();
             renderSidebar();
             renderDefs();
             renderFishbone();
@@ -1225,22 +1414,61 @@
                             `;
 
                             const causeFontSize = Math.round(10 * fontScale);
-                            const wrappedCause = svgWrapText(cause, branchWidth - 10, causeFontSize);
+                            const causeObj = getCauseObj(cause);
+                            const wrappedCause = svgWrapText(causeObj.text, branchWidth - 10, causeFontSize);
                             
                             const textSpacing = causeFontSize + 3.5;
-                            
+                            const triggerY = yEnd - 3 - wrappedCause.length * textSpacing;
+                            const triggerH = wrappedCause.length * textSpacing + 6;
+
+                            // Custom color-coding based on status
+                            let currentTextColor = textMutedColor;
+                            const status = causeObj.status;
+                            const config = STATUS_CONFIG[status];
+                            let statusBackgroundRect = "";
+                            let strikethroughLine = "";
+
+                            if (config) {
+                                const fill = isDark ? config.bgDark : config.bgLight;
+                                const stroke = isDark ? config.borderDark : config.borderLight;
+                                currentTextColor = isDark ? config.textDark : config.textLight;
+                                statusBackgroundRect = `<rect x="${xEnd - 4}" y="${triggerY + 2}" width="${branchWidth + 8}" height="${triggerH - 4}" rx="6" ry="6" fill="${fill}" stroke="${stroke}" stroke-width="1.2" />`;
+                                
+                                if (status === 'ruled-out') {
+                                    strikethroughLine = `<line x1="${xEnd + 2}" y1="${triggerY + triggerH / 2}" x2="${xStart - 4}" y2="${triggerY + triggerH / 2}" stroke="${currentTextColor}" stroke-width="1.5" opacity="0.6" />`;
+                                }
+                            }
+
+                            // If comment is present, draw a speech bubble icon
+                            let commentIcon = "";
+                            if (causeObj.comment) {
+                                commentIcon = `
+                                    <g opacity="0.8">
+                                        <rect x="${xEnd - 16}" y="${yEnd - 12}" width="12" height="8" rx="2.5" fill="${isDark ? '#475569' : '#94a3b8'}" />
+                                        <polygon points="${xEnd - 13},${yEnd - 4} ${xEnd - 9},${yEnd - 4} ${xEnd - 13},${yEnd}" fill="${isDark ? '#475569' : '#94a3b8'}" />
+                                    </g>
+                                `;
+                            }
+
                             g += `
-                                <g class="cause-text-group group/cause cursor-pointer select-none" onclick="triggerInlineEdit({type: 'cause', catIndex: ${idx}, causeIndex: ${causeIdx}}, event)">
+                                <g class="cause-text-group group/cause cursor-pointer select-none" 
+                                   onclick="triggerInlineEdit({type: 'cause', catIndex: ${idx}, causeIndex: ${causeIdx}}, event)"
+                                   onmouseenter="showCauseTooltip(event, ${idx}, ${causeIdx})"
+                                   onmousemove="showCauseTooltip(event, ${idx}, ${causeIdx})"
+                                   onmouseleave="hideCauseTooltip()">
+                                    ${statusBackgroundRect}
+                                    ${commentIcon}
                             `;
 
                             wrappedCause.forEach((cLine, lineIdx) => {
                                 const yLine = yEnd - 3 - (wrappedCause.length - 1 - lineIdx) * textSpacing;
-                                g += `<text x="${xEnd + 2}" y="${yLine}" font-family="'Plus Jakarta Sans', sans-serif" font-size="${causeFontSize}" font-weight="600" fill="${textMutedColor}">${escapeHtml(cLine)}</text>`;
+                                g += `<text x="${xEnd + 2}" y="${yLine}" font-family="'Plus Jakarta Sans', sans-serif" font-size="${causeFontSize}" font-weight="600" fill="${currentTextColor}">${escapeHtml(cLine)}</text>`;
                             });
 
-                            const triggerY = yEnd - 3 - wrappedCause.length * textSpacing;
-                            const triggerH = wrappedCause.length * textSpacing + 6;
-                            
+                            if (strikethroughLine) {
+                                g += strikethroughLine;
+                            }
+
                             g += `
                                     <!-- Delete cross -->
                                     <g class="opacity-0 group-hover/cause:opacity-100 transition-opacity" onclick="event.stopPropagation(); deleteCause(${idx}, ${causeIdx});">
@@ -1366,7 +1594,8 @@
             } else if (target.type === 'category') {
                 currentText = state.categories[target.index].name;
             } else if (target.type === 'cause') {
-                currentText = state.categories[target.catIndex].causes[target.causeIndex];
+                const cause = state.categories[target.catIndex].causes[target.causeIndex];
+                currentText = getCauseObj(cause).text;
             }
 
             const container = document.getElementById('canvas-container');
@@ -1424,7 +1653,16 @@
                 } else if (inlineEditingTarget.type === 'category') {
                     state.categories[inlineEditingTarget.index].name = newVal;
                 } else if (inlineEditingTarget.type === 'cause') {
-                    state.categories[inlineEditingTarget.catIndex].causes[inlineEditingTarget.causeIndex] = newVal;
+                    const cause = state.categories[inlineEditingTarget.catIndex].causes[inlineEditingTarget.causeIndex];
+                    if (typeof cause === 'string') {
+                        state.categories[inlineEditingTarget.catIndex].causes[inlineEditingTarget.causeIndex] = {
+                            text: newVal,
+                            status: '',
+                            comment: ''
+                        };
+                    } else {
+                        cause.text = newVal;
+                    }
                 }
                 updateUI();
             }
