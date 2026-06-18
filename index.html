@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Engineering Toolkit - Interactive Design Calculators</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="A premium, curated collection of interactive calculators, design guides, and utilities for professional engineers. Find wire sizes, busbar sizing, and more.">
+  <meta name="keywords" content="engineering calculators, wire size calculator, busbar size calculator, AWG calculator, mechanical design, electrical design">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Premium Header -->
+  <header>
+    <div class="container header-container">
+      <a href="index.html" class="logo" id="header-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          <path d="M2 12h20"/>
+        </svg>
+        <span>Engineering<span class="logo-accent">Toolkit</span></span>
+      </a>
+      
+      <div class="nav-actions">
+        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle Theme">
+          <!-- Moon Icon (shows in light theme) -->
+          <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <!-- Sun Icon (shows in dark theme) -->
+          <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+        </button>
+        <button id="suggest-btn" class="suggest-btn">Suggest Tool</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero & Search Section -->
+  <main class="container">
+    <section class="hero">
+      <h1 class="hero-title">Precision Tools for <span>Professional Engineers</span></h1>
+      <p class="hero-subtitle">A curated toolbox of interactive calculators, compliance checkers, and design tools built to streamline engineering workflows.</p>
+      
+      <div class="search-box-wrapper">
+        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="search-input" class="search-input" placeholder="Search tools (e.g., wire, torque, copper)..." autocomplete="off" autofocus>
+        <span class="search-keyboard-shortcut">Ctrl+K</span>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-badge">
+          <span>Active Utilities:</span>
+          <span id="active-count" class="accent">0</span>
+        </div>
+        <div class="stat-badge">
+          <span>Total Catalog:</span>
+          <span id="total-count" class="accent">0</span>
+        </div>
+        <div class="stat-badge">
+          <span>Standard:</span>
+          <span class="accent">NEC, ASTM, ASME</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Grid Section -->
+    <section class="tools-section">
+      <div class="tools-grid" id="tools-grid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Request / Suggest Tool Modal -->
+  <div class="modal-overlay" id="request-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Suggest a New Tool</h3>
+        <button class="modal-close" id="modal-close" aria-label="Close modal">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="request-form">
+          <div class="form-group">
+            <label for="tool-name-input">Tool / Calculator Name</label>
+            <input type="text" id="tool-name-input" class="form-input" placeholder="e.g. PCB Trace Width Calculator" required>
+          </div>
+          <div class="form-group">
+            <label for="tool-description-input">Description & Scope</label>
+            <textarea id="tool-description-input" class="form-textarea" placeholder="Describe what calculations or design rules this tool should implement..." required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="contact-email">Your Email (Optional)</label>
+            <input type="email" id="contact-email" class="form-input" placeholder="engineering@example.com">
+          </div>
+          <button type="submit" class="modal-submit">Submit Proposal</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Footer -->
+  <footer>
+    <div class="container footer-content">
+      <p>&copy; 2026 Engineering Toolkit. Open-source under the MIT License.</p>
+      <div class="footer-links">
+        <a href="https://github.com/dhavalpalsana/engineering-toolkit" target="_blank" rel="noopener">GitHub Repository</a>
+        <a href="#" id="open-suggest-footer">Request Utility</a>
+        <a href="https://github.com/dhavalpalsana/engineering-toolkit/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/registry.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Bind additional suggest button in footer
+    document.getElementById("open-suggest-footer").addEventListener("click", (e) => {
+      e.preventDefault();
+      document.getElementById("request-modal").classList.add("active");
+      document.getElementById("tool-name-input").value = "";
+      document.getElementById("tool-name-input").focus();
+    });
+  </script>
+</body>
+</html>
