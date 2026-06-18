@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        // Sync theme immediately to prevent flashing
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            if (savedTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ishikawa Fishbone Diagram Creator - Engineering Toolkit</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="An interactive, high-fidelity Ishikawa Fishbone Diagram creator for professional root-cause analysis. Supports dynamic layout, custom themes, SVG/PNG exports, and AI-assisted brainstorming.">
+    <meta name="keywords" content="fishbone diagram, Ishikawa diagram, root cause analysis, quality engineering, 6 Ms, lean six sigma, engineering calculators">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        /* Scrollbar styles */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Dark mode scrollbars */
+        .dark ::-webkit-scrollbar-track {
+            background: #090d16;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Custom glassmorphism and subtle animations */
+        .glass-panel {
+            backdrop-filter: blur(12px);
+            background-color: rgba(255, 255, 255, 0.85);
+        }
+        .dark .glass-panel {
+            background-color: rgba(15, 20, 34, 0.85);
+        }
+
+        /* SVG styles */
+        svg text {
+            user-select: none;
+        }
+
+        /* Active tab styling */
+        .tab-active {
+            border-bottom-color: #0d9488;
+            color: #0d9488;
+        }
+        .dark .tab-active {
+            border-bottom-color: #14b8a6;
+            color: #14b8a6;
+        }
+    </style>
+</head>
+<body class="bg-[#f8fafc] dark:bg-slate-950 text-[#0f172a] dark:text-slate-100 font-sans min-h-screen flex flex-col antialiased transition-colors duration-200">
+
+    <!-- Header Section -->
+    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 py-4 px-6 sticky top-0 z-30 shadow-sm transition-colors duration-200">
+        <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <a href="../../index.html" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center mr-1" title="Back to Tools Hub">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                </a>
+                <div class="bg-teal-600 text-white p-2.5 rounded-xl shadow-md shadow-teal-100 flex items-center justify-center">
+                    <i data-lucide="network" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-950 dark:text-white tracking-tight flex items-center gap-2">
+                        Ishikawa Fishbone Diagram Creator
+                    </h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Interactive Cause-and-Effect Analysis and Root Cause Brainstorming</p>
+                </div>
+            </div>
+
+            <!-- Header Toolbar -->
+            <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                <button onclick="shareLink()" class="bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/30 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-400 font-bold text-xs px-3.5 py-2 rounded-xl border border-teal-150 dark:border-teal-900/50 transition-all flex items-center gap-1.5" title="Copy sharing link to clipboard">
+                    <i data-lucide="share-2" class="w-3.5 h-3.5"></i> Copy Link
+                </button>
+                <button onclick="exportJSON()" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5" title="Export diagram to JSON file">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
+                </button>
+                <button onclick="document.getElementById('import-file-input').click()" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5" title="Import diagram from JSON file">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import JSON
+                </button>
+                <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" />
+
+                <div class="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 hidden md:block mx-1"></div>
+
+                <!-- API Key Configuration -->
+                <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 w-full md:w-auto">
+                    <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300 px-2 flex items-center gap-1 shrink-0">
+                        <i data-lucide="key" class="w-3 h-3 text-slate-400"></i> API Key:
+                    </span>
+                    <input id="api-key-input" type="password" placeholder="Paste Gemini Key..." 
+                           class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs px-2 py-1 rounded-lg w-full md:w-36 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono" />
+                </div>
+
+                <div class="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 hidden md:block mx-1"></div>
+
+                <!-- Theme Toggle -->
+                <button id="theme-toggle" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 p-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center" title="Toggle Light/Dark Theme">
+                    <i data-lucide="moon" class="w-4 h-4 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Grid Content -->
+    <main class="flex-1 max-w-[1600px] mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        
+        <!-- Left Panel: Sidebar Editor & Tools (5 Columns) -->
+        <section class="lg:col-span-5 flex flex-col gap-4">
+            
+            <!-- Presets Section -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-teal-600 dark:text-teal-400"><i data-lucide="library" class="w-5 h-5"></i></span>
+                    <h2 class="font-bold text-slate-900 dark:text-white text-sm">Select Framework Template</h2>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <button onclick="applyPreset('manufacturing')" class="py-2 px-3 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 hover:bg-teal-50/20 dark:hover:bg-teal-950/20 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                        Mfg (6 Ms)
+                    </button>
+                    <button onclick="applyPreset('software')" class="py-2 px-3 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 hover:bg-teal-50/20 dark:hover:bg-teal-950/20 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                        Dev (5 Ps)
+                    </button>
+                    <button onclick="applyPreset('marketing')" class="py-2 px-3 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 hover:bg-teal-50/20 dark:hover:bg-teal-950/20 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                        Mktg (8 Ps)
+                    </button>
+                    <button onclick="applyPreset('blank')" class="py-2 px-3 border border-slate-200 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-500 hover:bg-teal-50/20 dark:hover:bg-teal-950/20 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                        Clear Canvas
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabbed Panel (Structure, Styles, AI, Guide) -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex-1 flex flex-col overflow-hidden min-h-[500px]">
+                <!-- Tabs header -->
+                <div class="flex border-b border-slate-200 dark:border-slate-800 shrink-0">
+                    <button onclick="switchTab('structure')" id="tab-btn-structure" class="flex-1 py-3 text-center text-xs font-bold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-all flex items-center justify-center gap-1.5">
+                        <i data-lucide="list-tree" class="w-3.5 h-3.5"></i> Structure
+                    </button>
+                    <button onclick="switchTab('styles')" id="tab-btn-styles" class="flex-1 py-3 text-center text-xs font-bold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-all flex items-center justify-center gap-1.5">
+                        <i data-lucide="palette" class="w-3.5 h-3.5"></i> Styles
+                    </button>
+                    <button onclick="switchTab('ai')" id="tab-btn-ai" class="flex-1 py-3 text-center text-xs font-bold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-all flex items-center justify-center gap-1.5">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> AI Generator
+                    </button>
+                    <button onclick="switchTab('guide')" id="tab-btn-guide" class="flex-1 py-3 text-center text-xs font-bold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-all flex items-center justify-center gap-1.5">
+                        <i data-lucide="book-open" class="w-3.5 h-3.5"></i> Guide
+                    </button>
+                </div>
+
+                <!-- Tab Contents Container -->
+                <div class="flex-1 overflow-y-auto p-4">
+                    
+                    <!-- TAB 1: STRUCTURE EDITOR -->
+                    <div id="tab-content-structure" class="space-y-4">
+                        <!-- Effect Input -->
+                        <div class="space-y-1.5">
+                            <label for="effect-input" class="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                                <span>Effect / Problem Statement (Head)</span>
+                                <span class="text-[10px] font-normal text-slate-400">Double-click on diagram to edit directly</span>
+                            </label>
+                            <textarea id="effect-input" oninput="updateEffect(this.value)" rows="2" 
+                                      class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 font-semibold text-slate-800 dark:text-white leading-relaxed" 
+                                      placeholder="State the core problem here..."></textarea>
+                        </div>
+
+                        <!-- Categories list -->
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-xs font-bold text-slate-600 dark:text-slate-300">Categories & Causes (Ribs)</h3>
+                                <button onclick="addCategory()" class="bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/30 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-400 font-bold text-[10px] px-2.5 py-1 rounded-lg border border-teal-100 dark:border-teal-900/50 flex items-center gap-1 transition-all">
+                                    <i data-lucide="plus" class="w-3 h-3"></i> Add Category
+                                </button>
+                            </div>
+                            
+                            <!-- Categories Loop Container -->
+                            <div id="categories-editor-list" class="space-y-3">
+                                <!-- Rendered dynamically by js -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: STYLES AND COSMETICS -->
+                    <div id="tab-content-styles" class="hidden space-y-4">
+                        <h3 class="text-xs font-bold text-slate-600 dark:text-slate-300 mb-3">Custom Theme & Cosmetics</h3>
+
+                        <!-- Color Palette Selection -->
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-slate-500 dark:text-slate-400">Color Palette</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="setPalette('teal')" id="palette-btn-teal" class="palette-option border-2 border-transparent p-2 rounded-xl bg-slate-50 dark:bg-slate-950 text-left transition-all flex items-center gap-2">
+                                    <span class="w-3.5 h-3.5 rounded-full bg-teal-500 shrink-0"></span>
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Teal Breeze</span>
+                                </button>
+                                <button onclick="setPalette('blue')" id="palette-btn-blue" class="palette-option border-2 border-transparent p-2 rounded-xl bg-slate-50 dark:bg-slate-950 text-left transition-all flex items-center gap-2">
+                                    <span class="w-3.5 h-3.5 rounded-full bg-blue-500 shrink-0"></span>
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Royal Blue</span>
+                                </button>
+                                <button onclick="setPalette('crimson')" id="palette-btn-crimson" class="palette-option border-2 border-transparent p-2 rounded-xl bg-slate-50 dark:bg-slate-950 text-left transition-all flex items-center gap-2">
+                                    <span class="w-3.5 h-3.5 rounded-full bg-rose-500 shrink-0"></span>
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Crimson</span>
+                                </button>
+                                <button onclick="setPalette('emerald')" id="palette-btn-emerald" class="palette-option border-2 border-transparent p-2 rounded-xl bg-slate-50 dark:bg-slate-950 text-left transition-all flex items-center gap-2">
+                                    <span class="w-3.5 h-3.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Emerald</span>
+                                </button>
+                                <button onclick="setPalette('amber')" id="palette-btn-amber" class="palette-option border-2 border-transparent p-2 rounded-xl bg-slate-50 dark:bg-slate-950 text-left transition-all flex items-center gap-2">
+                                    <span class="w-3.5 h-3.5 rounded-full bg-amber-500 shrink-0"></span>
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Amber</span>
+                                </button>
+                                <button onclick="setPalette('slate')" id="palette-btn-slate" class="palette-option border-2 border-transparent p-2 rounded-xl bg-slate-50 dark:bg-slate-950 text-left transition-all flex items-center gap-2">
+                                    <span class="w-3.5 h-3.5 rounded-full bg-slate-500 shrink-0"></span>
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Slate</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Card shapes selector -->
+                        <div class="space-y-2 pt-2">
+                            <label class="text-xs font-semibold text-slate-500 dark:text-slate-400">Box Corner Styling</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="setShapeStyle('rounded')" id="shape-btn-rounded" class="shape-option border border-slate-200 dark:border-slate-800 p-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                                    Rounded Box
+                                </button>
+                                <button onclick="setShapeStyle('hexagon')" id="shape-btn-hexagon" class="shape-option border border-slate-200 dark:border-slate-800 p-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                                    Hexagon Shape
+                                </button>
+                                <button onclick="setShapeStyle('sharp')" id="shape-btn-sharp" class="shape-option border border-slate-200 dark:border-slate-800 p-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                                    Sharp Box
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Line style selector -->
+                        <div class="space-y-2 pt-2">
+                            <label class="text-xs font-semibold text-slate-500 dark:text-slate-400">Secondary Bones Style</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="setLineStyle('solid')" id="line-btn-solid" class="line-option border border-slate-200 dark:border-slate-800 p-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                                    Solid Line
+                                </button>
+                                <button onclick="setLineStyle('dashed')" id="line-btn-dashed" class="line-option border border-slate-200 dark:border-slate-800 p-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all text-center">
+                                    Dashed Line
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Layout parameters sliders -->
+                        <div class="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Layout fine-tuning</h4>
+                            
+                            <div class="space-y-1">
+                                <div class="flex items-center justify-between text-xs text-slate-500">
+                                    <span>Branch Line Width</span>
+                                    <span id="label-val-branch-width" class="font-bold">110px</span>
+                                </div>
+                                <input type="range" id="slider-branch-width" min="80" max="180" step="5" value="110" oninput="updateLayoutParam('branchWidth', this.value)" class="w-full accent-teal-600" />
+                            </div>
+
+                            <div class="space-y-1">
+                                <div class="flex items-center justify-between text-xs text-slate-500">
+                                    <span>Bone spacing offset</span>
+                                    <span id="label-val-bone-offset" class="font-bold">110px</span>
+                                </div>
+                                <input type="range" id="slider-bone-offset" min="80" max="160" step="5" value="110" oninput="updateLayoutParam('boneOffset', this.value)" class="w-full accent-teal-600" />
+                            </div>
+
+                            <div class="space-y-1">
+                                <div class="flex items-center justify-between text-xs text-slate-500">
+                                    <span>Font size scale</span>
+                                    <span id="label-val-font-scale" class="font-bold">1.0</span>
+                                </div>
+                                <input type="range" id="slider-font-scale" min="0.8" max="1.3" step="0.05" value="1.0" oninput="updateLayoutParam('fontScale', this.value)" class="w-full accent-teal-600" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: GEMINI AI GENERATOR -->
+                    <div id="tab-content-ai" class="hidden space-y-4">
+                        <div class="bg-teal-50/50 dark:bg-teal-950/10 border border-teal-100 dark:border-teal-900/50 rounded-xl p-3.5 text-xs text-teal-800 dark:text-teal-300 leading-relaxed space-y-2">
+                            <p class="font-bold flex items-center gap-1.5"><i data-lucide="sparkles" class="w-4 h-4"></i> Gemini AI Brainstorm Assistant</p>
+                            <p>Stuck listing root causes? Let Gemini AI suggest standard or specialized causes based on your problem statement. Just add your API key in the header to use this helper.</p>
+                        </div>
+
+                        <!-- Prompt customizations -->
+                        <div class="space-y-1.5">
+                            <label for="ai-focus-input" class="text-xs font-bold text-slate-600 dark:text-slate-300">Custom Brainstorm Guidelines (Optional)</label>
+                            <textarea id="ai-focus-input" rows="3" 
+                                      class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-700 dark:text-slate-300" 
+                                      placeholder="e.g. Focus on organizational fatigue, software infrastructure, and process handoffs. Keep categories to exactly 5."></textarea>
+                        </div>
+
+                        <button id="ai-generate-btn" onclick="generateAICauses()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i> Brainstorm with Gemini AI
+                        </button>
+
+                        <div id="ai-status-indicator" class="hidden text-center text-xs text-slate-500 font-medium py-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-teal-500 animate-ping mr-1.5"></span>
+                            <span>Analyzing problem statement and brainstorming causes...</span>
+                        </div>
+
+                        <!-- Gemini Logs output -->
+                        <div id="ai-log-container" class="hidden bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 p-3 text-xs space-y-2">
+                            <h4 class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                                <i data-lucide="info" class="w-3.5 h-3.5"></i> AI Context:
+                            </h4>
+                            <p id="ai-log-text" class="text-slate-500 dark:text-slate-400 font-medium leading-relaxed"></p>
+                        </div>
+                    </div>
+
+                    <!-- TAB 4: ISHIKAWA GUIDE -->
+                    <div id="tab-content-guide" class="hidden space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <h3 class="text-xs font-bold text-slate-900 dark:text-white">Conducting an Ishikawa (Fishbone) Analysis</h3>
+                        <p>The Ishikawa diagram (invented by Kaoru Ishikawa in 1968) is a structured tool to identify, explore, and organize the potential causes of a key problem or event (the "effect").</p>
+                        
+                        <div class="border-l-2 border-teal-500 pl-3 py-1 space-y-1">
+                            <h4 class="font-bold text-slate-800 dark:text-slate-200">The 6 M's of Manufacturing</h4>
+                            <p><strong>Manpower:</strong> People involved in the process.</p>
+                            <p><strong>Machine:</strong> Tools, computers, and instrumentation.</p>
+                            <p><strong>Material:</strong> Raw materials, data feeds, and inputs.</p>
+                            <p><strong>Method:</strong> Standard operating procedures and steps.</p>
+                            <p><strong>Measurement:</strong> Audits, calibrations, and inspectors.</p>
+                            <p><strong>Milieu:</strong> Environment, temperature, humidity, lighting.</p>
+                        </div>
+
+                        <div class="border-l-2 border-teal-500 pl-3 py-1 space-y-1">
+                            <h4 class="font-bold text-slate-800 dark:text-slate-200">The 5 P's of Software</h4>
+                            <p><strong>People:</strong> Development team, QA, operators.</p>
+                            <p><strong>Process:</strong> Agile steps, reviews, CI/CD pipelines.</p>
+                            <p><strong>Product:</strong> The code base, architecture, libraries.</p>
+                            <p><strong>Platform:</strong> Cloud instances, OS, infrastructure.</p>
+                            <p><strong>Place:</strong> Environment, local developer variables.</p>
+                        </div>
+
+                        <div class="border-l-2 border-teal-500 pl-3 py-1 space-y-1">
+                            <h4 class="font-bold text-slate-800 dark:text-slate-200">Best Practices</h4>
+                            <ul class="list-disc pl-4 space-y-1">
+                                <li>Clearly specify the **effect** (problem statement) first. Make it measurable.</li>
+                                <li>Conduct brainstorming sessions. Focus on listing *potential* causes before evaluating their validity.</li>
+                                <li>Combine the Fishbone with **5-Whys** analysis: ask "Why did this happen?" repeatedly to dig deeper.</li>
+                                <li>Look for causes that appear in multiple categories; these are likely core contributors.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Panel: Interactive Visual Canvas (7 Columns) -->
+        <section class="lg:col-span-7 flex flex-col gap-4">
+            
+            <!-- Canvas Window Card -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex-1 flex flex-col overflow-hidden min-h-[500px] relative">
+                
+                <!-- Canvas Floating Header Toolbar -->
+                <div class="absolute top-4 left-4 z-20 flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-md">
+                    <button onclick="zoomIn()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg transition-all" title="Zoom In">
+                        <i data-lucide="zoom-in" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="zoomOut()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg transition-all" title="Zoom Out">
+                        <i data-lucide="zoom-out" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="resetZoom()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg transition-all" title="Reset Zoom & Pan">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="fitCanvas()" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg transition-all" title="Fit to screen">
+                        <i data-lucide="maximize" class="w-4 h-4"></i>
+                    </button>
+                    
+                    <div class="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1"></div>
+                    <span id="zoom-indicator" class="text-[10px] font-bold text-slate-500 dark:text-slate-400 px-1.5 font-mono">100%</span>
+                </div>
+
+                <!-- Export SVG / PNG float -->
+                <div class="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-md">
+                    <button onclick="downloadSVG()" class="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] rounded-lg transition-all flex items-center gap-1">
+                        <i data-lucide="file-type-2" class="w-3.5 h-3.5 text-orange-500"></i> SVG Vector
+                    </button>
+                    <button onclick="downloadPNG()" class="px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] rounded-lg transition-all flex items-center gap-1">
+                        <i data-lucide="image" class="w-3.5 h-3.5 text-blue-500"></i> PNG Image
+                    </button>
+                </div>
+
+                <!-- Double-click / Zoom guide status line in canvas bottom -->
+                <div class="absolute bottom-4 left-4 z-20 text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1 pointer-events-none select-none">
+                    <i data-lucide="mouse-pointer-click" class="w-3.5 h-3.5"></i>
+                    <span>Double-click text in diagram to edit inline. Drag to pan. Scroll to zoom.</span>
+                </div>
+
+                <!-- Interactive SVG Canvas wrapper -->
+                <div id="canvas-container" class="flex-1 w-full h-full bg-[#fcfdfe] dark:bg-[#070b12] relative cursor-grab active:cursor-grabbing overflow-hidden">
+                    <svg id="fishbone-svg" width="100%" height="100%" class="w-full h-full" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+                        <!-- Definitions for patterns/gradients -->
+                        <defs id="svg-defs">
+                            <!-- Populated dynamically based on theme/palette -->
+                        </defs>
+                        <!-- Grid overlay pattern -->
+                        <rect width="100%" height="100%" fill="url(#grid-pattern)" opacity="0.4" pointer-events="none" />
+                        
+                        <!-- Zoomable/Pannable content group -->
+                        <g id="viewport-group">
+                            <g id="fishbone-content">
+                                <!-- Redrawn dynamically -->
+                            </g>
+                        </g>
+                    </svg>
+
+                    <!-- Floating Inline Text Editor overlay -->
+                    <div id="inline-editor-container" class="hidden absolute z-40 bg-white dark:bg-slate-900 border-2 border-teal-500 rounded-xl p-1.5 shadow-xl transition-all">
+                        <textarea id="inline-editor-textarea" class="bg-transparent text-slate-900 dark:text-white border-0 outline-none p-1 font-semibold leading-normal focus:ring-0 focus:outline-none w-56 resize-none overflow-hidden" rows="2"></textarea>
+                        <div class="flex justify-end gap-1.5 pt-1 text-[9px] font-bold text-slate-400">
+                            <span>Esc: Cancel</span>
+                            <span class="text-slate-300">•</span>
+                            <span>Enter: Confirm</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- Global Footer -->
+    <footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 px-6 text-center text-xs text-slate-500 dark:text-slate-400 shrink-0">
+        <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center gap-2">
+            <p>&copy; 2026 Engineering Toolkit. Ishikawa Visualizer.</p>
+            <div class="flex gap-4">
+                <a href="https://github.com/dhavalpalsana/engineering-toolkit" target="_blank" class="hover:text-slate-900 dark:hover:text-white">GitHub Repository</a>
+                <a href="../../index.html" class="hover:text-slate-900 dark:hover:text-white">Back to Hub</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Custom Alert Container -->
+    <div id="alert-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 transform transition-all">
+            <div class="flex items-center gap-3 text-amber-600 mb-3">
+                <div class="bg-amber-50 dark:bg-amber-950/30 p-2 rounded-full">
+                    <i id="alert-icon" data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-950 dark:text-white" id="alert-title">Notification</h3>
+            </div>
+            <p class="text-slate-600 dark:text-slate-300 text-sm mb-6 leading-relaxed" id="alert-message">Details go here...</p>
+            <div class="flex justify-end">
+                <button onclick="closeAlert()" class="bg-slate-950 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-950 font-bold text-sm px-4 py-2 rounded-xl transition-colors">
+                    Acknowledge
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- main logic -->
+    <script>
+        // Default framework structures
+        const PRESETS = {
+            manufacturing: {
+                effect: "High rate of surface paint defect in motor housing assembly line 3",
+                categories: [
+                    { name: "Manpower (People)", causes: ["Lack of experience in sprayer gun speed", "Operator fatigue from double shift", "Inadequate inspection training"] },
+                    { name: "Machine (Equipment)", causes: ["Nozzle pressure fluctuation on Line 3", "Clogged intake filters in dry chamber", "Spray arm alignment out of specs"] },
+                    { name: "Material", causes: ["Paint batch viscosity inconsistency", "Storage shelf moisture saturation", "Solvent contamination in drum"] },
+                    { name: "Method (Process)", causes: ["Oven drying time shorted in schedule", "Incorrect pre-wash chemistry mix", "Wipe-down stage done too quickly"] },
+                    { name: "Measurement", causes: ["Wet-film thickness gauge uncalibrated", "Visual check has ambient light variance", "Inspector records incomplete data"] },
+                    { name: "Milieu (Environment)", causes: ["Humidity surges during rainy days", "Drafts bringing dust from loading dock", "Temperature cooling section swings"] }
+                ]
+            },
+            software: {
+                effect: "High count of post-release bugs and memory leaks in Version 4.1",
+                categories: [
+                    { name: "People", causes: ["Devs rushed to meet fixed-deadline", "QA team lacks stress test experience", "Communication gap on API contract"] },
+                    { name: "Process", causes: ["No mandatory secondary code reviews", "Lack of automated integration testing", "Incomplete unit testing coverage"] },
+                    { name: "Product (Software)", causes: ["Memory leaks in third-party graph library", "Database indexes missing on user ID query", "Async events lack fallback timeout"] },
+                    { name: "Platform (Infra)", causes: ["Staging environment mismatch", "Connection pool limit set too low", "Heavy logs filling root volume"] },
+                    { name: "Place (Local Vars)", causes: ["Local node version disparity", "Mismatched environment configuration files", "Different docker file caching levels"] }
+                ]
+            },
+            marketing: {
+                effect: "Drop in customer conversion rates on premium subscription checkout",
+                categories: [
+                    { name: "Product", causes: ["Slow loading time on checkout button", "Confusing 3-step checkout flow", "Mobile rendering cuts price tier text"] },
+                    { name: "Price", causes: ["High initial sign-up barrier", "Mismatched localization currency conversion", "No pricing transparency page"] },
+                    { name: "Place", causes: ["Broken deep links from newsletter promotion", "CDN latency spikes on images", "Checkout button below fold on mobile"] },
+                    { name: "Promotion", causes: ["Inconsistent coupon code duration", "Landing page highlights wrong feature set", "Retargeting ads link to main homepage"] },
+                    { name: "People", causes: ["No live chat assistance for checkouts", "Long wait times on payment queries", "Support lacks access to retry transactions"] },
+                    { name: "Process", causes: ["Payment processor throws obscure declines", "Password recovery loop on register", "No email reminder for abandoned carts"] }
+                ]
+            },
+            blank: {
+                effect: "State the problem statement or visual effect here",
+                categories: [
+                    { name: "Category A", causes: ["Primary cause 1", "Primary cause 2"] },
+                    { name: "Category B", causes: ["Primary cause 3"] },
+                    { name: "Category C", causes: [] }
+                ]
+            }
+        };
+
+        // Palette definitions
+        const PALETTES = {
+            teal: {
+                primary: '#0d9488', // teal-600
+                primaryLight: '#2dd4bf', // teal-400
+                primaryDark: '#0f766e', // teal-700
+                primaryGlow: 'rgba(13, 148, 136, 0.12)',
+                accent: '#0284c7', // sky-600
+                textOnPrimary: '#ffffff',
+                bgGradient: ['#0f766e', '#115e59']
+            },
+            blue: {
+                primary: '#2563eb', // blue-600
+                primaryLight: '#60a5fa', // blue-400
+                primaryDark: '#1d4ed8', // blue-700
+                primaryGlow: 'rgba(37, 99, 235, 0.12)',
+                accent: '#db2777', // rose-600
+                textOnPrimary: '#ffffff',
+                bgGradient: ['#1d4ed8', '#1e40af']
+            },
+            crimson: {
+                primary: '#db2777', // rose-600
+                primaryLight: '#f472b6', // pink-400
+                primaryDark: '#be185d', // rose-700
+                primaryGlow: 'rgba(219, 39, 119, 0.12)',
+                accent: '#7c3aed', // violet-600
+                textOnPrimary: '#ffffff',
+                bgGradient: ['#be185d', '#9d174d']
+            },
+            emerald: {
+                primary: '#059669', // emerald-600
+                primaryLight: '#34d399', // emerald-400
+                primaryDark: '#047857', // emerald-700
+                primaryGlow: 'rgba(5, 150, 105, 0.12)',
+                accent: '#d97706', // amber-600
+                textOnPrimary: '#ffffff',
+                bgGradient: ['#047857', '#065f46']
+            },
+            amber: {
+                primary: '#d97706', // amber-600
+                primaryLight: '#fbbf24', // amber-400
+                primaryDark: '#b45309', // amber-700
+                primaryGlow: 'rgba(217, 119, 6, 0.12)',
+                accent: '#dc2626', // red-600
+                textOnPrimary: '#ffffff',
+                bgGradient: ['#b45309', '#92400e']
+            },
+            slate: {
+                primary: '#475569', // slate-600
+                primaryLight: '#94a3b8', // slate-400
+                primaryDark: '#334155', // slate-700
+                primaryGlow: 'rgba(71, 85, 105, 0.12)',
+                accent: '#0d9488', // teal-600
+                textOnPrimary: '#ffffff',
+                bgGradient: ['#334155', '#1e293b']
+            }
+        };
+
+        // Application State
+        let state = {
+            effect: PRESETS.software.effect,
+            categories: JSON.parse(JSON.stringify(PRESETS.software.categories)),
+            theme: 'teal',
+            shapeStyle: 'rounded',
+            lineStyle: 'solid',
+            layout: {
+                branchWidth: 110,
+                boneOffset: 110,
+                fontScale: 1.0
+            }
+        };
+
+        // Viewport Transformation State (Zoom & Pan)
+        let translateX = 0;
+        let translateY = 0;
+        let scale = 1.0;
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+
+        // Current active editor tab
+        let activeTab = 'structure';
+
+        // Undo/Redo Stacks
+        const historyLimit = 30;
+        let undoStack = [];
+        let redoStack = [];
+
+        // Inline Editor Tracking State
+        let inlineEditingTarget = null; // { type: 'effect' } or { type: 'category', index } or { type: 'cause', catIndex, causeIndex }
+
+        // DOM Elements
+        const svgElement = document.getElementById('fishbone-svg');
+        const viewportGroup = document.getElementById('viewport-group');
+        const fishboneContent = document.getElementById('fishbone-content');
+        const categoriesEditorList = document.getElementById('categories-editor-list');
+        const effectInput = document.getElementById('effect-input');
+        const inlineEditorContainer = document.getElementById('inline-editor-container');
+        const inlineEditorTextarea = document.getElementById('inline-editor-textarea');
+
+        // Document Load Init
+        window.addEventListener('DOMContentLoaded', () => {
+            // Check for compressed state in shareable link
+            const urlParams = new URLSearchParams(window.location.search);
+            const dataParam = urlParams.get('data');
+            if (dataParam) {
+                try {
+                    const decompressed = JSON.parse(atob(dataParam));
+                    if (decompressed.effect && decompressed.categories) {
+                        state = decompressed;
+                    }
+                } catch (e) {
+                    console.error("Could not decompress state from URL parameter", e);
+                }
+            }
+
+            // Load API key from local storage
+            const savedApiKey = localStorage.getItem('gemini_api_key');
+            if (savedApiKey) {
+                document.getElementById('api-key-input').value = savedApiKey;
+            }
+
+            // Sync API key saves
+            document.getElementById('api-key-input').addEventListener('change', (e) => {
+                localStorage.setItem('gemini_api_key', e.target.value.trim());
+            });
+
+            // Initialize zoom/pan event listeners
+            initZoomPanListeners();
+
+            // Apply loaded config parameters to sliders
+            initSliders();
+
+            // Set UI according to loaded values
+            pushHistory(); // first history state
+            switchTab('structure');
+            syncThemeUI();
+            updateUI();
+            fitCanvas(); // Auto-scale to show first screen nicely
+
+            // Lucide initialize
+            lucide.createIcons();
+        });
+
+        function initSliders() {
+            document.getElementById('slider-branch-width').value = state.layout?.branchWidth || 110;
+            document.getElementById('slider-bone-offset').value = state.layout?.boneOffset || 110;
+            document.getElementById('slider-font-scale').value = state.layout?.fontScale || 1.0;
+
+            document.getElementById('label-val-branch-width').textContent = (state.layout?.branchWidth || 110) + 'px';
+            document.getElementById('label-val-bone-offset').textContent = (state.layout?.boneOffset || 110) + 'px';
+            document.getElementById('label-val-font-scale').textContent = (state.layout?.fontScale || 1.0).toFixed(2);
+        }
+
+        // --- HISTORY MANAGEMENT ---
+        function pushHistory() {
+            const stateClone = JSON.stringify(state);
+            // Don't push duplicates
+            if (undoStack.length > 0 && undoStack[undoStack.length - 1] === stateClone) return;
+            
+            undoStack.push(stateClone);
+            if (undoStack.length > historyLimit) {
+                undoStack.shift();
+            }
+            redoStack = []; // Clear redo on action
+        }
+
+        function triggerUndo() {
+            if (undoStack.length > 1) {
+                const current = undoStack.pop();
+                redoStack.push(current);
+                const prev = undoStack[undoStack.length - 1];
+                state = JSON.parse(prev);
+                initSliders();
+                updateUI();
+            }
+        }
+
+        function triggerRedo() {
+            if (redoStack.length > 0) {
+                const next = redoStack.pop();
+                undoStack.push(next);
+                state = JSON.parse(next);
+                initSliders();
+                updateUI();
+            }
+        }
+
+        // Handle global keys (Undo, Redo, Esc, Save)
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    triggerRedo();
+                } else {
+                    triggerUndo();
+                }
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                triggerRedo();
+            }
+        });
+
+        // --- THEME SYNC ---
+        function syncThemeUI() {
+            // Colors update of options
+            document.querySelectorAll('.palette-option').forEach(btn => {
+                const pid = btn.id.replace('palette-btn-', '');
+                if (pid === state.theme) {
+                    btn.classList.add('border-teal-600', 'dark:border-teal-400');
+                    btn.classList.remove('border-transparent');
+                } else {
+                    btn.classList.remove('border-teal-600', 'dark:border-teal-400');
+                    btn.classList.add('border-transparent');
+                }
+            });
+
+            document.querySelectorAll('.shape-option').forEach(btn => {
+                const sid = btn.id.replace('shape-btn-', '');
+                if (sid === state.shapeStyle) {
+                    btn.classList.add('bg-teal-600', 'text-white', 'border-teal-600');
+                    btn.classList.remove('border-slate-200', 'dark:border-slate-800', 'text-slate-700', 'dark:text-slate-300');
+                } else {
+                    btn.classList.remove('bg-teal-600', 'text-white', 'border-teal-600');
+                    btn.classList.add('border-slate-200', 'dark:border-slate-800', 'text-slate-700', 'dark:text-slate-300');
+                }
+            });
+
+            document.querySelectorAll('.line-option').forEach(btn => {
+                const lid = btn.id.replace('line-btn-', '');
+                if (lid === state.lineStyle) {
+                    btn.classList.add('bg-teal-600', 'text-white', 'border-teal-600');
+                    btn.classList.remove('border-slate-200', 'dark:border-slate-800', 'text-slate-700', 'dark:text-slate-300');
+                } else {
+                    btn.classList.remove('bg-teal-600', 'text-white', 'border-teal-600');
+                    btn.classList.add('border-slate-200', 'dark:border-slate-800', 'text-slate-700', 'dark:text-slate-300');
+                }
+            });
+        }
+
+        function setPalette(pid) {
+            pushHistory();
+            state.theme = pid;
+            syncThemeUI();
+            updateUI();
+        }
+
+        function setShapeStyle(sid) {
+            pushHistory();
+            state.shapeStyle = sid;
+            syncThemeUI();
+            updateUI();
+        }
+
+        function setLineStyle(lid) {
+            pushHistory();
+            state.lineStyle = lid;
+            syncThemeUI();
+            updateUI();
+        }
+
+        function updateLayoutParam(key, val) {
+            if (!state.layout) state.layout = {};
+            
+            let floatVal = parseFloat(val);
+            state.layout[key] = floatVal;
+
+            if (key === 'branchWidth') {
+                document.getElementById('label-val-branch-width').textContent = floatVal + 'px';
+            } else if (key === 'boneOffset') {
+                document.getElementById('label-val-bone-offset').textContent = floatVal + 'px';
+            } else if (key === 'fontScale') {
+                document.getElementById('label-val-font-scale').textContent = floatVal.toFixed(2);
+            }
+            
+            updateUI();
+        }
+
+        // --- TABS SWITCHING ---
+        function switchTab(tabId) {
+            activeTab = tabId;
+            document.querySelectorAll("[id^='tab-btn-']").forEach(btn => {
+                btn.classList.remove('tab-active', 'border-teal-600', 'dark:border-teal-400');
+                btn.classList.add('text-slate-500', 'dark:text-slate-400');
+            });
+            document.querySelectorAll("[id^='tab-content-']").forEach(content => {
+                content.classList.add('hidden');
+            });
+
+            const activeBtn = document.getElementById('tab-btn-' + tabId);
+            if (activeBtn) {
+                activeBtn.classList.add('tab-active', 'border-teal-600', 'dark:border-teal-400');
+                activeBtn.classList.remove('text-slate-500', 'dark:text-slate-400');
+            }
+            const activeContent = document.getElementById('tab-content-' + tabId);
+            if (activeContent) {
+                activeContent.classList.remove('hidden');
+            }
+        }
+
+        // --- PRESETS APPLY ---
+        function applyPreset(presetId) {
+            if (presetId === 'blank' || PRESETS[presetId]) {
+                pushHistory();
+                state.effect = PRESETS[presetId].effect;
+                state.categories = JSON.parse(JSON.stringify(PRESETS[presetId].categories));
+                updateUI();
+                fitCanvas();
+            }
+        }
+
+        // --- DATA STATE MODIFICATIONS ---
+        function updateEffect(val) {
+            pushHistory();
+            state.effect = val;
+            renderFishbone();
+        }
+
+        function updateCategoryName(index, name) {
+            pushHistory();
+            state.categories[index].name = name;
+            updateUI();
+        }
+
+        function addCategory() {
+            pushHistory();
+            state.categories.push({
+                name: `Category ${state.categories.length + 1}`,
+                causes: []
+            });
+            updateUI();
+        }
+
+        function deleteCategory(index) {
+            pushHistory();
+            state.categories.splice(index, 1);
+            updateUI();
+        }
+
+        function addCause(categoryIndex, causeVal = "") {
+            pushHistory();
+            const causeText = causeVal.trim() || `New Cause`;
+            state.categories[categoryIndex].causes.push(causeText);
+            updateUI();
+            
+            if (causeVal === "") {
+                const causeIndex = state.categories[categoryIndex].causes.length - 1;
+                setTimeout(() => {
+                    triggerInlineEdit({ type: 'cause', catIndex: categoryIndex, causeIndex: causeIndex });
+                }, 100);
+            }
+        }
+
+        function updateCauseText(categoryIndex, causeIndex, val) {
+            pushHistory();
+            state.categories[categoryIndex].causes[causeIndex] = val;
+            updateUI();
+        }
+
+        function deleteCause(categoryIndex, causeIndex) {
+            pushHistory();
+            state.categories[categoryIndex].causes.splice(causeIndex, 1);
+            updateUI();
+        }
+
+        // --- SIDEBAR UI RENDERER ---
+        function renderSidebar() {
+            effectInput.value = state.effect;
+
+            categoriesEditorList.innerHTML = "";
+            state.categories.forEach((cat, catIdx) => {
+                const catCard = document.createElement("div");
+                catCard.className = "border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/20";
+                
+                catCard.innerHTML = `
+                    <div class="bg-slate-100/50 dark:bg-slate-900/40 p-2.5 flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800">
+                        <input type="text" value="${escapeHtml(cat.name)}" 
+                               onchange="updateCategoryName(${catIdx}, this.value)"
+                               class="bg-transparent border-0 hover:bg-white dark:hover:bg-slate-900 focus:bg-white dark:focus:bg-slate-900 text-xs font-bold text-slate-800 dark:text-white px-1.5 py-0.5 rounded focus:ring-1 focus:ring-teal-500 w-full focus:outline-none" />
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button onclick="addCause(${catIdx})" class="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-950 dark:hover:text-white rounded-lg transition-all" title="Add Cause">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <button onclick="deleteCategory(${catIdx})" class="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 rounded-lg transition-all" title="Delete Category">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-2.5 space-y-1.5" id="cat-causes-${catIdx}">
+                    </div>
+                `;
+
+                const causesContainer = catCard.querySelector(`#cat-causes-${catIdx}`);
+                if (cat.causes.length === 0) {
+                    causesContainer.innerHTML = `<p class="text-[10px] text-slate-400 font-medium italic p-1">No causes registered. Click plus icon to add.</p>`;
+                } else {
+                    cat.causes.forEach((cause, causeIdx) => {
+                        const causeRow = document.createElement("div");
+                        causeRow.className = "flex items-start gap-1.5 group";
+                        causeRow.innerHTML = `
+                            <textarea rows="1" onchange="updateCauseText(${catIdx}, ${causeIdx}, this.value)"
+                                      class="w-full bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-850 hover:border-slate-300 dark:hover:border-slate-700 focus:border-teal-500 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium resize-none leading-normal overflow-hidden">${escapeHtml(cause)}</textarea>
+                            <button onclick="deleteCause(${catIdx}, ${causeIdx})" class="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 rounded-lg transition-all self-stretch flex items-center shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete Cause">
+                                <i data-lucide="x" class="w-3 h-3"></i>
+                            </button>
+                        `;
+
+                        const textarea = causeRow.querySelector('textarea');
+                        textarea.addEventListener('input', function() {
+                            this.style.height = 'auto';
+                            this.style.height = this.scrollHeight + 'px';
+                        });
+                        setTimeout(() => {
+                            textarea.style.height = 'auto';
+                            textarea.style.height = textarea.scrollHeight + 'px';
+                        }, 10);
+
+                        causesContainer.appendChild(causeRow);
+                    });
+                }
+
+                categoriesEditorList.appendChild(catCard);
+            });
+
+            lucide.createIcons({
+                attrs: {
+                    class: "w-3.5 h-3.5"
+                }
+            });
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // --- DYNAMIC SVG RENDERING ---
+        function updateUI() {
+            renderSidebar();
+            renderDefs();
+            renderFishbone();
+        }
+
+        function renderDefs() {
+            const defs = document.getElementById('svg-defs');
+            const pal = PALETTES[state.theme] || PALETTES.teal;
+            const isDark = document.documentElement.classList.contains('dark');
+            
+            const gridColor = isDark ? '#1e293b' : '#cbd5e1';
+            const shadowColor = isDark ? 'rgba(0,0,0,0.5)' : 'rgba(15,23,42,0.08)';
+
+            defs.innerHTML = `
+                <pattern id="grid-pattern" width="30" height="30" patternUnits="userSpaceOnUse">
+                    <circle cx="2" cy="2" r="1.2" fill="${gridColor}" />
+                </pattern>
+                
+                <filter id="box-shadow" x="-10%" y="-10%" width="120%" height="130%" filterUnits="userSpaceOnUse">
+                    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="${shadowColor}" flood-opacity="0.8" />
+                </filter>
+
+                <marker id="spine-arrow" markerWidth="12" markerHeight="12" refX="2" refY="6" orient="auto" markerUnits="strokeWidth">
+                    <path d="M2,2 L10,6 L2,10 L4,6 Z" fill="${pal.primary}" />
+                </marker>
+
+                <linearGradient id="head-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="${pal.primary}" />
+                    <stop offset="100%" stop-color="${pal.primaryDark}" />
+                </linearGradient>
+            `;
+        }
+
+        function svgWrapText(text, maxWidth, fontSize) {
+            const words = text.split(/\s+/);
+            const lines = [];
+            let currentLine = "";
+
+            const maxCharsPerLine = Math.floor(maxWidth / (fontSize * 0.52));
+
+            words.forEach(word => {
+                if (currentLine.length + word.length + 1 <= maxCharsPerLine) {
+                    currentLine += (currentLine === "" ? "" : " ") + word;
+                } else {
+                    if (currentLine !== "") {
+                        lines.push(currentLine);
+                    }
+                    currentLine = word;
+                }
+            });
+            if (currentLine !== "") {
+                lines.push(currentLine);
+            }
+
+            return lines;
+        }
+
+        function renderFishbone() {
+            const pal = PALETTES[state.theme] || PALETTES.teal;
+            const isDark = document.documentElement.classList.contains('dark');
+            const fontScale = state.layout?.fontScale || 1.0;
+            const branchWidth = state.layout?.branchWidth || 110;
+            const boneOffset = state.layout?.boneOffset || 110;
+
+            const textPrimaryColor = isDark ? '#f8fafc' : '#0f172a';
+            const textMutedColor = isDark ? '#94a3b8' : '#475569';
+            const boneColor = isDark ? '#334155' : '#cbd5e1';
+
+            let g = "";
+
+            // --- 1. SPINE ---
+            const spineStart = 60;
+            const spineEnd = 790;
+            const spineY = 300;
+            g += `
+                <g class="spine-group">
+                    <line x1="${spineStart}" y1="${spineY}" x2="${spineEnd}" y2="${spineY}" 
+                          stroke="${pal.primary}" stroke-width="4.5" stroke-linecap="round" />
+                    <path d="M${spineEnd},${spineY} L${spineEnd - 16},${spineY - 10} L${spineEnd - 12},${spineY} L${spineEnd - 16},${spineY + 10} Z" 
+                          fill="${pal.primary}" />
+                </g>
+            `;
+
+            // --- 2. EFFECT (THE HEAD) ---
+            const headX = spineEnd + 15;
+            const headY = 300;
+            const headW = 180;
+            const headH = 90;
+            
+            const effectFontSize = Math.round(13 * fontScale);
+            const wrappedEffect = svgWrapText(state.effect, headW - 20, effectFontSize);
+            const effectBoxY = headY - headH / 2;
+
+            let headShape = "";
+            if (state.shapeStyle === 'hexagon') {
+                const rx1 = headX;
+                const rx2 = headX + 30;
+                const rx3 = headX + headW - 30;
+                const rx4 = headX + headW;
+                const ry1 = effectBoxY;
+                const ry2 = headY;
+                const ry3 = effectBoxY + headH;
+                headShape = `<polygon points="${rx1},${ry2} ${rx2},${ry1} ${rx3},${ry1} ${rx4},${ry2} ${rx3},${ry3} ${rx2},${ry3}" 
+                                      fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2.5" filter="url(#box-shadow)" />`;
+            } else if (state.shapeStyle === 'sharp') {
+                headShape = `<rect x="${headX}" y="${effectBoxY}" width="${headW}" height="${headH}" 
+                                   fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2" filter="url(#box-shadow)" />`;
+            } else {
+                headShape = `<rect x="${headX}" y="${effectBoxY}" width="${headW}" height="${headH}" rx="16" ry="16" 
+                                   fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2.5" filter="url(#box-shadow)" />`;
+            }
+
+            g += `
+                <g class="head-group cursor-pointer select-none" onclick="triggerInlineEdit({type: 'effect'}, event)">
+                    ${headShape}
+                    <text font-family="'Plus Jakarta Sans', sans-serif" font-size="${effectFontSize}" font-weight="700" fill="${pal.textOnPrimary}">
+            `;
+            
+            const lineSpacing = effectFontSize + 4;
+            const totalTextHeight = wrappedEffect.length * lineSpacing;
+            const startTextY = headY - totalTextHeight / 2 + effectFontSize - 2;
+
+            wrappedEffect.forEach((line, idx) => {
+                g += `<tspan x="${headX + headW / 2}" y="${startTextY + idx * lineSpacing}" text-anchor="middle">${escapeHtml(line)}</tspan>`;
+            });
+            g += `
+                    </text>
+                    <rect x="${headX}" y="${effectBoxY}" width="${headW}" height="${headH}" fill="transparent" stroke="transparent" class="hover:stroke-teal-300 hover:stroke-[2] transition-all" />
+                </g>
+            `;
+
+            // --- 3. CATEGORIES & CAUSES (RIBS) ---
+            const C = state.categories.length;
+            if (C > 0) {
+                const xMin = 130;
+                const xMax = 720;
+                const spineSpacing = C > 1 ? (xMax - xMin) / (C - 1) : 0;
+
+                state.categories.forEach((cat, idx) => {
+                    const isTop = idx % 2 === 0;
+                    const xConn = C > 1 ? xMin + idx * spineSpacing : 420;
+                    
+                    const yOuter = isTop ? 75 : 525;
+                    const xOuter = xConn - boneOffset;
+
+                    g += `
+                        <line x1="${xOuter}" y1="${yOuter}" x2="${xConn}" y2="${spineY}" 
+                              stroke="${pal.primary}" stroke-width="3" stroke-linecap="round" />
+                    `;
+
+                    const catW = 145;
+                    const catH = 42;
+                    const catBoxX = xOuter - catW / 2;
+                    const catBoxY = isTop ? yOuter - catH : yOuter;
+
+                    let catShape = "";
+                    const borderStrokeColor = isDark ? pal.primaryLight : pal.primary;
+                    const fillBoxColor = isDark ? '#111827' : '#ffffff';
+
+                    if (state.shapeStyle === 'hexagon') {
+                        const cx1 = xOuter - catW / 2;
+                        const cx2 = xOuter - catW / 2 + 12;
+                        const cx3 = xOuter + catW / 2 - 12;
+                        const cx4 = xOuter + catW / 2;
+                        const cy1 = catBoxY;
+                        const cy2 = catBoxY + catH / 2;
+                        const cy3 = catBoxY + catH;
+                        catShape = `<polygon points="${cx1},${cy2} ${cx2},${cy1} ${cx3},${cy1} ${cx4},${cy2} ${cx3},${cy3} ${cx2},${cy3}" 
+                                             fill="${fillBoxColor}" stroke="${borderStrokeColor}" stroke-width="2" filter="url(#box-shadow)" />`;
+                    } else if (state.shapeStyle === 'sharp') {
+                        catShape = `<rect x="${catBoxX}" y="${catBoxY}" width="${catW}" height="${catH}" 
+                                           fill="${fillBoxColor}" stroke="${borderStrokeColor}" stroke-width="1.5" filter="url(#box-shadow)" />`;
+                    } else {
+                        catShape = `<rect x="${catBoxX}" y="${catBoxY}" width="${catW}" height="${catH}" rx="10" ry="10" 
+                                           fill="${fillBoxColor}" stroke="${borderStrokeColor}" stroke-width="2" filter="url(#box-shadow)" />`;
+                    }
+
+                    const catFontSize = Math.round(11 * fontScale);
+                    const wrappedCat = svgWrapText(cat.name, catW - 12, catFontSize);
+
+                    g += `
+                        <g class="category-box group/cat cursor-pointer select-none" onclick="triggerInlineEdit({type: 'category', index: ${idx}}, event)">
+                            ${catShape}
+                            <text font-family="'Plus Jakarta Sans', sans-serif" font-size="${catFontSize}" font-weight="700" fill="${textPrimaryColor}">
+                    `;
+
+                    const catTextSpacing = catFontSize + 3;
+                    const catTextHeight = wrappedCat.length * catTextSpacing;
+                    const catTextStartY = catBoxY + catH / 2 - catTextHeight / 2 + catFontSize - 2;
+
+                    wrappedCat.forEach((line, lIdx) => {
+                        g += `<tspan x="${xOuter}" y="${catTextStartY + lIdx * catTextSpacing}" text-anchor="middle">${escapeHtml(line)}</tspan>`;
+                    });
+
+                    const plusX = catBoxX + catW - 18;
+                    const plusY = catBoxY + 4;
+                    
+                    g += `
+                            </text>
+                            
+                            <!-- Delete button (x) -->
+                            <g class="opacity-0 group-hover/cat:opacity-100 transition-opacity" onclick="event.stopPropagation(); deleteCategory(${idx});">
+                                <circle cx="${catBoxX + 10}" cy="${catBoxY + 10}" r="7.5" fill="#ef4444" />
+                                <line x1="${catBoxX + 7.5}" y1="${catBoxY + 7.5}" x2="${catBoxX + 12.5}" y2="${catBoxY + 12.5}" stroke="#ffffff" stroke-width="1.5" />
+                                <line x1="${catBoxX + 12.5}" y1="${catBoxY + 7.5}" x2="${catBoxX + 7.5}" y2="${catBoxY + 12.5}" stroke="#ffffff" stroke-width="1.5" />
+                            </g>
+
+                            <!-- Add cause button (+) -->
+                            <g class="opacity-0 group-hover/cat:opacity-100 transition-opacity" onclick="event.stopPropagation(); addCause(${idx});">
+                                <circle cx="${plusX}" cy="${plusY + 6}" r="7.5" fill="${pal.primary}" />
+                                <line x1="${plusX - 4.5}" y1="${plusY + 6}" x2="${plusX + 4.5}" y2="${plusY + 6}" stroke="#ffffff" stroke-width="1.5" />
+                                <line x1="${plusX}" y1="${plusY + 1.5}" x2="${plusX}" y2="${plusY + 10.5}" stroke="#ffffff" stroke-width="1.5" />
+                            </g>
+                        </g>
+                    `;
+
+                    // --- 3B. CAUSES ---
+                    const M = cat.causes.length;
+                    if (M > 0) {
+                        cat.causes.forEach((cause, causeIdx) => {
+                            const t = M === 1 ? 0.5 : 0.23 + (causeIdx / (M - 0.5)) * 0.62;
+                            
+                            let xStart, yStart;
+                            if (isTop) {
+                                xStart = xOuter + t * (xConn - xOuter);
+                                yStart = yOuter + t * (spineY - yOuter);
+                            } else {
+                                xStart = xOuter + t * (xConn - xOuter);
+                                yStart = yOuter - t * (yOuter - spineY);
+                            }
+
+                            const xEnd = xStart - branchWidth;
+                            const yEnd = yStart;
+
+                            const lineDashedAttr = state.lineStyle === 'dashed' ? 'stroke-dasharray="4,3"' : '';
+
+                            g += `
+                                <line x1="${xStart}" y1="${yStart}" x2="${xEnd}" y2="${yEnd}" 
+                                      stroke="${boneColor}" stroke-width="1.5" ${lineDashedAttr} />
+                            `;
+
+                            const causeFontSize = Math.round(10 * fontScale);
+                            const wrappedCause = svgWrapText(cause, branchWidth - 10, causeFontSize);
+                            
+                            const textSpacing = causeFontSize + 3.5;
+                            
+                            g += `
+                                <g class="cause-text-group group/cause cursor-pointer select-none" onclick="triggerInlineEdit({type: 'cause', catIndex: ${idx}, causeIndex: ${causeIdx}}, event)">
+                            `;
+
+                            wrappedCause.forEach((cLine, lineIdx) => {
+                                const yLine = yEnd - 3 - (wrappedCause.length - 1 - lineIdx) * textSpacing;
+                                g += `<text x="${xEnd + 2}" y="${yLine}" font-family="'Plus Jakarta Sans', sans-serif" font-size="${causeFontSize}" font-weight="600" fill="${textMutedColor}">${escapeHtml(cLine)}</text>`;
+                            });
+
+                            const triggerY = yEnd - 3 - wrappedCause.length * textSpacing;
+                            const triggerH = wrappedCause.length * textSpacing + 6;
+                            
+                            g += `
+                                    <!-- Delete cross -->
+                                    <g class="opacity-0 group-hover/cause:opacity-100 transition-opacity" onclick="event.stopPropagation(); deleteCause(${idx}, ${causeIdx});">
+                                        <circle cx="${xEnd - 8}" cy="${yEnd - 6}" r="5.5" fill="#ef4444" />
+                                        <line x1="${xEnd - 10}" y1="${yEnd - 8}" x2="${xEnd - 6}" y2="${yEnd - 4}" stroke="#ffffff" stroke-width="1.2" />
+                                        <line x1="${xEnd - 6}" y1="${yEnd - 8}" x2="${xEnd - 10}" y2="${yEnd - 4}" stroke="#ffffff" stroke-width="1.2" />
+                                    </g>
+                                    
+                                    <rect x="${xEnd}" y="${triggerY}" width="${branchWidth}" height="${triggerH}" fill="transparent" class="hover:stroke-teal-400 hover:stroke-[1] hover:stroke-dasharray-[2,2]" />
+                                </g>
+                            `;
+                        });
+                    }
+                });
+            }
+
+            fishboneContent.innerHTML = g;
+        }
+
+        // --- ZOOM & PAN LOGIC ---
+        function initZoomPanListeners() {
+            const container = document.getElementById('canvas-container');
+
+            container.addEventListener('mousedown', (e) => {
+                if (e.target.closest('button') || e.target.closest('#inline-editor-container')) return;
+                
+                isDragging = true;
+                container.style.cursor = 'grabbing';
+                startX = e.clientX - translateX;
+                startY = e.clientY - translateY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                translateX = e.clientX - startX;
+                translateY = e.clientY - startY;
+                applyTransform();
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    container.style.cursor = 'grab';
+                }
+            });
+
+            container.addEventListener('mouseleave', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    container.style.cursor = 'grab';
+                }
+            });
+
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const rect = svgElement.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const svgX = (mouseX - translateX) / scale;
+                const svgY = (mouseY - translateY) / scale;
+
+                const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+                const newScale = Math.min(Math.max(scale * zoomFactor, 0.25), 4.0);
+
+                translateX = mouseX - svgX * newScale;
+                translateY = mouseY - svgY * newScale;
+                scale = newScale;
+
+                applyTransform();
+            }, { passive: false });
+        }
+
+        function applyTransform() {
+            viewportGroup.setAttribute('transform', `translate(${translateX}, ${translateY}) scale(${scale})`);
+            document.getElementById('zoom-indicator').textContent = Math.round(scale * 100) + '%';
+        }
+
+        function zoomIn() {
+            scale = Math.min(scale * 1.15, 4.0);
+            applyTransform();
+        }
+
+        // Zoom out
+        function zoomOut() {
+            scale = Math.max(scale * 0.85, 0.25);
+            applyTransform();
+        }
+
+        function resetZoom() {
+            translateX = 0;
+            translateY = 0;
+            scale = 1.0;
+            applyTransform();
+        }
+
+        function fitCanvas() {
+            const container = document.getElementById('canvas-container');
+            const contW = container.clientWidth;
+            const contH = container.clientHeight;
+
+            const scaleW = contW / 1020;
+            const scaleH = contH / 620;
+
+            scale = Math.min(scaleW, scaleH, 1.2);
+            scale = Math.max(scale, 0.45);
+
+            translateX = (contW - 1000 * scale) / 2;
+            translateY = (contH - 600 * scale) / 2;
+
+            applyTransform();
+        }
+
+        // --- INLINE EDITING INTERACTIVES ---
+        function triggerInlineEdit(target, event) {
+            if (event) event.stopPropagation();
+            
+            inlineEditingTarget = target;
+            let currentText = "";
+
+            if (target.type === 'effect') {
+                currentText = state.effect;
+            } else if (target.type === 'category') {
+                currentText = state.categories[target.index].name;
+            } else if (target.type === 'cause') {
+                currentText = state.categories[target.catIndex].causes[target.causeIndex];
+            }
+
+            const container = document.getElementById('canvas-container');
+            const containerRect = container.getBoundingClientRect();
+            
+            let clickX, clickY;
+            if (event) {
+                clickX = event.clientX - containerRect.left;
+                clickY = event.clientY - containerRect.top;
+            } else {
+                clickX = containerRect.width / 2 - 100;
+                clickY = containerRect.height / 2 - 40;
+            }
+
+            inlineEditorTextarea.value = currentText;
+            inlineEditorContainer.style.left = `${clickX}px`;
+            inlineEditorContainer.style.top = `${clickY}px`;
+            inlineEditorContainer.classList.remove('hidden');
+
+            setTimeout(() => {
+                inlineEditorTextarea.focus();
+                inlineEditorTextarea.select();
+                adjustInlineEditorHeight();
+            }, 10);
+
+            inlineEditorTextarea.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveInlineEdit();
+                } else if (e.key === 'Escape') {
+                    closeInlineEdit();
+                }
+            };
+
+            inlineEditorTextarea.oninput = adjustInlineEditorHeight;
+
+            setTimeout(() => {
+                document.addEventListener('click', closeInlineEditOnClickOutside);
+            }, 150);
+        }
+
+        function adjustInlineEditorHeight() {
+            inlineEditorTextarea.style.height = 'auto';
+            inlineEditorTextarea.style.height = (inlineEditorTextarea.scrollHeight) + 'px';
+        }
+
+        function saveInlineEdit() {
+            if (!inlineEditingTarget) return;
+
+            const newVal = inlineEditorTextarea.value.trim();
+            if (newVal !== "") {
+                pushHistory();
+                if (inlineEditingTarget.type === 'effect') {
+                    state.effect = newVal;
+                } else if (inlineEditingTarget.type === 'category') {
+                    state.categories[inlineEditingTarget.index].name = newVal;
+                } else if (inlineEditingTarget.type === 'cause') {
+                    state.categories[inlineEditingTarget.catIndex].causes[inlineEditingTarget.causeIndex] = newVal;
+                }
+                updateUI();
+            }
+
+            closeInlineEdit();
+        }
+
+        function closeInlineEdit() {
+            inlineEditorContainer.classList.add('hidden');
+            inlineEditingTarget = null;
+            document.removeEventListener('click', closeInlineEditOnClickOutside);
+        }
+
+        function closeInlineEditOnClickOutside(e) {
+            if (!inlineEditorContainer.contains(e.target)) {
+                saveInlineEdit();
+            }
+        }
+
+        // --- IMPORTS & EXPORTS ---
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            
+            const cleanEffect = state.effect.toLowerCase().replace(/[^a-z0-9]+/g, "-").substring(0, 30);
+            downloadAnchor.setAttribute("download", `fishbone-${cleanEffect || "export"}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.effect && Array.isArray(parsed.categories)) {
+                        pushHistory();
+                        state.effect = parsed.effect;
+                        state.categories = parsed.categories;
+                        if (parsed.theme) state.theme = parsed.theme;
+                        if (parsed.shapeStyle) state.shapeStyle = parsed.shapeStyle;
+                        if (parsed.lineStyle) state.lineStyle = parsed.lineStyle;
+                        if (parsed.layout) state.layout = parsed.layout;
+
+                        initSliders();
+                        syncThemeUI();
+                        updateUI();
+                        fitCanvas();
+                        showAlert("Import Successful", "Your fishbone diagram configuration was loaded successfully.");
+                    } else {
+                        throw new Error("Invalid structure. Must contain 'effect' and 'categories'.");
+                    }
+                } catch (err) {
+                    showAlert("Import Failed", "Failed to parse JSON configuration file: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = "";
+        }
+
+        function shareLink() {
+            try {
+                const compressed = btoa(JSON.stringify(state));
+                const shareUrl = window.location.origin + window.location.pathname + "?data=" + compressed;
+                
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    showAlert("Link Copied", "A compressed shareable link containing your current diagram configuration has been copied to your clipboard!");
+                }).catch(() => {
+                    showAlert("Share Link", `Could not write to clipboard. Copy this URL manually:<br/><input type="text" readonly value="${shareUrl}" class="w-full text-xs p-2 bg-slate-100 rounded border border-slate-300 mt-2 font-mono" onclick="this.select()" />`);
+                });
+            } catch (err) {
+                showAlert("Error", "Could not generate sharing link: " + err.message);
+            }
+        }
+
+        function downloadSVG() {
+            const svgContentCopy = svgElement.cloneNode(true);
+            const viewGroup = svgContentCopy.querySelector('#viewport-group');
+            if (viewGroup) {
+                viewGroup.removeAttribute('transform');
+            }
+
+            const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+            style.textContent = `
+                text { font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; }
+                line, path, polygon, rect { transition: none !important; }
+            `;
+            svgContentCopy.appendChild(style);
+
+            const svgString = new XMLSerializer().serializeToString(svgContentCopy);
+            const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.href = url;
+            const cleanEffect = state.effect.toLowerCase().replace(/[^a-z0-9]+/g, "-").substring(0, 30);
+            downloadAnchor.download = `fishbone-${cleanEffect || "diagram"}.svg`;
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadPNG() {
+            const svgContentCopy = svgElement.cloneNode(true);
+            const viewGroup = svgContentCopy.querySelector('#viewport-group');
+            if (viewGroup) {
+                viewGroup.removeAttribute('transform');
+            }
+
+            const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+            style.textContent = `
+                text { font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; }
+            `;
+            svgContentCopy.appendChild(style);
+
+            const svgString = new XMLSerializer().serializeToString(svgContentCopy);
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const reader = new FileReader();
+
+            reader.onload = function() {
+                const img = new Image();
+                img.onload = function() {
+                    const scaleFactor = 2;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 1000 * scaleFactor;
+                    canvas.height = 600 * scaleFactor;
+                    
+                    const ctx = canvas.getContext('2d');
+                    const isDark = document.documentElement.classList.contains('dark');
+                    ctx.fillStyle = isDark ? '#070b12' : '#fcfdfe';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    ctx.scale(scaleFactor, scaleFactor);
+                    ctx.drawImage(img, 0, 0);
+
+                    canvas.toBlob(function(blob) {
+                        const url = URL.createObjectURL(blob);
+                        const downloadAnchor = document.createElement('a');
+                        downloadAnchor.href = url;
+                        const cleanEffect = state.effect.toLowerCase().replace(/[^a-z0-9]+/g, "-").substring(0, 30);
+                        downloadAnchor.download = `fishbone-${cleanEffect || "diagram"}.png`;
+                        document.body.appendChild(downloadAnchor);
+                        downloadAnchor.click();
+                        downloadAnchor.remove();
+                        URL.revokeObjectURL(url);
+                    }, 'image/png');
+                };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(svgBlob);
+        }
+
+        // --- GEMINI AI CAUSE GENERATOR ENGINE ---
+        async function generateAICauses() {
+            const apiKeyInput = document.getElementById('api-key-input');
+            const apiKey = apiKeyInput.value.trim();
+
+            if (!apiKey) {
+                showAlert("Gemini API Key Required", "Please enter a valid Gemini API Key in the upper right header input box to use the AI assistant.");
+                return;
+            }
+
+            const promptFocus = document.getElementById('ai-focus-input').value.trim();
+            const submitBtn = document.getElementById('ai-generate-btn');
+            const statusEl = document.getElementById('ai-status-indicator');
+            const logContainer = document.getElementById('ai-log-container');
+            const logText = document.getElementById('ai-log-text');
+
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            statusEl.classList.remove('hidden');
+            logContainer.classList.add('hidden');
+
+            const systemInstruction = `You are a professional systems design and quality assurance engineer specialized in Lean, Six Sigma, root cause analyses, and Ishikawa (Fishbone) diagram construction.
+Your task is to analyze the user's problem statement (Effect) and suggest a structured breakdown of categories and causes.
+Return exactly the JSON format specified in the schema. Do not output markdown code blocks or anything other than a clean JSON payload.`;
+
+            let promptText = `Effect/Problem statement to analyze: "${state.effect}".`;
+            if (promptFocus) {
+                promptText += `\nBrainstorming constraints & guidelines: ${promptFocus}`;
+            }
+            promptText += `\n\nGenerate appropriate categories (like the 6Ms of Manufacturing, the 5Ps of Software Dev, or 8Ps of Marketing/Service, depending on whichever suits the problem best) and individual plausible causes for each. Generate 4 to 6 categories, and 3 to 6 causes per category. Provide a brief explanation of your reasoning in the explanation field.`;
+
+            const responseSchema = {
+                type: "OBJECT",
+                properties: {
+                    categories: {
+                        type: "ARRAY",
+                        description: "List of categories with their brainstormed causes",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                name: { type: "STRING", description: "Name of the category, e.g. 'Manpower (People)', 'Process', etc." },
+                                causes: {
+                                    type: "ARRAY",
+                                    items: { type: "STRING", description: "A plausible root cause" }
+                                }
+                            },
+                            required: ["name", "causes"]
+                        }
+                    },
+                    explanation: { type: "STRING", description: "A brief summary explanation of the root cause hypothesis" }
+                },
+                required: ["categories", "explanation"]
+            };
+
+            const payload = {
+                contents: [{ parts: [{ text: promptText }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema
+                }
+            };
+
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+            let success = false;
+            let responseData = null;
+            let lastErr = "AI connection error";
+            const delays = [1000, 2000, 4000];
+
+            for (let attempt = 0; attempt < delays.length; attempt++) {
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errText}`);
+                    }
+
+                    const jsonResult = await response.json();
+                    const text = jsonResult.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) {
+                        responseData = JSON.parse(text);
+                        success = true;
+                        break;
+                    }
+                } catch (e) {
+                    lastErr = e.message;
+                    if (attempt < delays.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+                    }
+                }
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            statusEl.classList.add('hidden');
+
+            if (success && responseData) {
+                pushHistory();
+                state.categories = responseData.categories;
+                updateUI();
+                fitCanvas();
+
+                logText.innerHTML = `<strong>Root Cause Hypothesis:</strong> ${escapeHtml(responseData.explanation)}`;
+                logContainer.classList.remove('hidden');
+            } else {
+                showAlert("Gemini Connection Error", `Failed to get suggestions from Gemini AI: ${lastErr}. Verify your API Key and network connection.`);
+            }
+        }
+
+        // --- CUSTOM ALERT DIALOGS ---
+        function showAlert(title, message) {
+            document.getElementById('alert-title').innerHTML = title;
+            document.getElementById('alert-message').innerHTML = message;
+            document.getElementById('alert-modal').classList.remove('hidden');
+        }
+
+        function closeAlert() {
+            document.getElementById('alert-modal').classList.add('hidden');
+        }
+
+        // --- LIGHT/DARK SYSTEM EVENT TRIGGER ---
+        document.getElementById("theme-toggle").addEventListener("click", () => {
+            const isDark = document.documentElement.classList.contains('dark');
+            const newTheme = isDark ? 'light' : 'dark';
+            
+            if (newTheme === 'dark') {
+                document.documentElement.classList.add('dark');
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+            localStorage.setItem('theme', newTheme);
+            
+            updateUI();
+        });
+    </script>
+</body>
+</html>

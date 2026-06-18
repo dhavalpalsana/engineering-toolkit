@@ -1,6 +1,15 @@
 // Tools registry database
 const toolsRegistry = [
   {
+    id: "fishbone-diagram",
+    name: "Ishikawa Fishbone Diagram Creator",
+    description: "Visualize cause-and-effect relationships with interactive diagrams, templates, dynamic layouts, exports, and AI brainstorm assistance.",
+    tags: ["management", "quality", "root-cause", "ishikawa", "lean", "six-sigma", "engineering"],
+    icon: "fishbone",
+    path: "./tools/fishbone-diagram/index.html",
+    status: "active"
+  },
+  {
     id: "wire-gauge",
     name: "Dynamic Cable Thermal & Loss Solver",
     description: "Evaluate multi-segment thermodynamic conditions and electrodynamic voltage drops for series electrical cables.",
@@ -49,6 +58,7 @@ const toolsRegistry = [
 
 // Helper object to hold Lucide SVG icon paths (so we don't need external heavy library script files)
 const registryIcons = {
+  fishbone: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="22" y2="12" /><path d="M18 6l4 6-4 6" /><line x1="8" y1="12" x2="12" y2="5" /><line x1="14" y1="12" x2="18" y2="5" /><line x1="8" y1="12" x2="12" y2="19" /><line x1="14" y1="12" x2="18" y2="19" /></svg>`,
   zap: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
   layers: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
   wrench: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`,
