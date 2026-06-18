@@ -150,10 +150,10 @@
     </header>
 
     <!-- Main Grid Content -->
-    <main class="flex-1 max-w-[1600px] mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+    <main class="flex-1 max-w-[1600px] mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start lg:min-h-[600px]">
         
         <!-- Left Panel: Sidebar Editor & Tools (5 Columns) -->
-        <section class="lg:col-span-5 flex flex-col gap-4">
+        <section class="lg:col-span-5 flex flex-col gap-4 lg:self-start lg:max-h-[calc(100vh-130px)] lg:overflow-y-auto">
             
             <!-- Presets Section -->
             <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
@@ -178,7 +178,7 @@
             </div>
 
             <!-- Tabbed Panel (Structure, Styles, AI, Guide) -->
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex-1 flex flex-col overflow-hidden min-h-[500px]">
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
                 <!-- Tabs header -->
                 <div class="flex border-b border-slate-200 dark:border-slate-800 shrink-0">
                     <button onclick="switchTab('structure')" id="tab-btn-structure" class="flex-1 py-3 text-center text-xs font-bold border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-all flex items-center justify-center gap-1.5">
@@ -196,7 +196,7 @@
                 </div>
 
                 <!-- Tab Contents Container -->
-                <div class="flex-1 overflow-y-auto p-4">
+                <div class="p-4">
                     
                     <!-- TAB 1: STRUCTURE EDITOR -->
                     <div id="tab-content-structure" class="space-y-4">
@@ -393,7 +393,7 @@
         </section>
 
         <!-- Right Panel: Interactive Visual Canvas (7 Columns) -->
-        <section class="lg:col-span-7 flex flex-col gap-4">
+        <section class="lg:col-span-7 flex flex-col gap-4 lg:h-[calc(100vh-130px)] lg:self-start lg:sticky lg:top-[82px]">
             
             <!-- Canvas Window Card -->
             <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex-1 flex flex-col overflow-hidden min-h-[500px] relative">
@@ -434,7 +434,7 @@
                 </div>
 
                 <!-- Interactive SVG Canvas wrapper -->
-                <div id="canvas-container" class="flex-1 w-full h-full bg-[#fcfdfe] dark:bg-[#070b12] relative cursor-grab active:cursor-grabbing overflow-hidden">
+                <div id="canvas-container" class="flex-1 bg-[#fcfdfe] dark:bg-[#070b12] relative cursor-grab active:cursor-grabbing overflow-hidden">
                     <svg id="fishbone-svg" width="100%" height="100%" class="w-full h-full" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
                         <!-- Definitions for patterns/gradients -->
                         <defs id="svg-defs">
@@ -811,13 +811,22 @@
             switchTab('structure');
             syncThemeUI();
             updateUI();
-            fitCanvas(); // Auto-scale to show first screen nicely
+            // Fit canvas initially and after layout settles
+            fitCanvas();
+            setTimeout(fitCanvas, 50);
+            setTimeout(fitCanvas, 250);
 
-            // Listen for window resize to refit canvas
-            window.addEventListener('resize', fitCanvas);
-
-            // Re-fit once page resources are fully loaded and layouts settled
-            window.addEventListener('load', fitCanvas);
+            // Use ResizeObserver to automatically fit canvas when its container size changes
+            const canvasContainer = document.getElementById('canvas-container');
+            if (canvasContainer && window.ResizeObserver) {
+                const resizeObserver = new ResizeObserver(() => {
+                    fitCanvas();
+                });
+                resizeObserver.observe(canvasContainer);
+            } else {
+                window.addEventListener('resize', fitCanvas);
+                window.addEventListener('load', fitCanvas);
+            }
 
             // Lucide initialize
             lucide.createIcons();
@@ -987,6 +996,7 @@
                 state.categories = JSON.parse(JSON.stringify(PRESETS[presetId].categories));
                 updateUI();
                 fitCanvas();
+                setTimeout(fitCanvas, 50);
             }
         }
 
@@ -1016,6 +1026,12 @@
             pushHistory();
             state.categories.splice(index, 1);
             updateUI();
+        }
+
+        function toggleCategoryCollapse(index) {
+            const cat = state.categories[index];
+            cat.collapsed = !cat.collapsed;
+            renderSidebar();
         }
 
         function addCause(categoryIndex, causeVal = "") {
@@ -1084,11 +1100,19 @@
                 const catCard = document.createElement("div");
                 catCard.className = "border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/20";
                 
+                const isCollapsed = !!cat.collapsed;
+                const chevronIcon = isCollapsed ? 'chevron-right' : 'chevron-down';
+
                 catCard.innerHTML = `
-                    <div class="bg-slate-100/50 dark:bg-slate-900/40 p-2.5 flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800">
-                        <input type="text" value="${escapeHtml(cat.name)}" 
-                               onchange="updateCategoryName(${catIdx}, this.value)"
-                               class="bg-transparent border-0 hover:bg-white dark:hover:bg-slate-900 focus:bg-white dark:focus:bg-slate-900 text-xs font-bold text-slate-800 dark:text-white px-1.5 py-0.5 rounded focus:ring-1 focus:ring-teal-500 w-full focus:outline-none" />
+                    <div class="bg-slate-100/50 dark:bg-slate-900/40 p-2 flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-1 w-full">
+                            <button onclick="toggleCategoryCollapse(${catIdx})" class="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-950 dark:hover:text-white rounded-lg transition-all shrink-0" title="${isCollapsed ? 'Expand' : 'Collapse'} Category">
+                                <i data-lucide="${chevronIcon}" class="w-4 h-4"></i>
+                            </button>
+                            <input type="text" value="${escapeHtml(cat.name)}" 
+                                   onchange="updateCategoryName(${catIdx}, this.value)"
+                                   class="bg-transparent border-0 hover:bg-white dark:hover:bg-slate-900 focus:bg-white dark:focus:bg-slate-900 text-xs font-bold text-slate-800 dark:text-white px-1.5 py-0.5 rounded focus:ring-1 focus:ring-teal-500 w-full focus:outline-none font-semibold" />
+                        </div>
                         <div class="flex items-center gap-1 shrink-0">
                             <button onclick="addCause(${catIdx})" class="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-950 dark:hover:text-white rounded-lg transition-all" title="Add Cause">
                                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
@@ -1098,7 +1122,7 @@
                             </button>
                         </div>
                     </div>
-                    <div class="p-2.5 space-y-1.5" id="cat-causes-${catIdx}">
+                    <div class="p-2.5 space-y-1.5 ${isCollapsed ? 'hidden' : ''}" id="cat-causes-${catIdx}">
                     </div>
                 `;
 
@@ -1439,16 +1463,8 @@
                                 }
                             }
 
-                            // If comment is present, draw a speech bubble icon
+                            // No comment bubble drawn on canvas as per user request
                             let commentIcon = "";
-                            if (causeObj.comment) {
-                                commentIcon = `
-                                    <g opacity="0.8">
-                                        <rect x="${xEnd - 16}" y="${yEnd - 12}" width="12" height="8" rx="2.5" fill="${isDark ? '#475569' : '#94a3b8'}" />
-                                        <polygon points="${xEnd - 13},${yEnd - 4} ${xEnd - 9},${yEnd - 4} ${xEnd - 13},${yEnd}" fill="${isDark ? '#475569' : '#94a3b8'}" />
-                                    </g>
-                                `;
-                            }
 
                             g += `
                                 <g class="cause-text-group group/cause cursor-pointer select-none" 
@@ -1484,7 +1500,6 @@
                     }
                 });
             }
-
             fishboneContent.innerHTML = g;
         }
 
