@@ -176,16 +176,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const toolDesc = document.getElementById("tool-description-input").value;
     const contactEmail = document.getElementById("contact-email").value;
 
-    // Simulate saving suggestions (perfect for a static github.io site)
-    console.log("Tool Suggestion Received:", { toolName, toolDesc, contactEmail });
-    
-    // Store in local storage to keep it active for the local session demo
+    // Store in local storage for local reference
     const existing = JSON.parse(localStorage.getItem("tool_suggestions") || "[]");
     existing.push({ toolName, toolDesc, contactEmail, date: new Date().toISOString() });
     localStorage.setItem("tool_suggestions", JSON.stringify(existing));
 
-    // Success feedback
-    alert(`Thank you! Your suggestion for "${toolName}" has been submitted.`);
+    // Construct the GitHub pre-filled issue URL
+    const repoUrl = "https://github.com/dhavalpalsana/engineering-toolkit/issues/new";
+    const title = encodeURIComponent(`Tool Suggestion: ${toolName}`);
+    const body = encodeURIComponent(
+      `### Tool Request\n\n` +
+      `**Name:** ${toolName}\n\n` +
+      `**Description & Requirements:**\n${toolDesc}\n\n` +
+      `**Contact / Context (Optional):** ${contactEmail || "N/A"}\n\n` +
+      `*Submitted via Engineering Toolkit Suggestion Portal.*`
+    );
+    
+    const githubIssueUrl = `${repoUrl}?title=${title}&body=${body}`;
+    
+    // Open in a new tab
+    window.open(githubIssueUrl, "_blank");
     
     // Reset and close
     requestForm.reset();
