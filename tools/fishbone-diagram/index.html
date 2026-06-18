@@ -1292,11 +1292,14 @@
             const START_PAD   = 18;                   // gap from bone tip to first cause
             const USABLE_FRAC = 0.82;                 // causes use this fraction of bone span
 
-            // Layout constants – xMin=240 ensures the leftmost category always has
-            // at least ~130 px of cause-label space before the canvas edge.
+            // Layout constants.
+            // xMin=300  → leftmost bone tip at x=190, giving ≥branchWidth of cause space
+            //             at every attachment point on that bone.
+            // MIN_CAT_SPACING=165 → same-side bones are 330 px apart, so even the
+            //             second same-side category has 220 px of cause room at its tip.
             const spineStart      = 60;
-            const xMin            = 240;
-            const MIN_CAT_SPACING = 150;
+            const xMin            = 300;
+            const MIN_CAT_SPACING = 165;
             const headW           = 180;
             const headMargin      = 20;
 
@@ -1385,10 +1388,14 @@
                     const xConn  = C > 1 ? xMin + idx * spineSpacing : (xMin + xMax) / 2;
                     const xOuter = xConn - boneOffset;
 
-                    // Left boundary for causes: right edge of the previous same-side bone
+                    // Left boundary for causes.
+                    // For the FIRST same-side bone there's no previous bone to the left;
+                    // we set xLeft so that at EVERY attachment on this bone there is at
+                    // least branchWidth px of usable cause space.
+                    // For later same-side bones, xLeft = right edge of the previous bone.
                     const prevSameIdx = idx - 2;
                     const xLeft = prevSameIdx < 0
-                        ? spineStart + 5
+                        ? Math.max(spineStart + 5, xOuter - branchWidth - 10)
                         : (xMin + prevSameIdx * spineSpacing) + 20;
 
                     // Main bone line
@@ -1480,9 +1487,10 @@
                             const xAttach = xOuter + t * (xConn - xOuter);
 
                             // Horizontal space available to the left of the attachment:
-                            // from xAttach to xLeft, capped at branchWidth + 80 px
-                            const availW = Math.max(60, xAttach - xLeft - 5);
-                            const useW   = Math.min(branchWidth + 80, availW);
+                            // from xAttach to xLeft, capped at branchWidth + 40 px.
+                            // The xLeft guarantee above means availW ≥ branchWidth here.
+                            const availW = Math.max(branchWidth, xAttach - xLeft - 5);
+                            const useW   = Math.min(branchWidth + 40, availW);
                             const xLineL = Math.max(xLeft + 4, xAttach - useW); // left end of tick line
 
                             // Re-wrap with the real available width
