@@ -56,10 +56,18 @@ document.addEventListener("DOMContentLoaded", () => {
     filteredTools.forEach(tool => {
       const card = document.createElement("div");
       card.className = "tool-card";
-      
+
+      // Accessibility: make card keyboard-navigable
       const isActive = tool.status === "active";
       const badgeClass = isActive ? "active" : "upcoming";
       const badgeText = isActive ? "Active" : "Coming Soon";
+      const ariaLabel = isActive
+        ? `Open ${tool.name}`
+        : `${tool.name} — Coming Soon. Click to suggest this tool.`;
+
+      card.setAttribute("role", "button");
+      card.setAttribute("tabindex", "0");
+      card.setAttribute("aria-label", ariaLabel);
       
       card.innerHTML = `
         <div class="tool-card-header">
@@ -81,15 +89,21 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      if (isActive) {
-        card.addEventListener("click", () => {
+      const handleActivate = () => {
+        if (isActive) {
           window.location.href = tool.path;
-        });
-      } else {
-        card.addEventListener("click", () => {
+        } else {
           openModalWithTool(tool.name);
-        });
-      }
+        }
+      };
+
+      card.addEventListener("click", handleActivate);
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleActivate();
+        }
+      });
 
       toolsGrid.appendChild(card);
     });

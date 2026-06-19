@@ -1,0 +1,7 @@
+# robots.txt — Engineering Toolkit
+# Allow all crawlers; point to sitemap for indexing
+
+User-agent: *
+Allow: /
+
+Sitemap: https://dhavalpalsana.github.io/engineering-toolkit/sitemap.xml

@@ -1,60 +1,12 @@
-// Tools registry database
-const toolsRegistry = [
-  {
-    id: "fishbone-diagram",
-    name: "Ishikawa Fishbone Diagram Creator",
-    description: "Visualize cause-and-effect relationships with interactive diagrams, templates, dynamic layouts, exports, and AI brainstorm assistance.",
-    tags: ["management", "quality", "root-cause", "ishikawa", "lean", "six-sigma", "engineering"],
-    icon: "fishbone",
-    path: "./tools/fishbone-diagram/index.html",
-    status: "active"
-  },
-  {
-    id: "wire-gauge",
-    name: "Dynamic Cable Thermal & Loss Solver",
-    description: "Evaluate multi-segment thermodynamic conditions and electrodynamic voltage drops for series electrical cables.",
-    tags: ["electrical", "awg", "nec", "power", "cable", "thermal", "thermodynamics"],
-    icon: "zap",
-    path: "./tools/wire-gauge/index.html",
-    status: "active"
-  },
-  {
-    id: "busbar-sizing",
-    name: "Busbar Capacity Calculator",
-    description: "Determine current capacity, temperature rise, and mechanical forces for rectangular copper and aluminum busbars.",
-    tags: ["electrical", "busbar", "copper", "aluminum", "switchgear"],
-    icon: "layers",
-    path: "./tools/busbar-sizing/index.html",
-    status: "coming-soon"
-  },
-  {
-    id: "bolt-torque",
-    name: "Bolt Torque & Tension Calculator",
-    description: "Determine target bolt torque, preload tension, and friction coefficient adjustments for mechanical design.",
-    tags: ["mechanical", "bolt", "torque", "thread", "fastener"],
-    icon: "wrench",
-    path: "./tools/bolt-torque/index.html",
-    status: "coming-soon"
-  },
-  {
-    id: "unit-converter",
-    name: "Engineering Unit Converter",
-    description: "Convert between physical units of pressure, torque, temperature, energy, power, and mass flow rate.",
-    tags: ["general", "conversion", "units", "pressure", "temperature"],
-    icon: "refresh-cw",
-    path: "./tools/unit-converter/index.html",
-    status: "coming-soon"
-  },
-  {
-    id: "pressure-drop",
-    name: "Pipe Pressure Drop & Flow Calculator",
-    description: "Calculate fluid flow rate, velocity, Reynolds number, and friction pressure drops using the Darcy-Weisbach equation.",
-    tags: ["fluids", "hydraulics", "pipe", "flow", "pressure"],
-    icon: "droplet",
-    path: "./tools/pressure-drop/index.html",
-    status: "coming-soon"
-  }
-];
+/**
+ * registry.js — Thin shim that re-exports TOOLS_DATA from tools-data.js
+ * as `toolsRegistry` for backward compatibility with app.js.
+ *
+ * To add or edit tools, update js/tools-data.js instead.
+ *
+ * IMPORTANT: tools-data.js must be loaded before this file.
+ */
+const toolsRegistry = TOOLS_DATA;
 
 // Helper object to hold Lucide SVG icon paths (so we don't need external heavy library script files)
 const registryIcons = {
