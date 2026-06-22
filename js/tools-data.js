@@ -35,11 +35,11 @@ const TOOLS_DATA = [
   {
     id: "busbar-sizing",
     name: "Busbar Capacity Calculator",
-    description: "Determine current capacity, temperature rise, and mechanical forces for rectangular copper and aluminum busbars.",
-    tags: ["electrical", "busbar", "copper", "aluminum", "switchgear"],
+    description: "Full physics-based busbar design: thermal current capacity (CDA method), AC skin effect, multi-bar derating, IEC 60865-1 short-circuit rating, mechanical deflection, and voltage drop. Copper and aluminium.",
+    tags: ["electrical", "busbar", "copper", "aluminium", "switchgear", "short-circuit", "IEC", "thermal"],
     icon: "layers",
     path: "./tools/busbar-sizing/index.html",
-    status: "coming-soon"
+    status: "active"
   },
   {
     id: "bolt-torque",

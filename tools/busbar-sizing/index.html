@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function(){const t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Busbar Capacity Calculator — Engineering Toolkit</title>
+  <meta name="description" content="Physics-based busbar capacity calculator. DC/AC resistance, thermal current capacity, skin effect, short-circuit ratings, mechanical deflection, and voltage drop. Based on CDA Copper for Busbars methodology.">
+  <meta property="og:title" content="Busbar Capacity Calculator — Engineering Toolkit">
+  <meta property="og:image" content="https://dhavalpalsana.github.io/engineering-toolkit/assets/og-image.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-primary:#f8fafc; --bg-secondary:#ffffff; --bg-tertiary:#f1f5f9;
+      --text-primary:#0f172a; --text-secondary:#475569; --text-muted:#64748b;
+      --border-color:#e2e8f0;
+      --accent:#f59e0b; --accent-2:#0d9488; --accent-3:#2563eb;
+      --accent-glow:rgba(245,158,11,0.12);
+      --green:#10b981; --amber:#f59e0b; --red:#ef4444; --blue:#3b82f6;
+      --green-bg:rgba(16,185,129,0.08); --amber-bg:rgba(245,158,11,0.08); --red-bg:rgba(239,68,68,0.08); --blue-bg:rgba(59,130,246,0.08);
+      --font-sans:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+      --font-mono:'JetBrains Mono',monospace;
+      --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:20px;
+      --sh-sm:0 1px 3px rgba(0,0,0,.05);
+      --sh-md:0 4px 12px rgba(0,0,0,.07),0 0 0 1px rgba(0,0,0,.03);
+      --sh-lg:0 12px 32px rgba(0,0,0,.10),0 0 0 1px rgba(0,0,0,.04);
+      --tr:.2s cubic-bezier(.4,0,.2,1);
+    }
+    [data-theme="dark"] {
+      --bg-primary:#090d16; --bg-secondary:#0f1422; --bg-tertiary:#171e30;
+      --text-primary:#f8fafc; --text-secondary:#cbd5e1; --text-muted:#94a3b8;
+      --border-color:#1e293b;
+      --accent:#fbbf24; --accent-2:#14b8a6; --accent-3:#60a5fa;
+      --accent-glow:rgba(251,191,36,0.10);
+      --sh-sm:0 1px 3px rgba(0,0,0,.3); --sh-md:0 4px 12px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.02);
+      --sh-lg:0 12px 32px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.03);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{font-family:var(--font-sans);background:var(--bg-primary);color:var(--text-primary);min-height:100vh;display:flex;flex-direction:column;line-height:1.6;transition:background var(--tr),color var(--tr);overflow-x:hidden;}
+    body::before{content:'';position:fixed;top:-150px;right:-100px;width:500px;height:500px;border-radius:50%;filter:blur(140px);z-index:-1;pointer-events:none;background:radial-gradient(circle,var(--accent-glow),transparent 70%);}
+    ::-webkit-scrollbar{width:6px;height:6px;}
+    ::-webkit-scrollbar-track{background:var(--bg-primary);}
+    ::-webkit-scrollbar-thumb{background:var(--border-color);border-radius:99px;}
+
+    /* ── HEADER ── */
+    header{height:68px;display:flex;align-items:center;padding:0 24px;border-bottom:1px solid var(--border-color);position:sticky;top:0;z-index:50;background:rgba(255,255,255,.90);backdrop-filter:blur(12px);transition:background var(--tr);}
+    [data-theme="dark"] header{background:rgba(15,20,34,.90);}
+    .hdr{width:100%;max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+    .hdr-left{display:flex;align-items:center;gap:10px;}
+    .back-btn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--r-md);color:var(--text-secondary);transition:all var(--tr);cursor:pointer;text-decoration:none;flex-shrink:0;}
+    .back-btn:hover{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+    .back-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+    .hdr-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),#f97316);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;box-shadow:0 4px 10px var(--accent-glow);}
+    .hdr-icon svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+    .hdr-titles h1{font-size:16px;font-weight:700;letter-spacing:-.2px;}
+    .hdr-titles p{font-size:11px;color:var(--text-muted);font-weight:500;}
+    .theme-btn{width:36px;height:36px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;transition:all var(--tr);}
+    .theme-btn:hover{background:var(--bg-secondary);color:var(--text-primary);}
+    .theme-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+    .theme-btn .sun-icon{display:none;}
+    [data-theme="dark"] .theme-btn .sun-icon{display:block;}
+    [data-theme="dark"] .theme-btn .moon-icon{display:none;}
+
+    /* ── MAIN ── */
+    main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:32px 24px 80px;}
+
+    /* ── PAGE HERO ── */
+    .hero{margin-bottom:28px;}
+    .hero h2{font-size:30px;font-weight:800;letter-spacing:-.8px;margin-bottom:6px;}
+    .hero h2 span{background:linear-gradient(135deg,var(--accent),#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .hero p{font-size:14px;color:var(--text-secondary);max-width:620px;}
+    .hero-meta{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+    .tag{display:inline-flex;align-items:center;gap:5px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:99px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--text-muted);}
+    .tag svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+    /* ── MAIN TABS ── */
+    .main-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border-color);margin-bottom:28px;}
+    .main-tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--text-muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all var(--tr);border-radius:var(--r-sm) var(--r-sm) 0 0;}
+    .main-tab:hover{color:var(--text-primary);}
+    .main-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;}
+
+    /* ── LAYOUT ── */
+    .layout{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;}
+    @media(max-width:900px){.layout{grid-template-columns:1fr;}}
+
+    /* ── INPUT CARD ── */
+    .input-card{background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--r-xl);box-shadow:var(--sh-md);overflow:hidden;position:sticky;top:88px;}
+    .input-card-header{padding:16px 20px;border-bottom:1px solid var(--border-color);background:var(--bg-tertiary);display:flex;align-items:center;gap:8px;}
+    .input-card-header svg{width:16px;height:16px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+    .input-card-header h3{font-size:13px;font-weight:700;color:var(--text-primary);}
+    .input-body{padding:16px 20px;display:flex;flex-direction:column;gap:16px;}
+    .input-section{display:flex;flex-direction:column;gap:8px;}
+    .section-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);padding:0 2px;}
+    .field{display:flex;flex-direction:column;gap:4px;}
+    .field label{font-size:11px;font-weight:600;color:var(--text-secondary);}
+    .field-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    input[type=number],select{width:100%;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--r-md);padding:9px 11px;font-family:var(--font-sans);font-size:13px;font-weight:500;color:var(--text-primary);outline:none;transition:border-color var(--tr);}
+    input[type=number]:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+    select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:28px;}
+    .sep{height:1px;background:var(--border-color);}
+    .calc-btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),#f97316);border:none;border-radius:var(--r-md);color:#fff;font-family:var(--font-sans);font-size:14px;font-weight:700;cursor:pointer;transition:all var(--tr);box-shadow:0 4px 12px rgba(245,158,11,.3);margin-top:4px;}
+    .calc-btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(245,158,11,.4);}
+    .calc-btn:active{transform:translateY(0);}
+
+    /* ── RESULTS PANEL ── */
+    .results-panel{display:flex;flex-direction:column;gap:16px;}
+
+    /* ── SVG PREVIEW ── */
+    .preview-card{background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--r-xl);box-shadow:var(--sh-md);padding:20px;}
+    .preview-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+    .preview-header h3{font-size:13px;font-weight:700;color:var(--text-primary);}
+    .preview-meta{display:flex;gap:8px;flex-wrap:wrap;}
+    .meta-pill{background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:99px;padding:3px 10px;font-size:11px;font-weight:600;color:var(--text-muted);font-family:var(--font-mono);}
+    .preview-svg-wrap{display:flex;justify-content:center;background:var(--bg-tertiary);border-radius:var(--r-lg);padding:20px;min-height:160px;align-items:center;}
+    #busbar-svg{overflow:visible;}
+
+    /* ── MODULE GRID ── */
+    .mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    @media(max-width:1100px){.mod-grid{grid-template-columns:1fr;}}
+    .mod-card{background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--r-xl);box-shadow:var(--sh-md);overflow:hidden;}
+    .mod-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border-color);}
+    .mod-icon{width:32px;height:32px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .mod-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+    .mod-title{font-size:12px;font-weight:700;color:var(--text-primary);}
+    .mod-subtitle{font-size:10px;color:var(--text-muted);}
+    .mod-body{padding:14px 16px;display:flex;flex-direction:column;gap:8px;}
+    .result-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+    .result-label{font-size:11px;color:var(--text-secondary);font-weight:500;flex:1;}
+    .result-val{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text-primary);text-align:right;}
+    .result-unit{font-size:10px;color:var(--text-muted);margin-left:3px;font-family:var(--font-sans);}
+    .result-divider{height:1px;background:var(--border-color);margin:4px 0;}
+    .status-badge{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:3px 10px;font-size:11px;font-weight:700;margin-top:4px;}
+    .status-badge svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
+    .pass{background:var(--green-bg);color:var(--green);}
+    .warn{background:var(--amber-bg);color:var(--amber);}
+    .fail{background:var(--red-bg);color:var(--red);}
+    .info{background:var(--blue-bg);color:var(--blue);}
+    .mod-card.highlight-pass{border-color:rgba(16,185,129,.3);}
+    .mod-card.highlight-warn{border-color:rgba(245,158,11,.35);}
+    .mod-card.highlight-fail{border-color:rgba(239,68,68,.35);}
+
+    /* ── FORMULAS TAB ── */
+    .formula-grid{display:flex;flex-direction:column;gap:20px;}
+    .formula-card{background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--r-xl);box-shadow:var(--sh-md);overflow:hidden;}
+    .formula-card-hdr{display:flex;align-items:center;gap:10px;padding:14px 20px;background:var(--bg-tertiary);border-bottom:1px solid var(--border-color);}
+    .formula-num{width:24px;height:24px;background:linear-gradient(135deg,var(--accent),#f97316);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0;}
+    .formula-card-hdr h3{font-size:13px;font-weight:700;color:var(--text-primary);}
+    .formula-body{padding:16px 20px;display:flex;flex-direction:column;gap:10px;}
+    .formula-eq{background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--r-md);padding:12px 16px;font-family:var(--font-mono);font-size:12px;color:var(--accent-3);line-height:1.8;}
+    .formula-note{font-size:12px;color:var(--text-secondary);line-height:1.6;}
+    .param-table{width:100%;border-collapse:collapse;font-size:11px;}
+    .param-table td{padding:5px 8px;border-bottom:1px solid var(--border-color);color:var(--text-secondary);}
+    .param-table td:first-child{font-family:var(--font-mono);font-weight:600;color:var(--accent-3);white-space:nowrap;}
+    .param-table tr:last-child td{border-bottom:none;}
+
+    /* ── PLACEHOLDER ── */
+    .placeholder{text-align:center;padding:60px 24px;color:var(--text-muted);}
+    .placeholder svg{width:56px;height:56px;stroke:var(--border-color);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin:0 auto 16px;display:block;}
+    .placeholder h3{font-size:16px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;}
+    .placeholder p{font-size:13px;max-width:340px;margin:0 auto;}
+
+    /* ── TOAST ── */
+    .toast{position:fixed;bottom:24px;right:24px;z-index:999;background:var(--text-primary);color:var(--bg-primary);padding:10px 16px;border-radius:var(--r-md);font-size:13px;font-weight:600;box-shadow:var(--sh-lg);transform:translateY(70px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);pointer-events:none;}
+    .toast.show{transform:translateY(0);opacity:1;}
+
+    @media(max-width:640px){main{padding:20px 14px 60px;}.hero h2{font-size:24px;}}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="hdr">
+    <div class="hdr-left">
+      <a href="../../index.html" class="back-btn" title="Back to Engineering Toolkit">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </a>
+      <div class="hdr-icon">
+        <svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="1"></rect><path d="M3 12h18"></path><path d="M7 8V6M17 8V6M7 16v2M17 16v2"></path></svg>
+      </div>
+      <div class="hdr-titles">
+        <h1>Busbar Capacity Calculator</h1>
+        <p>CDA Copper for Busbars · IEC 60865-1 · 7 Design Modules</p>
+      </div>
+    </div>
+    <button class="theme-btn" id="theme-toggle" aria-label="Toggle theme">
+      <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+      <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <h2>Busbar <span>Capacity Calculator</span></h2>
+    <p>Physics-based design tool implementing the full CDA methodology: thermal current rating, AC skin effect, multi-bar derating, short-circuit withstand, mechanical deflection, and voltage drop.</p>
+    <div class="hero-meta">
+      <span class="tag"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>CDA Copper for Busbars</span>
+      <span class="tag"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>IEC 60865-1 Adiabatic</span>
+      <span class="tag"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="3"></line></svg>Cu &amp; Al · DC/AC 50/60 Hz</span>
+    </div>
+  </div>
+
+  <div class="main-tabs" role="tablist">
+    <button class="main-tab active" data-tab="configure" role="tab">Configure</button>
+    <button class="main-tab" data-tab="results" role="tab">Results</button>
+    <button class="main-tab" data-tab="formulas" role="tab">Formulas &amp; Reference</button>
+  </div>
+
+  <!-- ══ CONFIGURE TAB ══ -->
+  <div class="tab-panel active" id="tab-configure">
+    <div class="layout">
+
+      <!-- INPUT CARD -->
+      <div class="input-card">
+        <div class="input-card-header">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"></path></svg>
+          <h3>Design Parameters</h3>
+        </div>
+        <div class="input-body">
+
+          <!-- Geometry -->
+          <div class="input-section">
+            <div class="section-label">Busbar Geometry</div>
+            <div class="field-row">
+              <div class="field">
+                <label>Width W (mm)</label>
+                <input type="number" id="inp-W" value="100" min="5" max="500" step="5">
+              </div>
+              <div class="field">
+                <label>Thickness T (mm)</label>
+                <input type="number" id="inp-T" value="10" min="1" max="100" step="1">
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Length L (m)</label>
+                <input type="number" id="inp-L" value="5" min="0.1" max="100" step="0.5">
+              </div>
+              <div class="field">
+                <label>Bars per Phase</label>
+                <select id="inp-N">
+                  <option value="1">1 bar</option>
+                  <option value="2">2 bars</option>
+                  <option value="3">3 bars</option>
+                  <option value="4">4 bars</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Support Span L_span (m)</label>
+              <input type="number" id="inp-span" value="1.5" min="0.1" max="20" step="0.1">
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- Material & Surface -->
+          <div class="input-section">
+            <div class="section-label">Material &amp; Surface</div>
+            <div class="field">
+              <label>Material</label>
+              <select id="inp-mat">
+                <option value="Cu">Copper HC (ETP/HCP)</option>
+                <option value="Al">Aluminium 1350-H19</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Surface Finish (Emissivity ε)</label>
+              <select id="inp-emis">
+                <option value="0.10">Bright/Polished (ε = 0.10)</option>
+                <option value="0.50" selected>Oxidized/Natural (ε = 0.50)</option>
+                <option value="0.90">Painted/Matte (ε = 0.90)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Mounting Orientation</label>
+              <select id="inp-orient">
+                <option value="vertical">Vertical (edge-on)</option>
+                <option value="horizontal">Horizontal (flat)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- System -->
+          <div class="input-section">
+            <div class="section-label">System Conditions</div>
+            <div class="field-row">
+              <div class="field">
+                <label>Current Type</label>
+                <select id="inp-acdc">
+                  <option value="AC">AC</option>
+                  <option value="DC">DC</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Frequency (Hz)</label>
+                <select id="inp-freq">
+                  <option value="50">50 Hz</option>
+                  <option value="60">60 Hz</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Ambient Temp (°C)</label>
+                <input type="number" id="inp-Tamb" value="40" min="-20" max="60" step="1">
+              </div>
+              <div class="field">
+                <label>Max Temp Rise ΔT (°C)</label>
+                <input type="number" id="inp-dT" value="35" min="5" max="100" step="1">
+              </div>
+            </div>
+            <div class="field">
+              <label>System Voltage (V)</label>
+              <input type="number" id="inp-V" value="415" min="1" step="1">
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- Short Circuit -->
+          <div class="input-section">
+            <div class="section-label">Short-Circuit Conditions</div>
+            <div class="field-row">
+              <div class="field">
+                <label>Fault Current I_sc (kA rms)</label>
+                <input type="number" id="inp-Isc" value="50" min="1" max="500" step="1">
+              </div>
+              <div class="field">
+                <label>Fault Duration t_f (s)</label>
+                <input type="number" id="inp-tf" value="1" min="0.02" max="5" step="0.01">
+              </div>
+            </div>
+            <div class="field">
+              <label>Phase Spacing d, centre-to-centre (mm)</label>
+              <input type="number" id="inp-d" value="150" min="10" max="2000" step="10">
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <button class="calc-btn" id="calc-btn">
+            ⚡ Calculate All Modules
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT: SVG PREVIEW + MODULE CARDS -->
+      <div class="results-panel" id="results-panel">
+
+        <!-- Placeholder before first calc -->
+        <div class="preview-card" id="placeholder-card">
+          <div class="placeholder">
+            <svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="1"></rect><path d="M3 12h18M7 8V6M17 8V6M7 16v2M17 16v2"></path></svg>
+            <h3>Ready to Calculate</h3>
+            <p>Configure your busbar parameters on the left, then click <strong>Calculate All Modules</strong> to run the full design analysis.</p>
+          </div>
+        </div>
+
+        <!-- Results (hidden until first calc) -->
+        <div id="calc-results" style="display:none;display:flex;flex-direction:column;gap:16px;">
+
+          <!-- SVG Preview -->
+          <div class="preview-card">
+            <div class="preview-header">
+              <h3>Cross-Section Preview</h3>
+              <div class="preview-meta" id="preview-meta"></div>
+            </div>
+            <div class="preview-svg-wrap">
+              <svg id="busbar-svg" width="380" height="140" viewBox="0 0 380 140"></svg>
+            </div>
+          </div>
+
+          <!-- Module Cards Grid -->
+          <div class="mod-grid" id="mod-grid"></div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RESULTS TAB ══ -->
+  <div class="tab-panel" id="tab-results">
+    <div id="results-tab-content">
+      <div class="placeholder">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        <h3>No Results Yet</h3>
+        <p>Go to the Configure tab, enter your parameters, and run the calculation first.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ FORMULAS TAB ══ -->
+  <div class="tab-panel" id="tab-formulas">
+    <div class="formula-grid">
+
+      <div class="formula-card">
+        <div class="formula-card-hdr"><div class="formula-num">1</div><h3>DC Resistance &amp; Geometry</h3></div>
+        <div class="formula-body">
+          <div class="formula-note">The DC resistance per unit length at operating temperature is the foundation for all other calculations.</div>
+          <div class="formula-eq">R_DC(T) = ρ₀ × [1 + α × (T_op − 20)] / A</div>
+          <table class="param-table">
+            <tr><td>ρ₀</td><td>Resistivity at 20°C: Cu = 1.7241×10⁻⁸ Ω·m, Al = 2.826×10⁻⁸ Ω·m</td></tr>
+            <tr><td>α</td><td>Temperature coefficient: Cu = 0.00393/°C, Al = 0.00403/°C</td></tr>
+            <tr><td>T_op</td><td>Operating temperature = T_amb + ΔT [°C]</td></tr>
+            <tr><td>A</td><td>Cross-section = W × T [m²]</td></tr>
+          </table>
+          <div class="formula-eq">Weight = ρ_density × W × T [kg/m]
+Cu: 8890 kg/m³ · Al: 2700 kg/m³</div>
+        </div>
+      </div>
+
+      <div class="formula-card">
+        <div class="formula-card-hdr"><div class="formula-num">2</div><h3>AC Skin Effect — Rac/Rdc</h3></div>
+        <div class="formula-body">
+          <div class="formula-note">At AC, current density is higher at the conductor surface. The classical slab formula gives the skin effect factor k_s = Rac/Rdc, exact for infinite slabs, accurate for flat bars where W >> T.</div>
+          <div class="formula-eq">δ = √[ρ / (π × f × μ₀)]   [skin depth, metres]
+
+u = T / (2δ)              [normalised half-thickness]
+
+k_s = u × [sinh(2u) + sin(2u)] / [cosh(2u) − cos(2u)]</div>
+          <table class="param-table">
+            <tr><td>δ</td><td>Skin depth at frequency f and temperature T [m]</td></tr>
+            <tr><td>μ₀</td><td>4π × 10⁻⁷ H/m (permeability of free space)</td></tr>
+            <tr><td>u</td><td>Ratio of half-thickness to skin depth</td></tr>
+            <tr><td>k_s</td><td>AC/DC resistance ratio (always ≥ 1.0)</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="formula-card">
+        <div class="formula-card-hdr"><div class="formula-num">3</div><h3>Thermal Current Capacity (CDA Method)</h3></div>
+        <div class="formula-body">
+          <div class="formula-note">At thermal equilibrium, heat generated by I²R equals heat dissipated by natural convection and radiation. Given target ΔT, solve directly for I.</div>
+          <div class="formula-eq">I² × R_AC = Q_conv + Q_rad
+
+Q_conv = 1.71 × P_c^0.75 × ΔT^1.25   [W/m, vertical]
+Q_conv = 1.21 × P_c^0.75 × ΔT^1.25   [W/m, horizontal]
+
+Q_rad = 5.67×10⁻⁸ × ε × P_r × (T_bar⁴ − T_amb⁴) [W/m]
+
+I = √[(Q_conv + Q_rad) / R_AC]</div>
+          <table class="param-table">
+            <tr><td>P_c</td><td>Cooling perimeter = 2(W + T) [m] — exposed surfaces</td></tr>
+            <tr><td>ε</td><td>Emissivity: 0.10 (bright), 0.50 (oxidized), 0.90 (painted)</td></tr>
+            <tr><td>T_bar, T_amb</td><td>Absolute temperatures in Kelvin (add 273.15)</td></tr>
+            <tr><td>ΔT</td><td>Temperature rise = T_bar − T_amb [°C]</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="formula-card">
+        <div class="formula-card-hdr"><div class="formula-num">4</div><h3>Multiple Bars per Phase (CDA Derating)</h3></div>
+        <div class="formula-body">
+          <div class="formula-note">Additional bars in parallel do not give proportional current gain due to restricted convection between bars and proximity effect. CDA derating factors apply (assumes gap = bar thickness).</div>
+          <div class="formula-eq">I_total = I_single × k_N
+
+k₁ = 1.00 · k₂ = 1.80 · k₃ = 2.50 · k₄ = 3.20</div>
+          <table class="param-table">
+            <tr><td>k_N</td><td>CDA multi-bar derating factor for N bars per phase</td></tr>
+            <tr><td>Gap</td><td>Standard: gap between bars = bar thickness T</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="formula-card">
+        <div class="formula-card-hdr"><div class="formula-num">5</div><h3>Short-Circuit Thermal Rating — IEC 60865-1</h3></div>
+        <div class="formula-body">
+          <div class="formula-note">Short-circuit heating is treated as adiabatic (all energy stored in conductor). The minimum cross-section to survive fault without exceeding the annealing temperature limit is:</div>
+          <div class="formula-eq">A_min = I_sc × √t_f / k_th   [mm²]
+
+or: I_withstand = A × k_th / √t_f   [A]
+
+Peak electromagnetic force between phases:
+F = 2×10⁻⁷ × i_peak² × L_span / d   [N]
+i_peak = κ × √2 × I_sc_rms  (κ = 1.8 for X/R ≈ 10)</div>
+          <table class="param-table">
+            <tr><td>k_th</td><td>Material constant: Cu = 141 A·s^0.5/mm², Al = 86 A·s^0.5/mm²</td></tr>
+            <tr><td>t_f</td><td>Fault duration [s], typically 0.1–3 s</td></tr>
+            <tr><td>d</td><td>Phase centre-to-centre spacing [m]</td></tr>
+            <tr><td>κ</td><td>Peak factor = 1.8 (IEC 60909, X/R = 10)</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="formula-card">
+        <div class="formula-card-hdr"><div class="formula-num">6</div><h3>Mechanical Deflection — Beam Theory</h3></div>
+        <div class="formula-body">
+          <div class="formula-note">Busbar treated as a simply supported beam under uniformly distributed electromagnetic load during fault. Maximum deflection and bending stress at mid-span.</div>
+          <div class="formula-eq">w_em = F / L_span           [N/m, UDL per span]
+
+δ_max = 5×w×L⁴ / (384×E×I_2nd)   [m]
+
+σ_bend = w×L² × c / (8 × I_2nd)   [Pa]
+
+I_2nd = W × T³ / 12  (weak axis, vertical bar)
+I_2nd = T × W³ / 12  (strong axis, horizontal bar)</div>
+          <table class="param-table">
+            <tr><td>E</td><td>Young's modulus: Cu HC = 117 GPa, Al 1350 = 70 GPa</td></tr>
+            <tr><td>I_2nd</td><td>Second moment of area — axis depends on orientation</td></tr>
+            <tr><td>c</td><td>Distance to extreme fibre = T/2 (weak) or W/2 (strong)</td></tr>
+            <tr><td>σ_y</td><td>Yield strength: Cu HC = 250 MPa, Al 1350-H19 = 165 MPa</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="formula-card">
+        <div class="formula-card-hdr"><div class="formula-num">7</div><h3>Voltage Drop</h3></div>
+        <div class="formula-body">
+          <div class="formula-note">Resistive voltage drop along the full busbar length at the rated continuous current, expressed as millivolts per metre and as a percentage of system voltage.</div>
+          <div class="formula-eq">ΔV = I_cont × R_AC × L   [V]
+
+ΔV_mpm = I_cont × R_AC × 1000   [mV/m]
+
+ΔV% = (ΔV / V_system) × 100   [%]</div>
+          <table class="param-table">
+            <tr><td>I_cont</td><td>Continuous current capacity [A] (from Module 3+4)</td></tr>
+            <tr><td>R_AC</td><td>AC resistance per metre at operating temperature [Ω/m]</td></tr>
+            <tr><td>V_system</td><td>Line voltage or user-specified system voltage [V]</td></tr>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================================================================
+//  MATERIAL DATABASE
+// ================================================================
+const MAT = {
+  Cu: {
+    name: 'Copper HC',
+    rho20: 1.7241e-8,    // Ω·m at 20°C
+    alpha: 0.00393,       // /°C
+    density: 8890,        // kg/m³
+    E: 117e9,             // Pa
+    sigma_y: 250e6,       // Pa (hard drawn)
+    k_th: 141,            // A·s^0.5/mm² (IEC 60865-1, to 200°C)
+    mu_r: 1.0,            // relative permeability
+    color_dark: '#b45309',
+    color_light: '#f59e0b'
+  },
+  Al: {
+    name: 'Aluminium 1350-H19',
+    rho20: 2.8264e-8,
+    alpha: 0.00403,
+    density: 2700,
+    E: 70e9,
+    sigma_y: 165e6,
+    k_th: 86,
+    mu_r: 1.0,
+    color_dark: '#6b7280',
+    color_light: '#9ca3af'
+  }
+};
+
+const MU0 = 4 * Math.PI * 1e-7; // H/m
+const SIGMA_SB = 5.67e-8;        // W/(m²·K⁴) Stefan-Boltzmann
+const KAPPA = 1.8;               // IEC 60909 peak factor (X/R≈10)
+
+// Multi-bar derating (CDA)
+const K_N = { 1: 1.00, 2: 1.80, 3: 2.50, 4: 3.20 };
+
+// ================================================================
+//  DOM REFS
+// ================================================================
+const $ = id => document.getElementById(id);
+const gv = id => parseFloat($(id).value);
+
+// ================================================================
+//  SKIN EFFECT — classical slab formula
+// ================================================================
+function skinFactor(T_m, rho, f) {
+  const mu = MU0; // non-magnetic
+  const delta = Math.sqrt(rho / (Math.PI * f * mu)); // skin depth [m]
+  const u = (T_m / 2) / delta; // normalised
+  if (u < 0.05) return { ks: 1.0, delta_mm: delta * 1000 };
+  const two_u = 2 * u;
+  const s = Math.sinh(two_u);
+  const si = Math.sin(two_u);
+  const c = Math.cosh(two_u);
+  const co = Math.cos(two_u);
+  const denom = c - co;
+  const ks = denom < 1e-12 ? 1.0 : u * (s + si) / denom;
+  return { ks: Math.max(1.0, ks), delta_mm: delta * 1000 };
+}
+
+// ================================================================
+//  MAIN CALCULATION ENGINE
+// ================================================================
+function runCalc() {
+  // -- inputs --
+  const W_mm = gv('inp-W');    // mm
+  const T_mm = gv('inp-T');    // mm
+  const L    = gv('inp-L');    // m
+  const N    = parseInt($('inp-N').value);
+  const span = gv('inp-span'); // m
+  const mat  = $('inp-mat').value;
+  const eps  = gv('inp-emis');
+  const orient = $('inp-orient').value;
+  const acdc = $('inp-acdc').value;
+  const f    = gv('inp-freq'); // Hz
+  const Tamb = gv('inp-Tamb');
+  const dT   = gv('inp-dT');
+  const V_sys = gv('inp-V');
+  const Isc_kA = gv('inp-Isc');
+  const tf   = gv('inp-tf');
+  const d_mm = gv('inp-d');
+
+  const M = MAT[mat];
+
+  // SI conversions
+  const W_m = W_mm * 1e-3;
+  const T_m = T_mm * 1e-3;
+  const A_m2 = W_m * T_m;
+  const A_mm2 = W_mm * T_mm;
+  const d_m  = d_mm * 1e-3;
+
+  // Operating temperature
+  const T_op = Tamb + dT;  // °C
+
+  // ── MODULE 1: DC Resistance ──────────────────────────────────
+  const rho_T = M.rho20 * (1 + M.alpha * (T_op - 20));
+  const R_dc  = rho_T / A_m2;   // Ω/m
+  const weight_pm = M.density * A_m2; // kg/m
+
+  // ── MODULE 2: AC Skin Effect ─────────────────────────────────
+  let ks = 1.0, delta_mm = 999;
+  if (acdc === 'AC') {
+    const sk = skinFactor(T_m, rho_T, f);
+    ks = sk.ks;
+    delta_mm = sk.delta_mm;
+  }
+  const R_ac = R_dc * ks;  // Ω/m
+
+  // ── MODULE 3: Thermal Current Capacity ─────────────────────
+  // Heat dissipation perimeter [m] — full perimeter for both conv & rad
+  const P = 2 * (W_m + T_m);
+
+  // Temperatures in K
+  const T_bar_K = T_op + 273.15;
+  const T_amb_K = Tamb + 273.15;
+
+  // Convection (CDA empirical formula)
+  // Vertical: 1.71 × P^0.75 × ΔT^1.25 (W/m)
+  // Horizontal: ~0.71× less effective → use factor 0.71 (CDA)
+  const cv_factor = orient === 'vertical' ? 1.71 : 1.21;
+  const Q_conv = cv_factor * Math.pow(P, 0.75) * Math.pow(dT, 1.25);
+
+  // Radiation (Stefan-Boltzmann)
+  const Q_rad = SIGMA_SB * eps * P * (Math.pow(T_bar_K, 4) - Math.pow(T_amb_K, 4));
+
+  const Q_total = Q_conv + Q_rad;
+  const I_single = Math.sqrt(Q_total / R_ac); // A
+
+  // ── MODULE 4: Multi-bar ───────────────────────────────────
+  const kN = K_N[N] || 1.0;
+  const I_total = I_single * kN;
+
+  // ── MODULE 5: Short-Circuit Thermal Rating ────────────────
+  const Isc_A = Isc_kA * 1e3;
+  const I_withstand = A_mm2 * M.k_th / Math.sqrt(tf); // A
+  const sc_margin = (I_withstand / Isc_A - 1) * 100;  // %
+
+  // Peak fault current
+  const i_peak = KAPPA * Math.sqrt(2) * Isc_A;
+
+  // Electromagnetic force per unit length between parallel busbars
+  const Fem_pm = 2e-7 * Math.pow(i_peak, 2) / d_m; // N/m (per conductor length)
+
+  // ── MODULE 6: Mechanical Deflection ──────────────────────
+  // Uniformly distributed electromagnetic load on one span
+  const w_em = Fem_pm; // N/m UDL
+
+  // Second moment of area — orientation determines which axis resists
+  // Vertical (edge-on): force pushes in T direction → weak axis: I = W×T³/12
+  // Horizontal (flat): force acts laterally → strong axis: I = T×W³/12
+  let I_2nd, c_fiber;
+  if (orient === 'vertical') {
+    I_2nd   = (W_m * Math.pow(T_m, 3)) / 12;
+    c_fiber = T_m / 2;
+  } else {
+    I_2nd   = (T_m * Math.pow(W_m, 3)) / 12;
+    c_fiber = W_m / 2;
+  }
+
+  const EI = M.E * I_2nd;
+  const delta_max = (5 * w_em * Math.pow(span, 4)) / (384 * EI); // m
+  const delta_mm_defl = delta_max * 1000; // mm
+
+  // Bending stress at mid-span (UDL simply supported)
+  const M_bend = (w_em * Math.pow(span, 2)) / 8; // N·m
+  const sigma_bend = (M_bend * c_fiber) / I_2nd;  // Pa
+  const sigma_bend_MPa = sigma_bend / 1e6;
+  const stress_ratio = sigma_bend / M.sigma_y;
+
+  // ── MODULE 7: Voltage Drop ────────────────────────────────
+  const dV_total = I_total * R_ac * L;     // V
+  const dV_mpm   = I_total * R_ac * 1000;  // mV/m
+  const dV_pct   = (dV_total / V_sys) * 100;
+
+  // ── Build result object ───────────────────────────────────
+  return {
+    // Inputs for display
+    W_mm, T_mm, L, N, span, mat, eps, orient, acdc, f, Tamb, dT, V_sys, Isc_kA, tf, d_mm,
+    M,
+    // Mod 1
+    A_mm2, weight_pm, R_dc,
+    // Mod 2
+    ks, delta_mm, R_ac,
+    // Mod 3
+    Q_conv, Q_rad, Q_total, I_single,
+    // Mod 4
+    kN, I_total,
+    // Mod 5
+    I_withstand, sc_margin, i_peak, Fem_pm,
+    // Mod 6
+    w_em, delta_mm_defl, sigma_bend_MPa, stress_ratio,
+    // Mod 7
+    dV_total, dV_mpm, dV_pct,
+    // Derived
+    T_op, rho_T, delta_mm_defl
+  };
+}
+
+// ================================================================
+//  RENDER RESULTS
+// ================================================================
+function fmt(v, dec=2) {
+  if (!isFinite(v) || isNaN(v)) return '—';
+  return v.toPrecision ? parseFloat(v.toFixed(dec)).toString() : v;
+}
+function sci(v, dec=3) {
+  if (!isFinite(v) || isNaN(v)) return '—';
+  if (Math.abs(v) < 1e-3 || Math.abs(v) >= 1e6) return v.toExponential(dec);
+  return fmt(v, dec);
+}
+function badge(cls, icon_path, text) {
+  return `<span class="status-badge ${cls}"><svg viewBox="0 0 24 24"><path d="${icon_path}"></path></svg>${text}</span>`;
+}
+const ICONS = {
+  check: 'M20 6 9 17l-5-5',
+  warn:  'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
+  x:     'M18 6 6 18M6 6l12 12'
+};
+
+function renderSVG(r) {
+  const svg = $('busbar-svg');
+  const VW = 380, VH = 140;
+  const MAX_W = 300, MAX_T = 100;
+  const scale = Math.min(MAX_W / r.W_mm, MAX_T / r.T_mm, 5);
+  const bW = r.W_mm * scale;
+  const bT = r.T_mm * scale;
+  const barsToShow = Math.min(r.N, 3);
+  const gap = Math.max(4, r.T_mm * scale * 0.7);
+  const totalH = barsToShow * bT + (barsToShow - 1) * gap;
+  const ox = (VW - bW) / 2, oy = (VH - totalH) / 2;
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const barFill = isDark ? '#92400e' : '#fef3c7';
+  const barStroke = isDark ? '#f59e0b' : '#d97706';
+  const skinFill = isDark ? 'rgba(245,158,11,0.25)' : 'rgba(245,158,11,0.18)';
+  const textFill = isDark ? '#94a3b8' : '#64748b';
+  const dimColor = isDark ? '#60a5fa' : '#2563eb';
+
+  let html = '';
+
+  for (let i = 0; i < barsToShow; i++) {
+    const cy = oy + i * (bT + gap);
+
+    // skin depth indicator (if AC and skin depth < half-thickness)
+    if (r.acdc === 'AC' && r.ks > 1.02 && r.delta_mm < r.T_mm / 2) {
+      const sd_px = Math.min(r.delta_mm * scale, bT / 2 - 1);
+      // Skin depth rings on left/right
+      html += `<rect x="${ox}" y="${cy}" width="${sd_px}" height="${bT}" fill="${skinFill}" rx="2"/>`;
+      html += `<rect x="${ox + bW - sd_px}" y="${cy}" width="${sd_px}" height="${bT}" fill="${skinFill}" rx="2"/>`;
+      // top/bottom
+      html += `<rect x="${ox}" y="${cy}" width="${bW}" height="${sd_px}" fill="${skinFill}" rx="2"/>`;
+      html += `<rect x="${ox}" y="${cy + bT - sd_px}" width="${bW}" height="${sd_px}" fill="${skinFill}" rx="2"/>`;
+    }
+
+    // Main bar
+    html += `<rect x="${ox}" y="${cy}" width="${bW}" height="${bT}" fill="${barFill}" stroke="${barStroke}" stroke-width="1.5" rx="2"/>`;
+
+    if (i === 0) {
+      // Dimension arrows
+      // Width arrow
+      const ay = cy + bT + 16;
+      html += `<line x1="${ox}" y1="${ay}" x2="${ox + bW}" y2="${ay}" stroke="${dimColor}" stroke-width="1" marker-start="url(#a)" marker-end="url(#a)"/>`;
+      html += `<text x="${ox + bW/2}" y="${ay - 4}" text-anchor="middle" font-size="10" fill="${dimColor}" font-family="JetBrains Mono,monospace" font-weight="600">${r.W_mm}mm</text>`;
+
+      // Thickness label inside bar
+      if (bT > 16) {
+        html += `<text x="${ox + bW/2}" y="${cy + bT/2 + 4}" text-anchor="middle" font-size="10" fill="${textFill}" font-family="JetBrains Mono,monospace" font-weight="600">${r.T_mm}mm</text>`;
+      }
+    }
+  }
+
+  if (barsToShow < r.N) {
+    const dotY = oy + barsToShow * (bT + gap) + 6;
+    html += `<text x="${ox + bW/2}" y="${dotY + 10}" text-anchor="middle" font-size="11" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif">+${r.N - barsToShow} more bar${r.N - barsToShow > 1 ? 's' : ''}</text>`;
+  }
+
+  // Legend for skin depth
+  if (r.acdc === 'AC' && r.ks > 1.02 && r.delta_mm < r.T_mm / 2) {
+    html += `<rect x="12" y="8" width="10" height="10" fill="${skinFill}" stroke="${barStroke}" stroke-width="1" rx="2"/>`;
+    html += `<text x="26" y="18" font-size="10" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif">Skin depth δ = ${fmt(r.delta_mm, 1)} mm</text>`;
+  }
+
+  svg.innerHTML = `
+    <defs>
+      <marker id="a" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6" fill="none" stroke="${dimColor}" stroke-width="1"/>
+      </marker>
+    </defs>
+    ${html}`;
+}
+
+function statusClass(v, warn_pct, fail_pct, invert=false) {
+  if (invert) {
+    if (v >= fail_pct) return 'highlight-fail';
+    if (v >= warn_pct) return 'highlight-warn';
+    return 'highlight-pass';
+  }
+  if (v <= fail_pct) return 'highlight-fail';
+  if (v <= warn_pct) return 'highlight-warn';
+  return 'highlight-pass';
+}
+
+function renderModules(r) {
+  const grid = $('mod-grid');
+
+  // Helper: result row
+  const row = (label, val, unit='') =>
+    `<div class="result-row"><span class="result-label">${label}</span><span class="result-val">${val}<span class="result-unit">${unit}</span></span></div>`;
+
+  const divider = `<div class="result-divider"></div>`;
+
+  // ── MOD 1 ──
+  const mod1 = `
+  <div class="mod-card highlight-pass">
+    <div class="mod-header">
+      <div class="mod-icon" style="background:var(--blue-bg);color:var(--blue)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M9 21V9"></path></svg>
+      </div>
+      <div><div class="mod-title">1 · Geometry &amp; DC Resistance</div><div class="mod-subtitle">${r.M.name} · T_op = ${fmt(r.T_op,0)} °C</div></div>
+    </div>
+    <div class="mod-body">
+      ${row('Cross-section', fmt(r.A_mm2,0), 'mm²')}
+      ${row('Perimeter', fmt(2*(r.W_mm+r.T_mm),0), 'mm')}
+      ${row('Weight', fmt(r.weight_pm,3), 'kg/m')}
+      ${divider}
+      ${row('Resistivity at T_op', sci(r.rho_T,3), 'Ω·m')}
+      ${row('R_DC at T_op', sci(r.R_dc * 1000, 3), 'mΩ/m')}
+      ${row('R_DC at T_op', sci(r.R_dc * 1e6, 2), 'µΩ/m')}
+    </div>
+  </div>`;
+
+  // ── MOD 2 ──
+  const skinNote = r.acdc === 'DC' ? 'DC — no skin effect' :
+    r.ks < 1.005 ? 'Skin effect negligible' :
+    r.ks < 1.05 ? 'Mild skin effect' :
+    r.ks < 1.15 ? 'Moderate skin effect' : 'Significant skin effect';
+  const skinClass = r.acdc === 'DC' || r.ks < 1.01 ? 'pass' : r.ks < 1.1 ? 'warn' : 'fail';
+  const mod2 = `
+  <div class="mod-card ${r.ks > 1.1 ? 'highlight-warn' : 'highlight-pass'}">
+    <div class="mod-header">
+      <div class="mod-icon" style="background:var(--amber-bg);color:var(--amber)">
+        <svg viewBox="0 0 24 24"><path d="M2 12h4l3-9 4 18 3-9h6"></path></svg>
+      </div>
+      <div><div class="mod-title">2 · AC Skin Effect</div><div class="mod-subtitle">${r.acdc === 'DC' ? 'DC — k_s = 1.000' : `f = ${r.f} Hz`}</div></div>
+    </div>
+    <div class="mod-body">
+      ${row('Skin depth δ', r.acdc === 'DC' ? '∞' : fmt(r.delta_mm, 2), 'mm')}
+      ${row('T / (2δ)', r.acdc === 'DC' ? '—' : fmt(r.T_mm / (2 * r.delta_mm), 3), '')}
+      ${row('Skin factor k_s = Rac/Rdc', fmt(r.ks, 4), '')}
+      ${divider}
+      ${row('R_AC at T_op', sci(r.R_ac * 1e6, 2), 'µΩ/m')}
+      ${badge(skinClass, r.ks < 1.1 ? ICONS.check : ICONS.warn, skinNote)}
+    </div>
+  </div>`;
+
+  // ── MOD 3 ──
+  const mod3 = `
+  <div class="mod-card highlight-pass">
+    <div class="mod-header">
+      <div class="mod-icon" style="background:var(--red-bg);color:var(--red)">
+        <svg viewBox="0 0 24 24"><path d="M12 22a8 8 0 0 1-8-8c0-4.314 6-12 8-12s8 7.686 8 12a8 8 0 0 1-8 8z"></path></svg>
+      </div>
+      <div><div class="mod-title">3 · Continuous Current Capacity</div><div class="mod-subtitle">ΔT = ${r.dT} °C · ${r.orient} · ε = ${r.eps}</div></div>
+    </div>
+    <div class="mod-body">
+      ${row('Q_convection', fmt(r.Q_conv, 2), 'W/m')}
+      ${row('Q_radiation', fmt(r.Q_rad, 2), 'W/m')}
+      ${row('Q_total dissipated', fmt(r.Q_total, 2), 'W/m')}
+      ${divider}
+      ${row('I_capacity (1 bar)', fmt(r.I_single, 0), 'A')}
+      ${badge('info', ICONS.check, `At ΔT = ${r.dT} °C above ${r.Tamb} °C ambient`)}
+    </div>
+  </div>`;
+
+  // ── MOD 4 ──
+  const mod4 = `
+  <div class="mod-card highlight-pass">
+    <div class="mod-header">
+      <div class="mod-icon" style="background:var(--green-bg);color:var(--green)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="1"></rect><path d="M3 12h18M7 8V6M17 8V6M7 16v2M17 16v2"></path></svg>
+      </div>
+      <div><div class="mod-title">4 · Multi-Bar Rating</div><div class="mod-subtitle">N = ${r.N} bar${r.N>1?'s':''} per phase · k = ${r.kN}</div></div>
+    </div>
+    <div class="mod-body">
+      ${row('Single bar capacity', fmt(r.I_single, 0), 'A')}
+      ${row('CDA derating factor k_N', r.kN.toFixed(2), '')}
+      ${row('Total phase capacity', `<strong style="font-size:18px;color:var(--green)">${fmt(r.I_total, 0)}</strong>`, 'A')}
+      ${divider}
+      ${row('Current per bar', fmt(r.I_total / r.N, 0), 'A')}
+      ${badge('pass', ICONS.check, `${r.N} × ${fmt(r.W_mm,0)}×${fmt(r.T_mm,0)} mm ${r.M.name}`)}
+    </div>
+  </div>`;
+
+  // ── MOD 5 ──
+  const scPass = r.I_withstand >= r.Isc_kA * 1e3;
+  const scCard = scPass ? 'highlight-pass' : 'highlight-fail';
+  const scBadge = scPass
+    ? badge('pass', ICONS.check, `Withstands ${fmt(r.Isc_kA,0)} kA for ${r.tf} s ✓`)
+    : badge('fail', ICONS.x, `FAILS — ${fmt(r.Isc_kA,0)} kA exceeds withstand`);
+  const mod5 = `
+  <div class="mod-card ${scCard}">
+    <div class="mod-header">
+      <div class="mod-icon" style="background:var(--red-bg);color:var(--red)">
+        <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      </div>
+      <div><div class="mod-title">5 · Short-Circuit Thermal Rating</div><div class="mod-subtitle">IEC 60865-1 Adiabatic · k_th = ${r.M.k_th} A·s^0.5/mm²</div></div>
+    </div>
+    <div class="mod-body">
+      ${row('Fault current I_sc', fmt(r.Isc_kA, 1), 'kA rms')}
+      ${row('Fault duration t_f', r.tf, 's')}
+      ${row('I_withstand (this bar)', fmt(r.I_withstand/1000, 1), 'kA')}
+      ${row('Min. area for I_sc', fmt(r.Isc_kA * 1000 * Math.sqrt(r.tf) / r.M.k_th, 0), 'mm²')}
+      ${divider}
+      ${row('Peak fault current i_peak', fmt(r.i_peak/1000, 1), 'kA peak')}
+      ${row('EM force at fault', fmt(r.Fem_pm, 0), 'N/m')}
+      ${scBadge}
+    </div>
+  </div>`;
+
+  // ── MOD 6 ──
+  const deflPct = r.span * 1000 / 200; // L/200 acceptance limit
+  const deflOK = r.delta_mm_defl < deflPct;
+  const stressOK = r.stress_ratio < 0.8;
+  const mechClass = (deflOK && stressOK) ? 'highlight-pass' : r.stress_ratio >= 1.0 ? 'highlight-fail' : 'highlight-warn';
+  const mod6 = `
+  <div class="mod-card ${mechClass}">
+    <div class="mod-header">
+      <div class="mod-icon" style="background:var(--blue-bg);color:var(--blue)">
+        <svg viewBox="0 0 24 24"><path d="M4 20 C4 20 8 4 12 4 S20 20 20 20"></path></svg>
+      </div>
+      <div><div class="mod-title">6 · Mechanical Deflection</div><div class="mod-subtitle">Simply supported · Span ${r.span} m · E = ${(r.M.E/1e9).toFixed(0)} GPa</div></div>
+    </div>
+    <div class="mod-body">
+      ${row('UDL (EM force / span)', fmt(r.w_em, 2), 'N/m')}
+      ${row('Max deflection δ_max', fmt(r.delta_mm_defl, 2), 'mm')}
+      ${row('L/δ ratio', deflOK ? fmt(r.span*1000/r.delta_mm_defl,0) : '< 200', '')}
+      ${divider}
+      ${row('Bending stress σ', fmt(r.sigma_bend_MPa, 1), 'N/mm²')}
+      ${row('Yield strength σ_y', (r.M.sigma_y/1e6).toFixed(0), 'N/mm²')}
+      ${row('Stress utilisation', fmt(r.stress_ratio*100, 1), '%')}
+      ${r.stress_ratio < 0.5 ? badge('pass', ICONS.check, 'Structurally adequate') :
+        r.stress_ratio < 1.0 ? badge('warn', ICONS.warn, `${fmt(r.stress_ratio*100,0)}% of yield — check supports`) :
+        badge('fail', ICONS.x, 'Stress exceeds yield — shorten span')}
+    </div>
+  </div>`;
+
+  // ── MOD 7 ──
+  const vdropClass = r.dV_pct < 1 ? 'highlight-pass' : r.dV_pct < 3 ? 'highlight-warn' : 'highlight-fail';
+  const mod7 = `
+  <div class="mod-card ${vdropClass}" style="grid-column: span 2;">
+    <div class="mod-header">
+      <div class="mod-icon" style="background:var(--green-bg);color:var(--green)">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+      </div>
+      <div><div class="mod-title">7 · Voltage Drop at Continuous Current</div><div class="mod-subtitle">I_total = ${fmt(r.I_total,0)} A · L = ${r.L} m · V_sys = ${r.V_sys} V</div></div>
+    </div>
+    <div class="mod-body" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+      <div>
+        <div class="result-label">ΔV per metre</div>
+        <div class="result-val" style="font-size:20px">${fmt(r.dV_mpm, 2)}<span class="result-unit">mV/m</span></div>
+      </div>
+      <div>
+        <div class="result-label">Total ΔV over ${r.L} m</div>
+        <div class="result-val" style="font-size:20px">${fmt(r.dV_total, 3)}<span class="result-unit">V</span></div>
+      </div>
+      <div>
+        <div class="result-label">% of system voltage</div>
+        <div class="result-val" style="font-size:20px;color:${r.dV_pct<1?'var(--green)':r.dV_pct<3?'var(--amber)':'var(--red)'}">${fmt(r.dV_pct, 2)}<span class="result-unit">%</span></div>
+        ${r.dV_pct < 1 ? badge('pass', ICONS.check, '< 1% — Excellent') :
+          r.dV_pct < 3 ? badge('warn', ICONS.warn, '1–3% — Acceptable') :
+          badge('fail', ICONS.x, '> 3% — Increase cross-section')}
+      </div>
+    </div>
+  </div>`;
+
+  grid.innerHTML = mod1 + mod2 + mod3 + mod4 + mod5 + mod6 + mod7;
+}
+
+function renderResultsTab(r) {
+  const el = $('results-tab-content');
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="preview-card">
+        <div class="preview-header">
+          <h3>${r.N} × ${r.W_mm}×${r.T_mm} mm ${r.M.name} · ${r.orient} · ΔT = ${r.dT} °C</h3>
+          <div class="preview-meta">
+            <span class="meta-pill">${fmt(r.I_total,0)} A</span>
+            <span class="meta-pill">${fmt(r.I_withstand/1000,1)} kA SC</span>
+            <span class="meta-pill">${fmt(r.dV_pct,2)}% ΔV</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 0;">
+          <div style="text-align:center;">
+            <div style="font-size:28px;font-weight:800;color:var(--green);font-family:var(--font-mono)">${fmt(r.I_total,0)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Continuous (A)</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:28px;font-weight:800;color:var(--accent);font-family:var(--font-mono)">${fmt(r.I_withstand/1000,1)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">SC Withstand (kA)</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:28px;font-weight:800;color:var(--accent-3);font-family:var(--font-mono)">${fmt(r.ks,3)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Rac/Rdc (k_s)</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:28px;font-weight:800;color:${r.dV_pct<2?'var(--green)':'var(--amber)'};font-family:var(--font-mono)">${fmt(r.dV_pct,2)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">ΔV% drop</div>
+          </div>
+        </div>
+      </div>
+      <div class="mod-grid" id="results-tab-grid"></div>
+    </div>`;
+}
+
+function showToast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ================================================================
+//  MAIN ENTRY
+// ================================================================
+function calculate() {
+  try {
+    const r = runCalc();
+
+    // Show results in configure tab
+    $('placeholder-card').style.display = 'none';
+    const cr = $('calc-results');
+    cr.style.display = 'flex';
+
+    renderSVG(r);
+
+    // Update preview meta pills
+    $('preview-meta').innerHTML = `
+      <span class="meta-pill">${r.N}×${fmt(r.W_mm,0)}×${fmt(r.T_mm,0)} mm</span>
+      <span class="meta-pill">${r.M.name}</span>
+      <span class="meta-pill">${r.acdc}${r.acdc==='AC'?' '+r.f+'Hz':''}</span>`;
+
+    renderModules(r);
+    renderResultsTab(r);
+
+    // Auto-switch to results if on results tab
+    if ($('tab-results').classList.contains('active')) {
+      // just re-rendered, fine
+    }
+
+    showToast(`Calculated: ${fmt(r.I_total,0)} A continuous · ${fmt(r.I_withstand/1000,1)} kA SC`);
+  } catch(e) {
+    console.error(e);
+    showToast('Calculation error — check inputs');
+  }
+}
+
+// ================================================================
+//  TABS
+// ================================================================
+document.querySelectorAll('.main-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.main-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    $('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ================================================================
+//  AUTO-CALC on input changes
+// ================================================================
+document.querySelectorAll('input[type=number], select').forEach(el => {
+  el.addEventListener('change', calculate);
+  el.addEventListener('input', calculate);
+});
+$('calc-btn').addEventListener('click', calculate);
+
+// ================================================================
+//  THEME
+// ================================================================
+$('theme-toggle').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  // Re-render SVG with new colours
+  try { renderSVG(runCalc()); } catch(e) {}
+});
+
+// AC/DC toggle — disable frequency select when DC
+$('inp-acdc').addEventListener('change', () => {
+  $('inp-freq').disabled = $('inp-acdc').value === 'DC';
+});
+
+// ================================================================
+//  INIT — run once on load
+// ================================================================
+calculate();
+</script>
+</body>
+</html>

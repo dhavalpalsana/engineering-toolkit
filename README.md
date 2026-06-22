@@ -64,6 +64,22 @@ Instant bidirectional conversion across **23 engineering categories** with live 
 
 ---
 
+### 🏗️ Busbar Capacity Calculator (`tools/busbar-sizing/`)
+
+Full physics-based busbar design implementing the **CDA "Copper for Busbars"** methodology across 7 calculation modules.
+
+- **Module 1 — DC Resistance:** Temperature-corrected resistivity, cross-section, weight per metre
+- **Module 2 — AC Skin Effect:** Classical slab formula (k_s = Rac/Rdc), skin depth δ at operating temperature
+- **Module 3 — Thermal Current Capacity:** Heat balance (I²R = Q_conv + Q_rad); emissivity and orientation corrections
+- **Module 4 — Multi-Bar Derating:** CDA factors for 1–4 bars per phase (k₁=1.0 … k₄=3.2)
+- **Module 5 — Short-Circuit Thermal Rating:** IEC 60865-1 adiabatic withstand; peak electromagnetic force between phases
+- **Module 6 — Mechanical Deflection:** Simply-supported beam under fault EM load; bending stress vs. yield strength
+- **Module 7 — Voltage Drop:** mV/m, total ΔV, % of system voltage
+- **Materials:** Copper HC (ETP) and Aluminium 1350-H19 with correct physical constants
+- **Live SVG Preview:** Scaled cross-section with skin depth shading; multi-bar arrangement
+
+---
+
 ## 🔜 Coming Soon
 
 | Tool | Domain |
