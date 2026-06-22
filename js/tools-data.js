@@ -26,7 +26,7 @@ const TOOLS_DATA = [
   {
     id: "unit-converter",
     name: "Engineering Unit Converter",
-    description: "Convert between physical units of pressure, torque, temperature, energy, power, and mass flow rate. Instant bidirectional conversion with copy-to-clipboard.",
+    description: "Convert between 23 categories of engineering units: pressure, torque, temperature, energy, power, density, velocity, volume flow, viscosity, thermal conductivity, and more. Live search, instant bidirectional conversion, and copy-to-clipboard.",
     tags: ["general", "conversion", "units", "pressure", "temperature", "torque", "energy"],
     icon: "refresh-cw",
     path: "./tools/unit-converter/index.html",

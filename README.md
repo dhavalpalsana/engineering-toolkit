@@ -1,48 +1,140 @@
 # Engineering Toolkit 🛠️
 
-A curated, unified suite of high-performance design calculators, simulation solvers, and interactive utilities for mechanical, industrial, aerospace, and electrical engineers.
+A curated, unified suite of high-performance interactive design calculators, simulation solvers, and engineering utilities — built for mechanical, electrical, aerospace, and industrial engineers.
 
-Designed as a static site, this entire hub runs client-side, is fully optimized for offline utilization, and is hosted live on GitHub Pages.
+The toolkit runs entirely client-side as a static site: no backend, no build step, no dependencies. Double-click `index.html` to run offline, or access it live on GitHub Pages.
 
-🔗 **Access the live toolkit:** [dhavalpalsana.github.io/engineering-toolkit/](https://dhavalpalsana.github.io/engineering-toolkit/)
+🔗 **Live site:** [dhavalpalsana.github.io/engineering-toolkit/](https://dhavalpalsana.github.io/engineering-toolkit/)
 
 ---
 
 ## 🌟 Key Features
 
-- **Interactive Visual Dashboard**: A sleek, modern design index implementing the *Sleek Minimalist Light* design system with deep slate backgrounds, custom gradients, and micro-animations.
-- **Bi-Directional Theme Syncing**: Dynamic toggling between premium Light Mode and dark-slate Dark Mode. Toggling the theme on any individual solver tool automatically syncs the visual mode across all pages in real-time.
-- **Search & Quick-Launch System**: Responsive filter system with global keyboard hotkeys (`Ctrl + K` or `/` to focus search) for lightning-fast tool finding.
-- **Open Suggestion Portal**: Direct integration for requesting new engineering utilities.
+- **Premium Interactive Dashboard** — Sleek, dark-capable design with micro-animations, global search (`Ctrl + K` or `/`), and instant tool filtering by tag.
+- **Bi-Directional Theme Sync** — Light ↔ Dark mode synced across all tool pages via `localStorage`. Toggle anywhere; every page follows.
+- **Open Suggestion Portal** — Built-in workflow for requesting new engineering utilities.
+- **SEO & Social-Ready** — Open Graph and Twitter Card meta tags on all pages, with `robots.txt` and `sitemap.xml`.
+- **Keyboard Accessible** — All tool cards support `Tab` → `Enter`/`Space` navigation.
 
 ---
 
-## 🧮 Available Tools
+## 🧮 Active Tools
+
+### 🌊 Ishikawa Fishbone Diagram Creator (`tools/fishbone-diagram/`)
+
+An interactive, high-fidelity cause-and-effect diagram builder for professional root-cause analysis sessions.
+
+- **Pre-built Templates** — Manufacturing (6M), Service (8P), Software (4S), and custom frameworks
+- **Dynamic Layout Engine** — Auto-scales branches and spine based on cause density
+- **AI Brainstorm Mode** — Gemini-powered cause generation from a problem description
+- **Export** — SVG vector and PNG raster download at any resolution
+- **Dark/Light Themes** — Full theme support with custom color palettes
+- **State Persistence** — Diagrams auto-save to `localStorage`
+
+---
 
 ### ⚡ Dynamic Cable Thermal & Loss Solver (`tools/wire-gauge/`)
-A thermodynamic evaluation & electrodynamic solver designed for complex multi-segment series spliced cable harnesses. Unlike standard static tables, this solver couples electrodynamics and radial heat transfer physics.
-- **Proportional SVG Splicing Heat Map**: Renders real-time proportional diagrams showing splicing points and local temperature distributions.
-- **Physical Operational Envelope Checks**: Tracks and highlights peak thermal limits and voltage drop budgets.
-- **Dynamic Optimization Matrix**: Runs iterative wire-sizing shifts (AWG and Metric standards) on the active configuration to suggest optimal conductor areas.
-- **AI Design Assistant Integration**: Natural language interface coupled with Gemini models to translate configuration prompts directly into simulation variables.
-- **State Export/Import**: Download and reload setup parameters as JSON payloads.
+
+A thermodynamic + electrodynamic solver for multi-segment series-spliced cable harnesses. Goes far beyond standard lookup tables.
+
+- **Proportional SVG Heat Map** — Real-time diagram of splicing points and local temperature rise per segment
+- **Physical Envelope Checks** — Tracks peak thermal limits and voltage drop budgets against NEC/IEC derating
+- **Dynamic Optimization Matrix** — Iterative AWG/metric wire-size shifts to suggest the optimal conductor cross-section
+- **AI Design Assistant** — Natural language interface (Gemini) translates system descriptions into simulation parameters
+- **State Export / Import** — Full configuration snapshots as JSON payloads
+
+---
+
+### 📐 Engineering Unit Converter (`tools/unit-converter/`)
+
+Instant bidirectional conversion across **23 engineering categories** with live search and a full reference table.
+
+| Group | Categories |
+|---|---|
+| **Mechanics** | Acceleration, Area, Density, Force, Frequency, Length, Mass Flow, Pressure, Stress, Time, Torque, Velocity, Volume, Volume Flow |
+| **Thermodynamics** | Energy, Heat Flux, Heat Transfer Coefficient, Power, Specific Heat, Temperature, Thermal Conductivity |
+| **Fluids** | Dynamic Viscosity, Kinematic Viscosity |
+| **Electrical** | Current, Voltage |
+
+- **Live Search** — Filter categories and unit names as you type (press `/` to focus)
+- **Bidirectional** — Type in either field; both update instantly
+- **Swap Button** — Reverse from/to units in one click
+- **Copy to Clipboard** — Hover result to reveal copy button; toast confirmation
+- **Reference Table** — All units in the active category with base-unit equivalents
+
+---
+
+## 🔜 Coming Soon
+
+| Tool | Domain |
+|---|---|
+| Busbar Capacity Calculator | Electrical |
+| Bolt Torque & Tension Calculator | Mechanical |
+| Pipe Pressure Drop & Flow Calculator | Fluids |
+
+---
+
+## 🏗️ Architecture
+
+The project is a **pure static site** — no build system, no Node.js, no package.json required.
+
+```
+engineering-toolkit/
+├── index.html                # Hub / dashboard
+├── css/style.css             # Global shared design system (tokens, layout, components)
+├── js/
+│   ├── tools-data.js         # ← SINGLE SOURCE OF TRUTH for tool registry
+│   ├── registry.js           # Thin shim: const toolsRegistry = TOOLS_DATA
+│   └── app.js                # Dashboard rendering, search, filtering, theme
+├── assets/
+│   └── og-image.png          # Social preview (1200×630)
+├── tools/
+│   ├── fishbone-diagram/
+│   │   ├── index.html        # HTML + Tailwind CDN
+│   │   └── app.js            # All diagram logic (~1100 lines)
+│   ├── wire-gauge/
+│   │   ├── index.html        # HTML + Tailwind CDN
+│   │   └── app.js            # All solver logic (~1100 lines)
+│   └── unit-converter/
+│       └── index.html        # Self-contained (no Tailwind, uses design tokens)
+├── robots.txt
+└── sitemap.xml
+```
+
+### Adding a New Tool
+
+1. **Create the tool page** in `tools/<tool-id>/index.html`
+2. **Register it** by adding a new entry to `js/tools-data.js`:
+   ```js
+   {
+     id: "my-new-tool",
+     name: "My New Tool",
+     description: "Short description shown on the hub card.",
+     tags: ["mechanical", "thermal"],
+     icon: "wrench",          // any key from registryIcons in registry.js
+     path: "./tools/my-new-tool/index.html",
+     status: "active"         // "active" | "coming-soon"
+   }
+   ```
+3. That's it — the hub auto-renders the card, badge, and stats.
 
 ---
 
 ## 💻 Local Usage & Offline Mode
 
-Because the entire toolkit is constructed using static HTML, Vanilla CSS, and modern JavaScript, there are no databases or server-side requirements. You can run it locally or completely offline:
+No server required for most features.
 
-1. **Direct Load**: Double-click `index.html` inside the root folder to launch the dashboard locally.
-2. **Local Web Server**: For full feature support (including correct origin policies when reloading files), serve the repository root using any simple HTTP server:
-   ```bash
-   # Using Python
-   python -m http.server 8000
-   ```
-   Then navigate to `http://localhost:8000`.
+```bash
+# Option 1: Direct open (works for most tools)
+# Double-click index.html
+
+# Option 2: Local server (recommended — avoids any file:// origin quirks)
+python -m http.server 8000
+# Then open http://localhost:8000
+```
 
 ---
 
 ## 📄 License
 
-This project is open-source and distributed under the **GNU GPLv3 License**. Feel free to fork, expand, and self-host!
+Open-source under the **GNU GPLv3 License**. Fork, expand, and self-host freely.

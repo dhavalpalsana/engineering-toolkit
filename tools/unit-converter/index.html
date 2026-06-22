@@ -2,41 +2,27 @@
 <html lang="en">
 <head>
   <script>
-    // Sync theme immediately to prevent flash
     (function() {
       const t = localStorage.getItem('theme') || 'light';
       document.documentElement.setAttribute('data-theme', t);
-      if (t === 'dark') document.documentElement.classList.add('dark-mode');
     })();
   </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Engineering Unit Converter — Engineering Toolkit</title>
-
-  <!-- SEO Meta Tags -->
-  <meta name="description" content="Instantly convert between engineering units: pressure, torque, temperature, energy, power, mass flow rate, force, and length. Bidirectional, copy-to-clipboard.">
-
-  <!-- Open Graph / Facebook -->
+  <meta name="description" content="Instantly convert between 23 categories of engineering units: pressure, torque, temperature, energy, power, viscosity, thermal conductivity, velocity, volume flow, and more.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://dhavalpalsana.github.io/engineering-toolkit/tools/unit-converter/">
   <meta property="og:title" content="Engineering Unit Converter — Engineering Toolkit">
-  <meta property="og:description" content="Instantly convert between engineering units: pressure, torque, temperature, energy, power, mass flow rate. Bidirectional with copy-to-clipboard.">
+  <meta property="og:description" content="23 categories of engineering unit conversions. Pressure, Torque, Temperature, Energy, Power, Viscosity, Thermal Conductivity, and more. Instant bidirectional with copy-to-clipboard.">
   <meta property="og:image" content="https://dhavalpalsana.github.io/engineering-toolkit/assets/og-image.png">
-
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Engineering Unit Converter — Engineering Toolkit">
-  <meta name="twitter:description" content="Instantly convert between engineering units: pressure, torque, temperature, energy, power, mass flow rate.">
   <meta name="twitter:image" content="https://dhavalpalsana.github.io/engineering-toolkit/assets/og-image.png">
-
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <style>
-    /* =============================================
-       Design Tokens — mirroring root css/style.css
-       ============================================= */
     :root {
       --bg-primary: #f8fafc;
       --bg-secondary: #ffffff;
@@ -49,135 +35,72 @@
       --accent-hover: #0f766e;
       --accent-blue: #2563eb;
       --accent-glow: rgba(13,148,136,0.10);
-      --success: #10b981;
       --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --radius-lg: 16px;
-      --radius-xl: 20px;
+      --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 20px;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
       --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
       --shadow-lg: 0 12px 24px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04);
       --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
-      --header-h: 72px;
     }
-
     [data-theme="dark"] {
-      --bg-primary: #090d16;
-      --bg-secondary: #0f1422;
-      --bg-tertiary: #171e30;
-      --text-primary: #f8fafc;
-      --text-secondary: #cbd5e1;
-      --text-muted: #94a3b8;
-      --border-color: #1e293b;
-      --accent: #14b8a6;
-      --accent-hover: #2dd4bf;
-      --accent-blue: #3b82f6;
-      --accent-glow: rgba(20,184,166,0.12);
+      --bg-primary: #090d16; --bg-secondary: #0f1422; --bg-tertiary: #171e30;
+      --text-primary: #f8fafc; --text-secondary: #cbd5e1; --text-muted: #94a3b8;
+      --border-color: #1e293b; --accent: #14b8a6; --accent-hover: #2dd4bf;
+      --accent-blue: #3b82f6; --accent-glow: rgba(20,184,166,0.12);
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.25);
       --shadow-md: 0 4px 12px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.02);
       --shadow-lg: 0 12px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03);
     }
-
-    /* ============================
-       Base Reset
-       ============================ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     html { scroll-behavior: smooth; }
-
     body {
-      font-family: var(--font-sans);
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      line-height: 1.6;
-      transition: background var(--transition), color var(--transition);
-      overflow-x: hidden;
+      font-family: var(--font-sans); background: var(--bg-primary); color: var(--text-primary);
+      min-height: 100vh; display: flex; flex-direction: column; line-height: 1.6;
+      transition: background var(--transition), color var(--transition); overflow-x: hidden;
     }
-
-    /* Background glows */
     body::before, body::after {
-      content: '';
-      position: fixed;
-      width: 500px; height: 500px;
-      border-radius: 50%;
-      filter: blur(140px);
-      z-index: -1;
-      pointer-events: none;
-      opacity: 0.6;
+      content: ''; position: fixed; width: 500px; height: 500px; border-radius: 50%;
+      filter: blur(140px); z-index: -1; pointer-events: none; opacity: 0.6;
     }
     body::before { top: -200px; right: -100px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); }
     body::after  { bottom: -200px; left: -100px; background: radial-gradient(circle, rgba(37,99,235,0.07) 0%, transparent 70%); }
-
-    a { color: var(--accent); text-decoration: none; }
-
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg-primary); }
     ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 99px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-    /* ============================
-       Header
-       ============================ */
+    /* ====== HEADER ====== */
     header {
-      height: var(--header-h);
-      display: flex;
-      align-items: center;
-      padding: 0 24px;
+      height: 72px; display: flex; align-items: center; padding: 0 24px;
       border-bottom: 1px solid var(--border-color);
       position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,0.88); backdrop-filter: blur(12px);
       transition: background var(--transition), border-color var(--transition);
     }
-    [data-theme="light"] header { background: rgba(255,255,255,0.88); backdrop-filter: blur(12px); }
-    [data-theme="dark"]  header { background: rgba(15,20,34,0.88); backdrop-filter: blur(12px); }
-
-    .header-inner {
-      width: 100%; max-width: 1100px; margin: 0 auto;
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    }
-
+    [data-theme="dark"] header { background: rgba(15,20,34,0.88); }
+    .header-inner { width: 100%; max-width: 1100px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .header-left { display: flex; align-items: center; gap: 12px; }
-
     .back-btn {
       display: flex; align-items: center; justify-content: center;
-      width: 38px; height: 38px;
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-secondary);
-      transition: all var(--transition);
-      cursor: pointer; text-decoration: none;
+      width: 38px; height: 38px; background: var(--bg-tertiary);
+      border: 1px solid var(--border-color); border-radius: var(--radius-md);
+      color: var(--text-secondary); transition: all var(--transition); cursor: pointer; text-decoration: none;
     }
     .back-btn:hover { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
     .back-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
     .header-icon {
       width: 38px; height: 38px;
       background: linear-gradient(135deg, var(--accent), var(--accent-blue));
-      border-radius: var(--radius-md);
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; flex-shrink: 0;
-      box-shadow: 0 4px 10px var(--accent-glow);
+      border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;
+      color: #fff; flex-shrink: 0; box-shadow: 0 4px 10px var(--accent-glow);
     }
     .header-icon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
     .header-titles h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; color: var(--text-primary); }
     .header-titles p  { font-size: 12px; color: var(--text-muted); font-weight: 500; }
-
-    .header-actions { display: flex; align-items: center; gap: 10px; }
-
     .theme-btn {
-      width: 38px; height: 38px;
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--text-secondary); cursor: pointer;
-      transition: all var(--transition);
+      width: 38px; height: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color);
+      border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;
+      color: var(--text-secondary); cursor: pointer; transition: all var(--transition);
     }
     .theme-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
     .theme-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -185,234 +108,173 @@
     [data-theme="dark"] .theme-btn .sun-icon { display: block; }
     [data-theme="dark"] .theme-btn .moon-icon { display: none; }
 
-    /* ============================
-       Main Layout
-       ============================ */
-    main {
-      flex: 1;
-      width: 100%; max-width: 1100px;
-      margin: 0 auto;
-      padding: 40px 24px 80px;
-    }
-
-    /* ============================
-       Page Header
-       ============================ */
-    .page-hero { text-align: center; margin-bottom: 48px; }
-    .page-hero h2 {
-      font-size: 36px; font-weight: 800; letter-spacing: -1px;
-      color: var(--text-primary); margin-bottom: 10px;
-    }
-    .page-hero h2 span {
-      background: linear-gradient(135deg, var(--accent), var(--accent-blue));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
+    /* ====== MAIN ====== */
+    main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+    .page-hero { text-align: center; margin-bottom: 40px; }
+    .page-hero h2 { font-size: 36px; font-weight: 800; letter-spacing: -1px; color: var(--text-primary); margin-bottom: 10px; }
+    .page-hero h2 span { background: linear-gradient(135deg, var(--accent), var(--accent-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .page-hero p { font-size: 16px; color: var(--text-secondary); max-width: 520px; margin: 0 auto; }
 
-    /* ============================
-       Category Tabs
-       ============================ */
-    .category-tabs {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      margin-bottom: 36px; justify-content: center;
+    /* ====== SEARCH ====== */
+    .search-wrapper {
+      max-width: 560px; margin: 0 auto 28px; position: relative;
     }
+    .search-wrapper svg {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px; stroke: var(--text-muted); fill: none;
+      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none;
+    }
+    .search-input {
+      width: 100%; padding: 13px 44px 13px 44px;
+      background: var(--bg-secondary); border: 1.5px solid var(--border-color);
+      border-radius: var(--radius-lg); font-family: var(--font-sans);
+      font-size: 14px; font-weight: 500; color: var(--text-primary); outline: none;
+      transition: all var(--transition); box-shadow: var(--shadow-sm);
+    }
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .search-kbd {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: var(--bg-tertiary); border: 1px solid var(--border-color);
+      border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700;
+      color: var(--text-muted); font-family: var(--font-mono); pointer-events: none;
+    }
+    .search-clear-btn {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: var(--bg-tertiary); border: 1px solid var(--border-color);
+      border-radius: 6px; width: 26px; height: 26px;
+      display: none; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--text-muted); transition: all var(--transition);
+    }
+    .search-clear-btn:hover { background: var(--accent-glow); color: var(--accent); border-color: var(--accent); }
+    .search-clear-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .search-active .search-kbd { display: none; }
+    .search-active .search-clear-btn { display: flex; }
 
+    .no-results {
+      text-align: center; padding: 32px 0; color: var(--text-muted);
+      font-size: 14px; display: none;
+    }
+    .no-results.show { display: block; }
+
+    /* ====== GROUP HEADERS ====== */
+    .group-label {
+      font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-muted); margin: 20px 0 8px; padding: 0 4px;
+    }
+    .group-label:first-child { margin-top: 0; }
+
+    /* ====== CATEGORY TABS ====== */
+    .category-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 32px; }
     .cat-btn {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 18px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      font-size: 13px; font-weight: 600;
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: all var(--transition);
-      box-shadow: var(--shadow-sm);
+      display: flex; align-items: center; gap: 7px; padding: 8px 15px;
+      background: var(--bg-secondary); border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg); font-size: 12px; font-weight: 600;
+      color: var(--text-secondary); cursor: pointer; transition: all var(--transition);
+      box-shadow: var(--shadow-sm); position: relative;
     }
     .cat-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
     .cat-btn.active {
       background: linear-gradient(135deg, var(--accent), var(--accent-blue));
-      border-color: transparent; color: #fff;
-      box-shadow: 0 4px 12px var(--accent-glow);
+      border-color: transparent; color: #fff; box-shadow: 0 4px 12px var(--accent-glow);
     }
-    .cat-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
-
-    /* ============================
-       Converter Panel
-       ============================ */
-    .converter-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
+    .cat-btn.hidden-cat { display: none; }
+    .cat-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .match-badge {
+      background: rgba(255,255,255,0.25); color: inherit; border-radius: 99px;
+      font-size: 10px; font-weight: 800; padding: 1px 6px; margin-left: 2px;
     }
+    .cat-btn:not(.active) .match-badge { background: var(--accent-glow); color: var(--accent); }
 
-    @media (max-width: 640px) {
-      .converter-grid { grid-template-columns: 1fr; }
+    /* ====== CONVERTER PANELS ====== */
+    .converter-area {
+      display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px;
+      align-items: center; margin-bottom: 48px;
     }
-
+    @media (max-width: 640px) { .converter-area { grid-template-columns: 1fr; } }
     .converter-panel {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-xl);
-      padding: 28px;
-      box-shadow: var(--shadow-md);
+      background: var(--bg-secondary); border: 1px solid var(--border-color);
+      border-radius: var(--radius-xl); padding: 24px; box-shadow: var(--shadow-md);
       transition: all var(--transition);
     }
     .converter-panel:hover { box-shadow: var(--shadow-lg); }
-
-    .panel-label {
-      font-size: 11px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.8px;
-      color: var(--text-muted); margin-bottom: 12px;
-    }
-
+    .panel-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; }
     .unit-selector {
-      width: 100%;
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      padding: 10px 14px;
-      font-family: var(--font-sans);
-      font-size: 14px; font-weight: 600;
-      color: var(--text-primary);
-      outline: none;
-      cursor: pointer;
-      transition: border-color var(--transition);
-      margin-bottom: 16px;
+      width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color);
+      border-radius: var(--radius-md); padding: 10px 36px 10px 12px; font-family: var(--font-sans);
+      font-size: 13px; font-weight: 600; color: var(--text-primary); outline: none;
+      cursor: pointer; transition: border-color var(--transition); margin-bottom: 14px;
       appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-      padding-right: 36px;
+      background-repeat: no-repeat; background-position: right 10px center;
     }
     .unit-selector:focus { border-color: var(--accent); }
-
     .value-input-wrapper { position: relative; }
-
     .value-input {
-      width: 100%;
-      background: var(--bg-primary);
-      border: 2px solid var(--border-color);
-      border-radius: var(--radius-md);
-      padding: 14px 16px;
-      font-family: var(--font-mono);
-      font-size: 22px; font-weight: 500;
-      color: var(--text-primary);
-      outline: none;
-      transition: all var(--transition);
+      width: 100%; background: var(--bg-primary); border: 2px solid var(--border-color);
+      border-radius: var(--radius-md); padding: 13px 14px;
+      font-family: var(--font-mono); font-size: 22px; font-weight: 500;
+      color: var(--text-primary); outline: none; transition: all var(--transition);
     }
     .value-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-    .value-input.result-field {
-      border-color: var(--border-color);
-      background: var(--bg-tertiary);
-      color: var(--accent);
-    }
-
+    .value-input.result-field { background: var(--bg-tertiary); color: var(--accent); border-color: var(--border-color); }
     .copy-btn {
-      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      width: 32px; height: 32px;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text-muted);
-      transition: all var(--transition);
-      opacity: 0;
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+      width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--text-muted); transition: all var(--transition); opacity: 0;
     }
     .value-input-wrapper:hover .copy-btn { opacity: 1; }
     .copy-btn:hover { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
-    .copy-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-    .unit-name-display {
-      margin-top: 8px;
-      font-size: 12px; font-weight: 600;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      padding: 0 2px;
-    }
-
-    /* Swap button in the center */
-    .swap-col {
-      display: flex; align-items: center; justify-content: center;
-    }
+    .copy-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .unit-name-display { margin-top: 7px; font-size: 11px; font-weight: 600; color: var(--text-muted); font-family: var(--font-mono); padding: 0 2px; }
+    .swap-col { display: flex; align-items: center; justify-content: center; }
     .swap-btn {
-      width: 44px; height: 44px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text-secondary);
-      transition: all var(--transition);
-      box-shadow: var(--shadow-sm);
-      flex-shrink: 0;
+      width: 44px; height: 44px; background: var(--bg-secondary); border: 1px solid var(--border-color);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--text-secondary); transition: all var(--transition); box-shadow: var(--shadow-sm); flex-shrink: 0;
     }
     .swap-btn:hover { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); transform: rotate(180deg); }
     .swap-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-    /* ============================
-       Reference Table
-       ============================ */
-    .ref-section {
-      margin-top: 48px;
-    }
-    .ref-section h3 {
-      font-size: 16px; font-weight: 700;
-      color: var(--text-primary); margin-bottom: 16px;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .ref-section h3 svg { width: 18px; height: 18px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-    .ref-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      box-shadow: var(--shadow-md);
-    }
+    /* ====== REFERENCE TABLE ====== */
+    .ref-section { margin-top: 40px; }
+    .ref-section h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .ref-section h3 svg { width: 17px; height: 17px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .ref-table { width: 100%; border-collapse: collapse; font-size: 12px; border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-md); }
     .ref-table thead tr { background: linear-gradient(135deg, var(--accent), var(--accent-blue)); color: #fff; }
-    .ref-table th { padding: 12px 16px; text-align: left; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; }
-    .ref-table td { padding: 11px 16px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); background: var(--bg-secondary); font-family: var(--font-mono); font-size: 12px; }
+    .ref-table th { padding: 11px 14px; text-align: left; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; }
+    .ref-table td { padding: 10px 14px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); background: var(--bg-secondary); font-family: var(--font-mono); font-size: 11px; }
     .ref-table tbody tr:hover td { background: var(--bg-tertiary); }
-    .ref-table td:first-child { font-family: var(--font-sans); font-weight: 600; color: var(--text-primary); }
+    .ref-table td:first-child { font-family: var(--font-sans); font-weight: 600; color: var(--text-primary); font-size: 12px; }
+    .ref-table td:nth-child(2) { color: var(--accent); font-weight: 600; }
     .ref-table tbody tr:last-child td { border-bottom: none; }
 
-    /* Toast Notification */
+    /* ====== TOAST ====== */
     .toast {
       position: fixed; bottom: 24px; right: 24px; z-index: 999;
       background: var(--text-primary); color: var(--bg-primary);
-      padding: 12px 20px; border-radius: var(--radius-md);
-      font-size: 13px; font-weight: 600;
-      box-shadow: var(--shadow-lg);
-      transform: translateY(100px); opacity: 0;
-      transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
-      pointer-events: none;
+      padding: 11px 18px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
+      box-shadow: var(--shadow-lg); transform: translateY(80px); opacity: 0;
+      transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1); pointer-events: none;
     }
     .toast.show { transform: translateY(0); opacity: 1; }
 
-    /* Footer */
-    footer {
-      border-top: 1px solid var(--border-color);
-      background: var(--bg-secondary);
-      padding: 32px 24px;
-      text-align: center;
-      font-size: 13px; color: var(--text-muted);
-    }
+    /* ====== FOOTER ====== */
+    footer { border-top: 1px solid var(--border-color); background: var(--bg-secondary); padding: 28px 24px; text-align: center; font-size: 13px; color: var(--text-muted); }
     footer a { color: var(--text-muted); transition: color var(--transition); }
     footer a:hover { color: var(--text-primary); }
-    .footer-links { display: flex; gap: 24px; justify-content: center; margin-top: 10px; }
+    .footer-links { display: flex; gap: 24px; justify-content: center; margin-top: 8px; }
 
     @media (max-width: 768px) {
       .page-hero h2 { font-size: 28px; }
-      .category-tabs { gap: 6px; }
-      .cat-btn { padding: 8px 14px; font-size: 12px; }
-      main { padding: 28px 16px 60px; }
+      .converter-area { grid-template-columns: 1fr; }
+      .swap-col { transform: rotate(90deg); }
+      main { padding: 24px 16px 60px; }
     }
   </style>
 </head>
 <body>
-
-  <!-- Header -->
   <header>
     <div class="header-inner">
       <div class="header-left">
@@ -424,33 +286,38 @@
         </div>
         <div class="header-titles">
           <h1>Engineering Unit Converter</h1>
-          <p>Instant bidirectional conversion across 8 engineering domains</p>
+          <p>23 categories · Instant bidirectional conversion</p>
         </div>
       </div>
-      <div class="header-actions">
-        <button class="theme-btn" id="theme-toggle" aria-label="Toggle theme">
-          <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-          <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-        </button>
-      </div>
+      <button class="theme-btn" id="theme-toggle" aria-label="Toggle theme">
+        <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
     </div>
   </header>
 
-  <!-- Main Content -->
   <main>
     <div class="page-hero">
       <h2>Unit <span>Converter</span></h2>
       <p>Select a category, choose your units, and type a value. Conversion is instant and bidirectional.</p>
     </div>
 
-    <!-- Category Tabs -->
-    <div class="category-tabs" id="category-tabs" role="tablist" aria-label="Unit categories">
-      <!-- Rendered by JS -->
+    <!-- Search -->
+    <div class="search-wrapper" id="search-wrapper">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input type="text" class="search-input" id="cat-search" placeholder="Search categories or units… ( / to focus )" autocomplete="off" aria-label="Search categories and units">
+      <span class="search-kbd">/ </span>
+      <button class="search-clear-btn" id="search-clear" aria-label="Clear search">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
     </div>
 
-    <!-- Converter Area -->
-    <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; margin-bottom: 48px;">
-      <!-- From Panel -->
+    <!-- Category Tabs -->
+    <div id="category-tabs" role="tablist" aria-label="Unit categories"></div>
+    <div class="no-results" id="no-results">No categories match "<span id="no-results-term"></span>"</div>
+
+    <!-- Converter -->
+    <div class="converter-area">
       <div class="converter-panel">
         <div class="panel-label">From</div>
         <select id="from-unit" class="unit-selector" aria-label="From unit"></select>
@@ -459,15 +326,11 @@
         </div>
         <div class="unit-name-display" id="from-unit-name"></div>
       </div>
-
-      <!-- Swap -->
       <div class="swap-col">
         <button class="swap-btn" id="swap-btn" aria-label="Swap units" title="Swap units">
           <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
         </button>
       </div>
-
-      <!-- To Panel -->
       <div class="converter-panel">
         <div class="panel-label">To</div>
         <select id="to-unit" class="unit-selector" aria-label="To unit"></select>
@@ -481,33 +344,23 @@
       </div>
     </div>
 
-    <!-- Reference Conversion Table -->
+    <!-- Reference Table -->
     <div class="ref-section">
       <h3>
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line></svg>
         All Units in Category
       </h3>
-      <table class="ref-table" id="ref-table">
-        <thead>
-          <tr>
-            <th>Unit Name</th>
-            <th>Symbol</th>
-            <th>Equivalent in Base Unit</th>
-          </tr>
-        </thead>
-        <tbody id="ref-table-body">
-          <!-- Rendered by JS -->
-        </tbody>
+      <table class="ref-table">
+        <thead><tr><th>Unit Name</th><th>Symbol</th><th>Equivalent (Base)</th></tr></thead>
+        <tbody id="ref-table-body"></tbody>
       </table>
     </div>
   </main>
 
-  <!-- Toast -->
-  <div class="toast" id="toast">Copied to clipboard!</div>
+  <div class="toast" id="toast">Copied!</div>
 
-  <!-- Footer -->
   <footer>
-    <p>&copy; 2026 Engineering Toolkit. Open-source under the GNU GPLv3 License.</p>
+    <p>&copy; 2026 Engineering Toolkit · Open-source under the GNU GPLv3 License.</p>
     <div class="footer-links">
       <a href="https://github.com/dhavalpalsana/engineering-toolkit" target="_blank" rel="noopener">GitHub Repository</a>
       <a href="../../index.html">Back to Hub</a>
@@ -515,387 +368,734 @@
   </footer>
 
   <script>
-    // ====================================================
-    // UNIT DATABASE
-    // Each category: { name, icon, baseUnit, baseSymbol, units[] }
-    // Each unit: { name, symbol, toBase, fromBase } — functions
-    // For linear units: factor from unit to base (SI)
-    // Temperature: special-cased
-    // ====================================================
-    const CATEGORIES = [
-      {
-        id: 'pressure',
-        name: 'Pressure',
-        iconPath: 'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-1-5h2v2h-2zm0-8h2v6h-2z',
-        iconType: 'path',
-        baseUnit: 'Pascal (Pa)',
-        baseSymbol: 'Pa',
-        units: [
-          { name: 'Pascal',            symbol: 'Pa',      factor: 1 },
-          { name: 'Kilopascal',        symbol: 'kPa',     factor: 1e3 },
-          { name: 'Megapascal',        symbol: 'MPa',     factor: 1e6 },
-          { name: 'Bar',               symbol: 'bar',     factor: 1e5 },
-          { name: 'Millibar',          symbol: 'mbar',    factor: 1e2 },
-          { name: 'PSI',               symbol: 'psi',     factor: 6894.757 },
-          { name: 'Atmosphere (atm)',  symbol: 'atm',     factor: 101325 },
-          { name: 'Torr (mmHg)',       symbol: 'Torr',    factor: 133.3224 },
-          { name: 'kgf/cm²',          symbol: 'kgf/cm²', factor: 98066.5 },
-          { name: 'inHg',             symbol: 'inHg',    factor: 3386.39 },
-          { name: 'inH₂O',            symbol: 'inH₂O',   factor: 249.089 },
-          { name: 'mmH₂O',            symbol: 'mmH₂O',   factor: 9.80665 },
-        ]
-      },
-      {
-        id: 'torque',
-        name: 'Torque',
-        iconPath: 'M12 22V12m0 0C12 7 8 4 4 4m8 8c0-5 4-8 8-8',
-        iconType: 'path',
-        baseUnit: 'Newton-meter (N·m)',
-        baseSymbol: 'N·m',
-        units: [
-          { name: 'Newton-meter',       symbol: 'N·m',    factor: 1 },
-          { name: 'Kilonewton-meter',   symbol: 'kN·m',   factor: 1e3 },
-          { name: 'Millinewton-meter',  symbol: 'mN·m',   factor: 0.001 },
-          { name: 'Foot-pound',         symbol: 'ft·lbf', factor: 1.35582 },
-          { name: 'Inch-pound',         symbol: 'in·lbf', factor: 0.112985 },
-          { name: 'Inch-ounce',         symbol: 'in·ozf', factor: 0.00706155 },
-          { name: 'kgf·m',             symbol: 'kgf·m',  factor: 9.80665 },
-          { name: 'kgf·cm',            symbol: 'kgf·cm', factor: 0.0980665 },
-          { name: 'daN·m',             symbol: 'daN·m',  factor: 10 },
-        ]
-      },
-      {
-        id: 'temperature',
-        name: 'Temperature',
-        iconPath: 'M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z',
-        iconType: 'path',
-        baseUnit: 'Celsius (°C)',
-        baseSymbol: '°C',
-        isTemperature: true,
-        units: [
-          { name: 'Celsius',    symbol: '°C', toBase: v => v,                    fromBase: v => v },
-          { name: 'Fahrenheit', symbol: '°F', toBase: v => (v - 32) * 5/9,      fromBase: v => v * 9/5 + 32 },
-          { name: 'Kelvin',     symbol: 'K',  toBase: v => v - 273.15,           fromBase: v => v + 273.15 },
-          { name: 'Rankine',    symbol: '°R', toBase: v => (v - 491.67) * 5/9,  fromBase: v => (v + 273.15) * 9/5 },
-        ]
-      },
-      {
-        id: 'energy',
-        name: 'Energy',
-        iconPath: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
-        iconType: 'path',
-        baseUnit: 'Joule (J)',
-        baseSymbol: 'J',
-        units: [
-          { name: 'Joule',              symbol: 'J',      factor: 1 },
-          { name: 'Kilojoule',          symbol: 'kJ',     factor: 1e3 },
-          { name: 'Megajoule',          symbol: 'MJ',     factor: 1e6 },
-          { name: 'Calorie',            symbol: 'cal',    factor: 4.18400 },
-          { name: 'Kilocalorie (kcal)', symbol: 'kcal',   factor: 4184 },
-          { name: 'BTU',                symbol: 'BTU',    factor: 1055.06 },
-          { name: 'Watt-hour',          symbol: 'Wh',     factor: 3600 },
-          { name: 'Kilowatt-hour',      symbol: 'kWh',    factor: 3.6e6 },
-          { name: 'Megawatt-hour',      symbol: 'MWh',    factor: 3.6e9 },
-          { name: 'eV',                 symbol: 'eV',     factor: 1.60218e-19 },
-          { name: 'ft·lbf',            symbol: 'ft·lbf', factor: 1.35582 },
-        ]
-      },
-      {
-        id: 'power',
-        name: 'Power',
-        iconPath: 'M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10',
-        iconType: 'path',
-        baseUnit: 'Watt (W)',
-        baseSymbol: 'W',
-        units: [
-          { name: 'Watt',              symbol: 'W',     factor: 1 },
-          { name: 'Kilowatt',          symbol: 'kW',    factor: 1e3 },
-          { name: 'Megawatt',          symbol: 'MW',    factor: 1e6 },
-          { name: 'Milliwatt',         symbol: 'mW',    factor: 0.001 },
-          { name: 'Horsepower (mech)', symbol: 'hp',    factor: 745.700 },
-          { name: 'Horsepower (elec)', symbol: 'hp(e)', factor: 746 },
-          { name: 'BTU/hour',          symbol: 'BTU/h', factor: 0.293071 },
-          { name: 'BTU/min',           symbol: 'BTU/m', factor: 17.5843 },
-          { name: 'kgf·m/s',          symbol: 'kgf·m/s', factor: 9.80665 },
-          { name: 'Ton of refrigeration', symbol: 'TR', factor: 3516.85 },
-        ]
-      },
-      {
-        id: 'massflow',
-        name: 'Mass Flow',
-        iconPath: 'M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z',
-        iconType: 'path',
-        baseUnit: 'kg/s',
-        baseSymbol: 'kg/s',
-        units: [
-          { name: 'kg/s',     symbol: 'kg/s',    factor: 1 },
-          { name: 'kg/min',   symbol: 'kg/min',  factor: 1/60 },
-          { name: 'kg/h',     symbol: 'kg/h',    factor: 1/3600 },
-          { name: 'g/s',      symbol: 'g/s',     factor: 0.001 },
-          { name: 'g/min',    symbol: 'g/min',   factor: 1/60000 },
-          { name: 'lb/s',     symbol: 'lb/s',    factor: 0.453592 },
-          { name: 'lb/min',   symbol: 'lb/min',  factor: 0.00755987 },
-          { name: 'lb/h',     symbol: 'lb/h',    factor: 0.000125998 },
-          { name: 'ton/h',    symbol: 'ton/h',   factor: 0.277778 },
-          { name: 'slug/s',   symbol: 'slug/s',  factor: 14.5939 },
-        ]
-      },
-      {
-        id: 'force',
-        name: 'Force',
-        iconPath: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
-        iconType: 'path',
-        baseUnit: 'Newton (N)',
-        baseSymbol: 'N',
-        units: [
-          { name: 'Newton',         symbol: 'N',    factor: 1 },
-          { name: 'Kilonewton',     symbol: 'kN',   factor: 1000 },
-          { name: 'Meganewton',     symbol: 'MN',   factor: 1e6 },
-          { name: 'Millinewton',    symbol: 'mN',   factor: 0.001 },
-          { name: 'kgf',           symbol: 'kgf',  factor: 9.80665 },
-          { name: 'lbf',           symbol: 'lbf',  factor: 4.44822 },
-          { name: 'Dyne',           symbol: 'dyn',  factor: 1e-5 },
-          { name: 'Ton-force (US)', symbol: 'tonf', factor: 8896.44 },
-        ]
-      },
-      {
-        id: 'length',
-        name: 'Length',
-        iconPath: 'M3 12h18M3 6h18M3 18h18',
-        iconType: 'path',
-        baseUnit: 'Meter (m)',
-        baseSymbol: 'm',
-        units: [
-          { name: 'Meter',        symbol: 'm',   factor: 1 },
-          { name: 'Kilometer',    symbol: 'km',  factor: 1000 },
-          { name: 'Centimeter',   symbol: 'cm',  factor: 0.01 },
-          { name: 'Millimeter',   symbol: 'mm',  factor: 0.001 },
-          { name: 'Micrometer',   symbol: 'µm',  factor: 1e-6 },
-          { name: 'Inch',         symbol: 'in',  factor: 0.0254 },
-          { name: 'Foot',         symbol: 'ft',  factor: 0.3048 },
-          { name: 'Yard',         symbol: 'yd',  factor: 0.9144 },
-          { name: 'Mile',         symbol: 'mi',  factor: 1609.344 },
-          { name: 'Nautical Mile',symbol: 'nmi', factor: 1852 },
-        ]
-      }
-    ];
+  // ============================================================
+  //  UNIT DATABASE  — 23 Categories
+  //  Linear units: factor = multiplier to base SI unit
+  //  Temperature: special toBase / fromBase functions
+  // ============================================================
+  const GROUPS = [
+    { label: 'Mechanics', ids: ['acceleration','area','density','force','frequency','length','stress','time','torque','velocity','volume','volume_flow'] },
+    { label: 'Thermodynamics', ids: ['energy','heat_flux','heat_transfer','power','specific_heat','temperature','thermal_cond'] },
+    { label: 'Fluids', ids: ['massflow','viscosity_dyn','viscosity_kin'] },
+    { label: 'Electrical', ids: ['current','voltage'] },
+  ];
 
-    // ============================================================
-    //  State
-    // ============================================================
-    let activeCategory = CATEGORIES[0];
+  const CATEGORIES = [
+    // -------- MECHANICS --------
+    {
+      id: 'acceleration', name: 'Acceleration', group: 'Mechanics',
+      icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+      baseSymbol: 'm/s²',
+      units: [
+        { name: 'Metre/second²',      symbol: 'm/s²',   factor: 1 },
+        { name: 'Foot/second²',       symbol: 'ft/s²',  factor: 0.3048 },
+        { name: 'Inch/second²',       symbol: 'in/s²',  factor: 0.0254 },
+        { name: 'Standard gravity',   symbol: 'g₀',     factor: 9.80665 },
+        { name: 'Gal (cm/s²)',        symbol: 'Gal',    factor: 0.01 },
+        { name: 'km/h per second',    symbol: 'km/h·s', factor: 0.27778 },
+        { name: 'mph per second',     symbol: 'mph/s',  factor: 0.44704 },
+        { name: 'Millig (10⁻³ g)',    symbol: 'mg',     factor: 0.00980665 },
+      ]
+    },
+    {
+      id: 'area', name: 'Area', group: 'Mechanics',
+      icon: 'M3 3h18v18H3z',
+      baseSymbol: 'm²',
+      units: [
+        { name: 'Square metre',        symbol: 'm²',     factor: 1 },
+        { name: 'Square kilometre',    symbol: 'km²',    factor: 1e6 },
+        { name: 'Square centimetre',   symbol: 'cm²',    factor: 1e-4 },
+        { name: 'Square millimetre',   symbol: 'mm²',    factor: 1e-6 },
+        { name: 'Square foot',         symbol: 'ft²',    factor: 0.09290304 },
+        { name: 'Square inch',         symbol: 'in²',    factor: 6.4516e-4 },
+        { name: 'Square yard',         symbol: 'yd²',    factor: 0.83612736 },
+        { name: 'Square mile',         symbol: 'mi²',    factor: 2.589988e6 },
+        { name: 'Hectare',             symbol: 'ha',     factor: 1e4 },
+        { name: 'Acre',                symbol: 'ac',     factor: 4046.856 },
+      ]
+    },
+    {
+      id: 'density', name: 'Density', group: 'Mechanics',
+      icon: 'M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z',
+      baseSymbol: 'kg/m³',
+      units: [
+        { name: 'Kilogram/cubic metre', symbol: 'kg/m³',         factor: 1 },
+        { name: 'Gram/cubic centimetre',symbol: 'g/cm³',         factor: 1000 },
+        { name: 'Kilogram/litre',       symbol: 'kg/L',          factor: 1000 },
+        { name: 'Pound/cubic foot',     symbol: 'lb/ft³',        factor: 16.01845 },
+        { name: 'Pound/cubic inch',     symbol: 'lb/in³',        factor: 27679.90 },
+        { name: 'Pound/gallon (US)',    symbol: 'lb/gal(US)',    factor: 119.8264 },
+        { name: 'Pound/gallon (UK)',    symbol: 'lb/gal(UK)',    factor: 99.7764 },
+        { name: 'Slug/cubic foot',      symbol: 'slug/ft³',      factor: 515.3788 },
+        { name: 'Ounce/gallon (US)',    symbol: 'oz/gal(US)',    factor: 7.4892 },
+        { name: 'Gram/litre',          symbol: 'g/L',           factor: 1 },
+      ]
+    },
+    {
+      id: 'force', name: 'Force', group: 'Mechanics',
+      icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+      baseSymbol: 'N',
+      units: [
+        { name: 'Newton',              symbol: 'N',      factor: 1 },
+        { name: 'Kilonewton',          symbol: 'kN',     factor: 1000 },
+        { name: 'Meganewton',          symbol: 'MN',     factor: 1e6 },
+        { name: 'Millinewton',         symbol: 'mN',     factor: 0.001 },
+        { name: 'kgf (kilopond)',      symbol: 'kgf',    factor: 9.80665 },
+        { name: 'Pound-force',         symbol: 'lbf',    factor: 4.44822 },
+        { name: 'Kilopound-force',     symbol: 'kip',    factor: 4448.22 },
+        { name: 'Ounce-force',         symbol: 'ozf',    factor: 0.27801 },
+        { name: 'Poundal',             symbol: 'pdl',    factor: 0.13826 },
+        { name: 'Dyne',                symbol: 'dyn',    factor: 1e-5 },
+      ]
+    },
+    {
+      id: 'frequency', name: 'Frequency', group: 'Mechanics',
+      icon: 'M2 12h4l3-9 4 18 3-9h6',
+      baseSymbol: 'Hz',
+      units: [
+        { name: 'Hertz',           symbol: 'Hz',   factor: 1 },
+        { name: 'Kilohertz',       symbol: 'kHz',  factor: 1e3 },
+        { name: 'Megahertz',       symbol: 'MHz',  factor: 1e6 },
+        { name: 'Gigahertz',       symbol: 'GHz',  factor: 1e9 },
+        { name: 'RPM',             symbol: 'rpm',  factor: 1/60 },
+        { name: 'RPS',             symbol: 'rps',  factor: 1 },
+        { name: 'Millihertz',      symbol: 'mHz',  factor: 0.001 },
+        { name: 'Terahertz',       symbol: 'THz',  factor: 1e12 },
+      ]
+    },
+    {
+      id: 'length', name: 'Length', group: 'Mechanics',
+      icon: 'M3 12h18M3 6h18M3 18h18',
+      baseSymbol: 'm',
+      units: [
+        { name: 'Metre',           symbol: 'm',    factor: 1 },
+        { name: 'Kilometre',       symbol: 'km',   factor: 1000 },
+        { name: 'Centimetre',      symbol: 'cm',   factor: 0.01 },
+        { name: 'Millimetre',      symbol: 'mm',   factor: 0.001 },
+        { name: 'Micrometre',      symbol: 'µm',   factor: 1e-6 },
+        { name: 'Nanometre',       symbol: 'nm',   factor: 1e-9 },
+        { name: 'Angstrom',        symbol: 'Å',    factor: 1e-10 },
+        { name: 'Inch',            symbol: 'in',   factor: 0.0254 },
+        { name: 'Foot',            symbol: 'ft',   factor: 0.3048 },
+        { name: 'Yard',            symbol: 'yd',   factor: 0.9144 },
+        { name: 'Mile',            symbol: 'mi',   factor: 1609.344 },
+        { name: 'Nautical Mile',   symbol: 'nmi',  factor: 1852 },
+        { name: 'Fathom',          symbol: 'ftm',  factor: 1.8288 },
+        { name: 'Light-year',      symbol: 'ly',   factor: 9.461e15 },
+      ]
+    },
+    {
+      id: 'stress', name: 'Stress', group: 'Mechanics',
+      icon: 'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-1-5h2v2h-2zm0-8h2v6h-2z',
+      baseSymbol: 'Pa',
+      units: [
+        { name: 'Pascal',          symbol: 'Pa',      factor: 1 },
+        { name: 'Kilopascal',      symbol: 'kPa',     factor: 1e3 },
+        { name: 'Megapascal',      symbol: 'MPa',     factor: 1e6 },
+        { name: 'N/mm²',          symbol: 'N/mm²',   factor: 1e6 },
+        { name: 'GPa',             symbol: 'GPa',     factor: 1e9 },
+        { name: 'Bar',             symbol: 'bar',     factor: 1e5 },
+        { name: 'PSI',             symbol: 'psi',     factor: 6894.757 },
+        { name: 'ksi',             symbol: 'ksi',     factor: 6894757 },
+        { name: 'kgf/cm²',        symbol: 'kgf/cm²', factor: 98066.5 },
+        { name: 'kgf/mm²',        symbol: 'kgf/mm²', factor: 9806650 },
+        { name: 'lbf/in²',        symbol: 'lbf/in²', factor: 6894.757 },
+      ]
+    },
+    {
+      id: 'time', name: 'Time', group: 'Mechanics',
+      icon: 'M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm.5-10.5V7H11v5.5l4.25 2.55.75-1.23-3.5-2.32z',
+      baseSymbol: 's',
+      units: [
+        { name: 'Second',          symbol: 's',    factor: 1 },
+        { name: 'Millisecond',     symbol: 'ms',   factor: 0.001 },
+        { name: 'Microsecond',     symbol: 'µs',   factor: 1e-6 },
+        { name: 'Nanosecond',      symbol: 'ns',   factor: 1e-9 },
+        { name: 'Minute',          symbol: 'min',  factor: 60 },
+        { name: 'Hour',            symbol: 'h',    factor: 3600 },
+        { name: 'Day',             symbol: 'day',  factor: 86400 },
+        { name: 'Week',            symbol: 'wk',   factor: 604800 },
+        { name: 'Month (avg)',     symbol: 'mo',   factor: 2629800 },
+        { name: 'Year (avg)',      symbol: 'yr',   factor: 31557600 },
+      ]
+    },
+    {
+      id: 'torque', name: 'Torque', group: 'Mechanics',
+      icon: 'M12 22V12m0 0C12 7 8 4 4 4m8 8c0-5 4-8 8-8',
+      baseSymbol: 'N·m',
+      units: [
+        { name: 'Newton-metre',       symbol: 'N·m',     factor: 1 },
+        { name: 'Kilonewton-metre',   symbol: 'kN·m',    factor: 1000 },
+        { name: 'Millinewton-metre',  symbol: 'mN·m',    factor: 0.001 },
+        { name: 'Foot-pound',         symbol: 'ft·lbf',  factor: 1.35582 },
+        { name: 'Inch-pound',         symbol: 'in·lbf',  factor: 0.112985 },
+        { name: 'Inch-ounce',         symbol: 'in·ozf',  factor: 0.00706155 },
+        { name: 'kgf·m',             symbol: 'kgf·m',   factor: 9.80665 },
+        { name: 'kgf·cm',            symbol: 'kgf·cm',  factor: 0.0980665 },
+        { name: 'daN·m',             symbol: 'daN·m',   factor: 10 },
+        { name: 'oz·in',             symbol: 'oz·in',   factor: 0.00706155 },
+      ]
+    },
+    {
+      id: 'velocity', name: 'Velocity / Speed', group: 'Mechanics',
+      icon: 'M5 12h14M12 5l7 7-7 7',
+      baseSymbol: 'm/s',
+      units: [
+        { name: 'Metre/second',    symbol: 'm/s',   factor: 1 },
+        { name: 'Kilometre/hour',  symbol: 'km/h',  factor: 0.277778 },
+        { name: 'Mile/hour',       symbol: 'mph',   factor: 0.44704 },
+        { name: 'Foot/second',     symbol: 'ft/s',  factor: 0.3048 },
+        { name: 'Foot/minute',     symbol: 'ft/min',factor: 0.00508 },
+        { name: 'Knot',            symbol: 'kn',    factor: 0.514444 },
+        { name: 'Mach (at sea level, 15°C)',symbol: 'Mach',factor: 340.29 },
+        { name: 'cm/s',            symbol: 'cm/s',  factor: 0.01 },
+        { name: 'mm/s',            symbol: 'mm/s',  factor: 0.001 },
+        { name: 'in/s',            symbol: 'in/s',  factor: 0.0254 },
+      ]
+    },
+    {
+      id: 'volume', name: 'Volume', group: 'Mechanics',
+      icon: 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z',
+      baseSymbol: 'm³',
+      units: [
+        { name: 'Cubic metre',        symbol: 'm³',          factor: 1 },
+        { name: 'Litre',              symbol: 'L',           factor: 0.001 },
+        { name: 'Millilitre',         symbol: 'mL',          factor: 1e-6 },
+        { name: 'Cubic centimetre',   symbol: 'cm³',         factor: 1e-6 },
+        { name: 'Cubic foot',         symbol: 'ft³',         factor: 0.028317 },
+        { name: 'Cubic inch',         symbol: 'in³',         factor: 1.6387e-5 },
+        { name: 'US Gallon',          symbol: 'gal (US)',    factor: 0.003785 },
+        { name: 'UK Gallon',          symbol: 'gal (UK)',    factor: 0.004546 },
+        { name: 'US Fluid Ounce',     symbol: 'fl oz (US)',  factor: 2.9574e-5 },
+        { name: 'US Barrel (oil)',     symbol: 'bbl',         factor: 0.158987 },
+        { name: 'US Quart',           symbol: 'qt (US)',     factor: 9.4635e-4 },
+        { name: 'US Pint',            symbol: 'pt (US)',     factor: 4.7318e-4 },
+        { name: 'Cubic kilometre',    symbol: 'km³',         factor: 1e9 },
+        { name: 'Cubic millimetre',   symbol: 'mm³',         factor: 1e-9 },
+      ]
+    },
+    {
+      id: 'volume_flow', name: 'Volume Flow Rate', group: 'Mechanics',
+      icon: 'M22 12h-4l-3 9L9 3l-3 9H2',
+      baseSymbol: 'm³/s',
+      units: [
+        { name: 'Cubic metre/second', symbol: 'm³/s',    factor: 1 },
+        { name: 'Litre/second',       symbol: 'L/s',     factor: 0.001 },
+        { name: 'Litre/minute',       symbol: 'L/min',   factor: 1/60000 },
+        { name: 'Litre/hour',         symbol: 'L/h',     factor: 1/3600000 },
+        { name: 'Cubic metre/hour',   symbol: 'm³/h',    factor: 1/3600 },
+        { name: 'Cubic metre/minute', symbol: 'm³/min',  factor: 1/60 },
+        { name: 'US Gallon/min',      symbol: 'gpm',     factor: 6.3090e-5 },
+        { name: 'US Gallon/hour',     symbol: 'gph',     factor: 1.0515e-6 },
+        { name: 'Cubic foot/minute',  symbol: 'cfm',     factor: 4.7195e-4 },
+        { name: 'Cubic foot/second',  symbol: 'cfs',     factor: 0.028317 },
+        { name: 'Barrel/day (oil)',   symbol: 'bbl/d',   factor: 1.8401e-6 },
+        { name: 'UK Gallon/min',      symbol: 'UK gpm',  factor: 7.5768e-5 },
+      ]
+    },
 
-    // ============================================================
-    //  DOM refs
-    // ============================================================
-    const tabsEl      = document.getElementById('category-tabs');
-    const fromSel     = document.getElementById('from-unit');
-    const toSel       = document.getElementById('to-unit');
-    const fromInput   = document.getElementById('from-value');
-    const toInput     = document.getElementById('to-value');
-    const fromName    = document.getElementById('from-unit-name');
-    const toName      = document.getElementById('to-unit-name');
-    const swapBtn     = document.getElementById('swap-btn');
-    const copyBtn     = document.getElementById('copy-result-btn');
-    const refBody     = document.getElementById('ref-table-body');
-    const toast       = document.getElementById('toast');
+    // -------- THERMODYNAMICS --------
+    {
+      id: 'energy', name: 'Energy', group: 'Thermodynamics',
+      icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+      baseSymbol: 'J',
+      units: [
+        { name: 'Joule',              symbol: 'J',       factor: 1 },
+        { name: 'Kilojoule',          symbol: 'kJ',      factor: 1e3 },
+        { name: 'Megajoule',          symbol: 'MJ',      factor: 1e6 },
+        { name: 'Gigajoule',          symbol: 'GJ',      factor: 1e9 },
+        { name: 'Calorie (IT)',       symbol: 'cal',     factor: 4.1868 },
+        { name: 'Kilocalorie (kcal)', symbol: 'kcal',    factor: 4186.8 },
+        { name: 'BTU (IT)',           symbol: 'BTU',     factor: 1055.06 },
+        { name: 'Foot-pound-force',   symbol: 'ft·lbf',  factor: 1.35582 },
+        { name: 'Watt-hour',          symbol: 'Wh',      factor: 3600 },
+        { name: 'Kilowatt-hour',      symbol: 'kWh',     factor: 3.6e6 },
+        { name: 'Megawatt-hour',      symbol: 'MWh',     factor: 3.6e9 },
+        { name: 'Therm (US)',         symbol: 'thm',     factor: 1.055e8 },
+        { name: 'eV',                 symbol: 'eV',      factor: 1.60218e-19 },
+        { name: 'Erg',                symbol: 'erg',     factor: 1e-7 },
+      ]
+    },
+    {
+      id: 'heat_flux', name: 'Heat Flux', group: 'Thermodynamics',
+      icon: 'M12 2v20M2 12h20',
+      baseSymbol: 'W/m²',
+      units: [
+        { name: 'Watt/square metre',          symbol: 'W/m²',          factor: 1 },
+        { name: 'Kilowatt/square metre',      symbol: 'kW/m²',         factor: 1000 },
+        { name: 'BTU/(ft²·h)',                symbol: 'BTU/(ft²·h)',   factor: 3.15459 },
+        { name: 'BTU/(ft²·min)',              symbol: 'BTU/(ft²·min)', factor: 189.275 },
+        { name: 'kcal/(m²·h)',               symbol: 'kcal/(m²·h)',   factor: 1.163 },
+        { name: 'kcal/(cm²·h)',              symbol: 'kcal/(cm²·h)',  factor: 11630 },
+        { name: 'cal/(cm²·s)',               symbol: 'cal/(cm²·s)',   factor: 41868 },
+        { name: 'W/cm²',                     symbol: 'W/cm²',         factor: 1e4 },
+      ]
+    },
+    {
+      id: 'heat_transfer', name: 'Heat Transfer Coeff.', group: 'Thermodynamics',
+      icon: 'M17 12h-5v5h5v-5zM1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01',
+      baseSymbol: 'W/(m²·K)',
+      units: [
+        { name: 'W/(m²·K)',            symbol: 'W/(m²·K)',          factor: 1 },
+        { name: 'W/(m²·°C)',           symbol: 'W/(m²·°C)',         factor: 1 },
+        { name: 'kW/(m²·K)',           symbol: 'kW/(m²·K)',         factor: 1000 },
+        { name: 'BTU/(h·ft²·°F)',      symbol: 'BTU/(h·ft²·°F)',   factor: 5.67826 },
+        { name: 'BTU/(s·ft²·°F)',      symbol: 'BTU/(s·ft²·°F)',   factor: 20441.7 },
+        { name: 'kcal/(h·m²·°C)',     symbol: 'kcal/(h·m²·°C)',   factor: 1.163 },
+        { name: 'cal/(s·cm²·°C)',     symbol: 'cal/(s·cm²·°C)',   factor: 41868 },
+      ]
+    },
+    {
+      id: 'power', name: 'Power', group: 'Thermodynamics',
+      icon: 'M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10',
+      baseSymbol: 'W',
+      units: [
+        { name: 'Watt',                    symbol: 'W',      factor: 1 },
+        { name: 'Kilowatt',                symbol: 'kW',     factor: 1e3 },
+        { name: 'Megawatt',                symbol: 'MW',     factor: 1e6 },
+        { name: 'Gigawatt',                symbol: 'GW',     factor: 1e9 },
+        { name: 'Milliwatt',               symbol: 'mW',     factor: 0.001 },
+        { name: 'Horsepower (mech.)',      symbol: 'hp',     factor: 745.700 },
+        { name: 'Horsepower (metric)',     symbol: 'hk',     factor: 735.499 },
+        { name: 'BTU/hour',                symbol: 'BTU/h',  factor: 0.293071 },
+        { name: 'BTU/minute',              symbol: 'BTU/min',factor: 17.5843 },
+        { name: 'BTU/second',              symbol: 'BTU/s',  factor: 1055.06 },
+        { name: 'kcal/hour',              symbol: 'kcal/h', factor: 1.163 },
+        { name: 'kgf·m/s',               symbol: 'kgf·m/s',factor: 9.80665 },
+        { name: 'Ton of refrigeration',   symbol: 'TR',     factor: 3516.85 },
+        { name: 'ft·lbf/s',              symbol: 'ft·lbf/s',factor: 1.35582 },
+      ]
+    },
+    {
+      id: 'specific_heat', name: 'Specific Heat', group: 'Thermodynamics',
+      icon: 'M12 22a8 8 0 0 1-8-8c0-4.314 6-12 8-12s8 7.686 8 12a8 8 0 0 1-8 8z',
+      baseSymbol: 'J/(kg·K)',
+      units: [
+        { name: 'J/(kg·K)',          symbol: 'J/(kg·K)',        factor: 1 },
+        { name: 'kJ/(kg·K)',         symbol: 'kJ/(kg·K)',       factor: 1000 },
+        { name: 'J/(kg·°C)',         symbol: 'J/(kg·°C)',       factor: 1 },
+        { name: 'BTU/(lb·°F)',       symbol: 'BTU/(lb·°F)',    factor: 4186.8 },
+        { name: 'BTU/(lb·°R)',       symbol: 'BTU/(lb·°R)',    factor: 4186.8 },
+        { name: 'kcal/(kg·°C)',      symbol: 'kcal/(kg·°C)',   factor: 4186.8 },
+        { name: 'cal/(g·°C)',        symbol: 'cal/(g·°C)',     factor: 4186.8 },
+        { name: 'ft·lbf/(slug·°R)', symbol: 'ft·lbf/(slug·°R)',factor: 0.167226 },
+      ]
+    },
+    {
+      id: 'temperature', name: 'Temperature', group: 'Thermodynamics',
+      icon: 'M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z',
+      isTemperature: true,
+      baseSymbol: '°C',
+      units: [
+        { name: 'Celsius',    symbol: '°C',  toBase: v => v,                    fromBase: v => v },
+        { name: 'Fahrenheit', symbol: '°F',  toBase: v => (v - 32) * 5/9,      fromBase: v => v * 9/5 + 32 },
+        { name: 'Kelvin',     symbol: 'K',   toBase: v => v - 273.15,           fromBase: v => v + 273.15 },
+        { name: 'Rankine',    symbol: '°R',  toBase: v => (v - 491.67) * 5/9,  fromBase: v => (v + 273.15) * 9/5 },
+      ]
+    },
+    {
+      id: 'thermal_cond', name: 'Thermal Conductivity', group: 'Thermodynamics',
+      icon: 'M21 12a9 9 0 1 1-9-9c2.52 0 4.85.94 6.6 2.49M21 3v6h-6',
+      baseSymbol: 'W/(m·K)',
+      units: [
+        { name: 'W/(m·K)',               symbol: 'W/(m·K)',             factor: 1 },
+        { name: 'W/(m·°C)',              symbol: 'W/(m·°C)',            factor: 1 },
+        { name: 'kW/(m·K)',              symbol: 'kW/(m·K)',            factor: 1000 },
+        { name: 'BTU/(h·ft·°F)',         symbol: 'BTU/(h·ft·°F)',      factor: 1.73073 },
+        { name: 'BTU·in/(h·ft²·°F)',    symbol: 'BTU·in/(h·ft²·°F)',  factor: 0.144228 },
+        { name: 'kcal/(h·m·°C)',        symbol: 'kcal/(h·m·°C)',      factor: 1.163 },
+        { name: 'cal/(s·cm·°C)',        symbol: 'cal/(s·cm·°C)',      factor: 418.68 },
+      ]
+    },
 
-    // ============================================================
-    //  Build Category Tabs
-    // ============================================================
-    function buildTabs() {
-      tabsEl.innerHTML = '';
-      CATEGORIES.forEach((cat, i) => {
+    // -------- FLUIDS --------
+    {
+      id: 'massflow', name: 'Mass Flow Rate', group: 'Fluids',
+      icon: 'M22 12h-4l-3 9L9 3l-3 9H2',
+      baseSymbol: 'kg/s',
+      units: [
+        { name: 'kg/s',       symbol: 'kg/s',    factor: 1 },
+        { name: 'kg/min',     symbol: 'kg/min',  factor: 1/60 },
+        { name: 'kg/h',       symbol: 'kg/h',    factor: 1/3600 },
+        { name: 'g/s',        symbol: 'g/s',     factor: 0.001 },
+        { name: 'g/min',      symbol: 'g/min',   factor: 1/60000 },
+        { name: 'lb/s',       symbol: 'lb/s',    factor: 0.453592 },
+        { name: 'lb/min',     symbol: 'lb/min',  factor: 0.00755987 },
+        { name: 'lb/h',       symbol: 'lb/h',    factor: 0.000125998 },
+        { name: 'ton/h',      symbol: 'ton/h',   factor: 0.277778 },
+        { name: 'slug/s',     symbol: 'slug/s',  factor: 14.5939 },
+      ]
+    },
+    {
+      id: 'viscosity_dyn', name: 'Dynamic Viscosity', group: 'Fluids',
+      icon: 'M12 2v20M8 6l4-4 4 4M8 18l4 4 4-4',
+      baseSymbol: 'Pa·s',
+      units: [
+        { name: 'Pascal-second',      symbol: 'Pa·s',     factor: 1 },
+        { name: 'Millipascal-second', symbol: 'mPa·s',    factor: 0.001 },
+        { name: 'Poise',              symbol: 'P',        factor: 0.1 },
+        { name: 'Centipoise',         symbol: 'cP',       factor: 0.001 },
+        { name: 'Millipoise',         symbol: 'mP',       factor: 0.0001 },
+        { name: 'lbf·s/ft²',         symbol: 'lbf·s/ft²',factor: 47.8803 },
+        { name: 'lb/(ft·s)',          symbol: 'lb/(ft·s)', factor: 1.48816 },
+        { name: 'lb/(ft·h)',          symbol: 'lb/(ft·h)', factor: 4.13378e-4 },
+        { name: 'slug/(ft·s)',        symbol: 'slug/(ft·s)',factor: 47.8803 },
+        { name: 'kg/(m·h)',           symbol: 'kg/(m·h)',  factor: 2.77778e-4 },
+      ]
+    },
+    {
+      id: 'viscosity_kin', name: 'Kinematic Viscosity', group: 'Fluids',
+      icon: 'M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4',
+      baseSymbol: 'm²/s',
+      units: [
+        { name: 'Square metre/second', symbol: 'm²/s',   factor: 1 },
+        { name: 'Square cm/second',    symbol: 'cm²/s',  factor: 1e-4 },
+        { name: 'Square mm/second',    symbol: 'mm²/s',  factor: 1e-6 },
+        { name: 'Stokes',              symbol: 'St',     factor: 1e-4 },
+        { name: 'Centistokes',         symbol: 'cSt',    factor: 1e-6 },
+        { name: 'Millistokes',         symbol: 'mSt',    factor: 1e-7 },
+        { name: 'Square foot/second',  symbol: 'ft²/s',  factor: 9.2903e-2 },
+        { name: 'Square foot/hour',    symbol: 'ft²/h',  factor: 2.5806e-5 },
+        { name: 'Square inch/second',  symbol: 'in²/s',  factor: 6.4516e-4 },
+      ]
+    },
+
+    // -------- ELECTRICAL --------
+    {
+      id: 'pressure', name: 'Pressure', group: 'Electrical',
+      icon: 'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-1-5h2v2h-2zm0-8h2v6h-2z',
+      baseSymbol: 'Pa',
+      units: [
+        { name: 'Pascal',             symbol: 'Pa',      factor: 1 },
+        { name: 'Kilopascal',         symbol: 'kPa',     factor: 1e3 },
+        { name: 'Megapascal',         symbol: 'MPa',     factor: 1e6 },
+        { name: 'Bar',                symbol: 'bar',     factor: 1e5 },
+        { name: 'Millibar',           symbol: 'mbar',    factor: 100 },
+        { name: 'PSI',                symbol: 'psi',     factor: 6894.757 },
+        { name: 'Atmosphere (atm)',   symbol: 'atm',     factor: 101325 },
+        { name: 'Torr (mmHg)',        symbol: 'Torr',    factor: 133.3224 },
+        { name: 'kgf/cm²',           symbol: 'kgf/cm²', factor: 98066.5 },
+        { name: 'inHg',              symbol: 'inHg',    factor: 3386.39 },
+        { name: 'inH₂O',             symbol: 'inH₂O',   factor: 249.089 },
+        { name: 'mmH₂O',             symbol: 'mmH₂O',   factor: 9.80665 },
+        { name: 'ftH₂O',             symbol: 'ftH₂O',   factor: 2988.98 },
+      ]
+    },
+    {
+      id: 'current', name: 'Current', group: 'Electrical',
+      icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+      baseSymbol: 'A',
+      units: [
+        { name: 'Ampere',       symbol: 'A',   factor: 1 },
+        { name: 'Milliampere',  symbol: 'mA',  factor: 0.001 },
+        { name: 'Microampere',  symbol: 'µA',  factor: 1e-6 },
+        { name: 'Kiloampere',   symbol: 'kA',  factor: 1000 },
+        { name: 'Megaampere',   symbol: 'MA',  factor: 1e6 },
+        { name: 'Abampere',     symbol: 'abA', factor: 10 },
+        { name: 'Statampere',   symbol: 'statA',factor: 3.336e-10 },
+      ]
+    },
+    {
+      id: 'voltage', name: 'Voltage', group: 'Electrical',
+      icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+      baseSymbol: 'V',
+      units: [
+        { name: 'Volt',         symbol: 'V',    factor: 1 },
+        { name: 'Millivolt',    symbol: 'mV',   factor: 0.001 },
+        { name: 'Microvolt',    symbol: 'µV',   factor: 1e-6 },
+        { name: 'Kilovolt',     symbol: 'kV',   factor: 1000 },
+        { name: 'Megavolt',     symbol: 'MV',   factor: 1e6 },
+        { name: 'Statvolt',     symbol: 'statV',factor: 299.792 },
+        { name: 'Abvolt',       symbol: 'abV',  factor: 1e-8 },
+      ]
+    },
+  ];
+
+  // Build a lookup map
+  const CAT_MAP = {};
+  CATEGORIES.forEach(c => CAT_MAP[c.id] = c);
+
+  // ============================================================
+  //  State
+  // ============================================================
+  let activeCatId = CATEGORIES[0].id;
+
+  // ============================================================
+  //  DOM refs
+  // ============================================================
+  const tabsEl        = document.getElementById('category-tabs');
+  const searchInput   = document.getElementById('cat-search');
+  const searchWrapper = document.getElementById('search-wrapper');
+  const searchClear   = document.getElementById('search-clear');
+  const noResults     = document.getElementById('no-results');
+  const noResultsTerm = document.getElementById('no-results-term');
+  const fromSel       = document.getElementById('from-unit');
+  const toSel         = document.getElementById('to-unit');
+  const fromInput     = document.getElementById('from-value');
+  const toInput       = document.getElementById('to-value');
+  const fromName      = document.getElementById('from-unit-name');
+  const toName        = document.getElementById('to-unit-name');
+  const swapBtn       = document.getElementById('swap-btn');
+  const copyBtn       = document.getElementById('copy-result-btn');
+  const refBody       = document.getElementById('ref-table-body');
+  const toast         = document.getElementById('toast');
+
+  // ============================================================
+  //  Build Tabs (grouped)
+  // ============================================================
+  let tabEls = {}; // id -> button el
+
+  function buildTabs() {
+    tabsEl.innerHTML = '';
+    GROUPS.forEach(group => {
+      const label = document.createElement('div');
+      label.className = 'group-label';
+      label.textContent = group.label;
+      tabsEl.appendChild(label);
+
+      const row = document.createElement('div');
+      row.className = 'category-tabs';
+      tabsEl.appendChild(row);
+
+      group.ids.forEach(id => {
+        const cat = CAT_MAP[id];
+        if (!cat) return;
         const btn = document.createElement('button');
-        btn.className = 'cat-btn' + (i === 0 ? ' active' : '');
+        btn.className = 'cat-btn' + (id === activeCatId ? ' active' : '');
         btn.setAttribute('role', 'tab');
-        btn.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+        btn.setAttribute('aria-selected', id === activeCatId ? 'true' : 'false');
         btn.setAttribute('aria-label', cat.name);
-        btn.innerHTML = `
-          <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
-            <path d="${cat.iconPath}"></path>
-          </svg>
-          ${cat.name}
-        `;
-        btn.addEventListener('click', () => selectCategory(cat, btn));
-        tabsEl.appendChild(btn);
-      });
-    }
-
-    function selectCategory(cat, clickedBtn) {
-      activeCategory = cat;
-      document.querySelectorAll('.cat-btn').forEach(b => {
-        b.classList.remove('active');
-        b.setAttribute('aria-selected', 'false');
-      });
-      clickedBtn.classList.add('active');
-      clickedBtn.setAttribute('aria-selected', 'true');
-      populateSelects();
-      fromInput.value = 1;
-      convert('from');
-      buildRefTable();
-    }
-
-    // ============================================================
-    //  Populate unit dropdowns
-    // ============================================================
-    function populateSelects() {
-      [fromSel, toSel].forEach((sel, idx) => {
-        sel.innerHTML = '';
-        activeCategory.units.forEach((u, i) => {
-          const opt = document.createElement('option');
-          opt.value = i;
-          opt.textContent = `${u.name} (${u.symbol})`;
-          sel.appendChild(opt);
-        });
-        sel.value = idx === 1 ? 1 : 0; // default: first and second unit
-      });
-      updateUnitNames();
-    }
-
-    function updateUnitNames() {
-      const fu = activeCategory.units[parseInt(fromSel.value)];
-      const tu = activeCategory.units[parseInt(toSel.value)];
-      fromName.textContent = fu ? fu.name : '';
-      toName.textContent   = tu ? tu.name : '';
-    }
-
-    // ============================================================
-    //  Conversion Engine
-    // ============================================================
-    function convertValue(value, fromUnit, toUnit, cat) {
-      if (cat.isTemperature) {
-        const inCelsius = fromUnit.toBase(value);
-        return toUnit.fromBase(inCelsius);
-      }
-      // Linear: value × fromFactor / toFactor
-      return value * (fromUnit.factor / toUnit.factor);
-    }
-
-    function convert(direction) {
-      const fromIdx = parseInt(fromSel.value);
-      const toIdx   = parseInt(toSel.value);
-      const fu = activeCategory.units[fromIdx];
-      const tu = activeCategory.units[toIdx];
-      if (!fu || !tu) return;
-
-      if (direction === 'from') {
-        const v = parseFloat(fromInput.value);
-        if (isNaN(v)) { toInput.value = ''; return; }
-        const result = convertValue(v, fu, tu, activeCategory);
-        toInput.value = formatResult(result);
-      }
-    }
-
-    function formatResult(v) {
-      if (isNaN(v) || !isFinite(v)) return '—';
-      const abs = Math.abs(v);
-      if (abs === 0) return '0';
-      if (abs >= 1e-3 && abs < 1e7) {
-        // Use up to 8 significant figures
-        const str = parseFloat(v.toPrecision(8)).toString();
-        return str;
-      }
-      return v.toExponential(6);
-    }
-
-    // ============================================================
-    //  Reference Table
-    // ============================================================
-    function buildRefTable() {
-      const cat = activeCategory;
-      const baseIdx = 0; // base is always first unit
-      const baseUnit = cat.units[baseIdx];
-
-      refBody.innerHTML = '';
-      cat.units.forEach((u, i) => {
-        const tr = document.createElement('tr');
-        let equiv;
-        if (cat.isTemperature) {
-          equiv = '—'; // offset units don't have a simple multiplicative factor
-        } else {
-          const val = u.factor; // 1 [unit] = factor base units
-          equiv = `1 ${u.symbol} = ${formatResult(val)} ${cat.baseSymbol}`;
-        }
-        tr.innerHTML = `
-          <td>${u.name}</td>
-          <td>${u.symbol}</td>
-          <td>${equiv}</td>
-        `;
-        refBody.appendChild(tr);
-      });
-    }
-
-    // ============================================================
-    //  Event Wiring
-    // ============================================================
-    fromInput.addEventListener('input', () => convert('from'));
-
-    fromSel.addEventListener('change', () => {
-      updateUnitNames();
-      convert('from');
-    });
-
-    toSel.addEventListener('change', () => {
-      updateUnitNames();
-      convert('from');
-    });
-
-    swapBtn.addEventListener('click', () => {
-      const fromIdx = fromSel.value;
-      fromSel.value = toSel.value;
-      toSel.value   = fromIdx;
-      // use result value as new input
-      const resultVal = toInput.value;
-      if (resultVal && resultVal !== '—') {
-        fromInput.value = resultVal;
-      }
-      updateUnitNames();
-      convert('from');
-    });
-
-    copyBtn.addEventListener('click', () => {
-      const val = toInput.value;
-      if (!val || val === '—') return;
-      const unit = activeCategory.units[parseInt(toSel.value)];
-      const textToCopy = `${val} ${unit ? unit.symbol : ''}`.trim();
-      navigator.clipboard.writeText(textToCopy).then(() => {
-        showToast('Copied: ' + textToCopy);
-      }).catch(() => {
-        // Fallback
-        const ta = document.createElement('textarea');
-        ta.value = textToCopy;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        showToast('Copied: ' + textToCopy);
+        btn.dataset.catId = id;
+        btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="${cat.icon}"></path></svg>${cat.name}`;
+        btn.addEventListener('click', () => selectCategory(id));
+        row.appendChild(btn);
+        tabEls[id] = btn;
       });
     });
+  }
 
-    function showToast(msg) {
-      toast.textContent = msg;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 2800);
-    }
-
-    // ============================================================
-    //  Theme Toggle
-    // ============================================================
-    document.getElementById('theme-toggle').addEventListener('click', () => {
-      const current = document.documentElement.getAttribute('data-theme');
-      const next = current === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
+  function selectCategory(id) {
+    activeCatId = id;
+    Object.entries(tabEls).forEach(([tid, btn]) => {
+      btn.classList.toggle('active', tid === id);
+      btn.setAttribute('aria-selected', tid === id ? 'true' : 'false');
     });
-
-    // ============================================================
-    //  Init
-    // ============================================================
-    buildTabs();
     populateSelects();
-    convert('from');
+    fromInput.value = 1;
+    convert();
     buildRefTable();
+  }
+
+  // ============================================================
+  //  Search / Filter
+  // ============================================================
+  function filterTabs(query) {
+    const q = query.trim().toLowerCase();
+    const groupLabels = tabsEl.querySelectorAll('.group-label');
+    const rows = tabsEl.querySelectorAll('.category-tabs');
+    let anyVisible = false;
+
+    // Clear badges
+    Object.values(tabEls).forEach(btn => {
+      const badge = btn.querySelector('.match-badge');
+      if (badge) badge.remove();
+    });
+
+    GROUPS.forEach((group, gi) => {
+      let groupHasVisible = false;
+      group.ids.forEach(id => {
+        const cat = CAT_MAP[id];
+        const btn = tabEls[id];
+        if (!cat || !btn) return;
+
+        if (!q) {
+          btn.classList.remove('hidden-cat');
+          groupHasVisible = true;
+          anyVisible = true;
+          return;
+        }
+
+        // Match category name
+        const nameMatch = cat.name.toLowerCase().includes(q);
+        // Match unit names
+        const unitMatches = cat.units.filter(u =>
+          u.name.toLowerCase().includes(q) || u.symbol.toLowerCase().includes(q)
+        );
+
+        if (nameMatch || unitMatches.length > 0) {
+          btn.classList.remove('hidden-cat');
+          groupHasVisible = true;
+          anyVisible = true;
+          if (!nameMatch && unitMatches.length > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'match-badge';
+            badge.textContent = unitMatches.length;
+            btn.appendChild(badge);
+          }
+        } else {
+          btn.classList.add('hidden-cat');
+        }
+      });
+
+      if (groupLabels[gi]) groupLabels[gi].style.display = groupHasVisible ? '' : 'none';
+      if (rows[gi]) rows[gi].style.display = groupHasVisible ? '' : 'none';
+    });
+
+    noResults.classList.toggle('show', !anyVisible);
+    noResultsTerm.textContent = query;
+  }
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value;
+    filterTabs(q);
+    searchWrapper.classList.toggle('search-active', q.length > 0);
+  });
+
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    filterTabs('');
+    searchWrapper.classList.remove('search-active');
+    searchInput.focus();
+  });
+
+  // "/" shortcut to focus search
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement !== searchInput &&
+        document.activeElement.tagName !== 'INPUT' &&
+        document.activeElement.tagName !== 'SELECT') {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+    if (e.key === 'Escape' && document.activeElement === searchInput) {
+      searchInput.blur();
+    }
+  });
+
+  // ============================================================
+  //  Populate unit dropdowns
+  // ============================================================
+  function populateSelects() {
+    const cat = CAT_MAP[activeCatId];
+    [fromSel, toSel].forEach((sel, idx) => {
+      sel.innerHTML = '';
+      cat.units.forEach((u, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `${u.name} (${u.symbol})`;
+        sel.appendChild(opt);
+      });
+      sel.value = idx === 0 ? 0 : (cat.units.length > 1 ? 1 : 0);
+    });
+    updateUnitNames();
+  }
+
+  function updateUnitNames() {
+    const cat = CAT_MAP[activeCatId];
+    const fu = cat.units[parseInt(fromSel.value)];
+    const tu = cat.units[parseInt(toSel.value)];
+    fromName.textContent = fu ? fu.name : '';
+    toName.textContent   = tu ? tu.name : '';
+  }
+
+  // ============================================================
+  //  Conversion Engine
+  // ============================================================
+  function convertValue(value, fromUnit, toUnit, cat) {
+    if (cat.isTemperature) {
+      return toUnit.fromBase(fromUnit.toBase(value));
+    }
+    return value * (fromUnit.factor / toUnit.factor);
+  }
+
+  function convert() {
+    const cat = CAT_MAP[activeCatId];
+    const fu = cat.units[parseInt(fromSel.value)];
+    const tu = cat.units[parseInt(toSel.value)];
+    if (!fu || !tu) return;
+    const v = parseFloat(fromInput.value);
+    if (isNaN(v)) { toInput.value = ''; return; }
+    toInput.value = formatResult(convertValue(v, fu, tu, cat));
+  }
+
+  function formatResult(v) {
+    if (isNaN(v) || !isFinite(v)) return '—';
+    if (v === 0) return '0';
+    const abs = Math.abs(v);
+    if (abs >= 1e-3 && abs < 1e8) return parseFloat(v.toPrecision(8)).toString();
+    return v.toExponential(6);
+  }
+
+  // ============================================================
+  //  Reference Table
+  // ============================================================
+  function buildRefTable() {
+    const cat = CAT_MAP[activeCatId];
+    refBody.innerHTML = '';
+    cat.units.forEach(u => {
+      const tr = document.createElement('tr');
+      let equiv;
+      if (cat.isTemperature) {
+        equiv = '— (offset scale)';
+      } else {
+        equiv = `1 ${u.symbol} = ${formatResult(u.factor)} ${cat.baseSymbol}`;
+      }
+      tr.innerHTML = `<td>${u.name}</td><td>${u.symbol}</td><td>${equiv}</td>`;
+      refBody.appendChild(tr);
+    });
+  }
+
+  // ============================================================
+  //  Event Wiring
+  // ============================================================
+  fromInput.addEventListener('input', convert);
+  fromSel.addEventListener('change', () => { updateUnitNames(); convert(); });
+  toSel.addEventListener('change', () => { updateUnitNames(); convert(); });
+
+  swapBtn.addEventListener('click', () => {
+    const fromIdx = fromSel.value;
+    const resultVal = toInput.value;
+    fromSel.value = toSel.value;
+    toSel.value = fromIdx;
+    if (resultVal && resultVal !== '—') fromInput.value = resultVal;
+    updateUnitNames();
+    convert();
+  });
+
+  copyBtn.addEventListener('click', () => {
+    const val = toInput.value;
+    if (!val || val === '—') return;
+    const cat = CAT_MAP[activeCatId];
+    const unit = cat.units[parseInt(toSel.value)];
+    const text = `${val} ${unit ? unit.symbol : ''}`.trim();
+    navigator.clipboard.writeText(text).then(() => showToast('Copied: ' + text))
+      .catch(() => {
+        const ta = Object.assign(document.createElement('textarea'), { value: text });
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta); showToast('Copied: ' + text);
+      });
+  });
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2800);
+  }
+
+  // Theme
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  });
+
+  // ============================================================
+  //  Init
+  // ============================================================
+  buildTabs();
+  populateSelects();
+  convert();
+  buildRefTable();
   </script>
 </body>
 </html>
