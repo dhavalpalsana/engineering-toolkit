@@ -42,6 +42,15 @@ const TOOLS_DATA = [
     status: "active"
   },
   {
+    id: "can-bus-designer",
+    name: "CAN Bus Harness Designer & Analyzer",
+    description: "Design and verify CAN wire harnesses: model nodes, spacing, stubs, and terminations. Performs speed-based physical layer compliance checks and estimates signal integrity / reflection risks.",
+    tags: ["electrical", "automotive", "can", "signal-integrity", "physics", "harness"],
+    icon: "network",
+    path: "./tools/can-bus-designer/index.html",
+    status: "active"
+  },
+  {
     id: "bolt-torque",
     name: "Bolt Torque & Tension Calculator",
     description: "Determine target bolt torque, preload tension, and friction coefficient adjustments for mechanical design.",

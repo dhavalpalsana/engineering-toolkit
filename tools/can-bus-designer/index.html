@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    // Sync theme immediately to prevent flashing
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAN Bus Harness Designer & Analyzer — Engineering Toolkit</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Design and analyze CAN (Controller Area Network) wire harnesses. Check stub lengths, termination resistance, node placement, signal reflections, and propagation delays.">
+  <meta name="keywords" content="CAN bus, wire harness design, automotive electrical engineering, stub length calculator, CAN bus termination, signal reflection, ISO 11898">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="CAN Bus Harness Designer & Analyzer — Engineering Toolkit">
+  <meta property="og:description" content="Interactive topology planning and compliance checks for CAN bus harness designers.">
+  <meta property="og:image" content="../../assets/og-image.png">
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Premium Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <a href="../../index.html" class="back-btn" title="Back to Tools Hub">
+          <i data-lucide="arrow-left"></i>
+        </a>
+        <div class="hdr-icon">
+          <i data-lucide="network"></i>
+        </div>
+        <div class="hdr-titles">
+          <h1>CAN Bus Harness Designer</h1>
+          <p>Topology, Stub Length & Reflection Analyzer</p>
+        </div>
+      </div>
+      
+      <div class="hdr-actions">
+        <button id="btn-share" class="btn" title="Copy URL with current design parameters">
+          <i data-lucide="share-2"></i> Share Design
+        </button>
+        <button id="btn-export" class="btn" title="Export design to JSON">
+          <i data-lucide="download"></i> Export
+        </button>
+        <button id="btn-import" class="btn" title="Import design from JSON">
+          <i data-lucide="upload"></i> Import
+        </button>
+        <input type="file" id="file-import" accept=".json" style="display: none;">
+        
+        <button id="theme-toggle" class="btn btn-icon-only" aria-label="Toggle Theme">
+          <i data-lucide="moon" class="theme-icon-moon"></i>
+          <i data-lucide="sun" class="theme-icon-sun" style="display:none;"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace Grid -->
+  <main>
+    
+    <!-- LEFT COLUMN: Harness Configuration inputs -->
+    <div class="config-panel">
+      <div class="panel-header">
+        <span class="panel-title">
+          <i data-lucide="sliders" style="color: var(--accent);"></i>
+          Harness Configuration
+        </span>
+      </div>
+      <div class="panel-body">
+        
+        <!-- Preset Selector Card -->
+        <div class="section-card">
+          <span class="section-title">Design Presets</span>
+          <div class="form-group full-width">
+            <select id="select-preset" class="input-field">
+               <option value="ideal-250">Ideal Daisy-Chain Network (250 kbps)</option>
+              <option value="canfd-5mbps">CAN FD High-Speed (500k/5M Data Phase)</option>
+              <option value="highspeed-err">High-Speed Limit Violations (1 Mbps)</option>
+              <option value="term-err-mid">Improper Mid-Bus Termination (500 kbps)</option>
+              <option value="multiterm-err">Over-terminated Network (500 kbps, 4 Resistors)</option>
+              <option value="long-stubs">Aerospace J1939-15 Long Stubs (250 kbps)</option>
+              <option value="empty">Clear / New Design</option>
+            </select>
+          </div>
+          <div class="form-group full-width" style="margin-top: 10px;">
+            <label for="select-unit">Length Unit</label>
+            <select id="select-unit" class="input-field">
+              <option value="m" selected>Meters (m)</option>
+              <option value="mm">Millimeters (mm)</option>
+              <option value="cm">Centimeters (cm)</option>
+              <option value="in">Inches (in)</option>
+              <option value="ft">Feet (ft)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Bus Electrical Parameters Card -->
+        <div class="section-card">
+          <span class="section-title">Network & Cable Physics</span>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="input-baud">Baud Rate (kbps)</label>
+              <select id="input-baud" class="input-field">
+                <option value="1000">1000 kbps (1 Mbps)</option>
+                <option value="800">800 kbps</option>
+                <option value="500">500 kbps</option>
+                <option value="250" selected>250 kbps</option>
+                <option value="125">125 kbps</option>
+                <option value="50">50 kbps</option>
+                <option value="20">20 kbps</option>
+                <option value="10">10 kbps</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="input-sample-point">Sample Point (%)</label>
+              <input type="number" id="input-sample-point" class="input-field" value="80" min="50" max="95" step="1">
+            </div>
+            <div class="form-group">
+              <label for="input-prop-delay">Prop. Delay (ns/m)</label>
+              <input type="number" id="input-prop-delay" class="input-field" value="5.0" min="2.0" max="10.0" step="0.1">
+            </div>
+            <div class="form-group">
+              <label for="input-loop-delay">Transceiver Loop (ns)</label>
+              <input type="number" id="input-loop-delay" class="input-field" value="150" min="50" max="500" step="10">
+            </div>
+            <div class="form-group" style="grid-column: span 2; display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+              <input type="checkbox" id="input-canfd" style="width: 15px; height: 15px; cursor: pointer;">
+              <label for="input-canfd" style="cursor: pointer; font-weight: 700;">Enable CAN FD (Flexible Data-Rate)</label>
+            </div>
+            <div class="form-group" id="group-data-baud" style="display: none;">
+              <label for="input-data-baud">Data Phase Baud Rate</label>
+              <select id="input-data-baud" class="input-field">
+                <option value="1000">1000 kbps (1 Mbps)</option>
+                <option value="2000" selected>2000 kbps (2 Mbps)</option>
+                <option value="4000">4000 kbps (4 Mbps)</option>
+                <option value="5000">5000 kbps (5 Mbps)</option>
+                <option value="8000">8000 kbps (8 Mbps)</option>
+              </select>
+            </div>
+            <div class="form-group" id="group-data-sp" style="display: none;">
+              <label for="input-data-sp">Data Sample Point (%)</label>
+              <input type="number" id="input-data-sp" class="input-field" value="75" min="50" max="95" step="1">
+            </div>
+          </div>
+        </div>
+
+        <!-- Station Configuration Card -->
+        <div class="section-card" style="background: none; border: none; padding: 0;">
+          <div class="section-title" style="margin-bottom: 12px;">
+            <span>Harness Stations (Spaced Segments)</span>
+            <button id="btn-add-station" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
+              <i data-lucide="plus" style="width: 12px; height: 12px;"></i> Add Station
+            </button>
+          </div>
+          <div id="station-list-container" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Dynamically populated with station cards -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CENTER COLUMN: Live Harness Topology Diagram -->
+    <div class="diagram-card" style="display: flex; flex-direction: column;">
+      <div class="diagram-header">
+        <span class="panel-title">
+          <i data-lucide="route" style="color: var(--accent);"></i>
+          Physical Harness Topology
+        </span>
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Nodes auto-sorted by trunk position</span>
+      </div>
+      <div class="diagram-svg-container" id="canvas-container" style="position: relative; flex: 1;">
+        <svg class="diagram-svg" id="harness-svg" style="user-select: none; height: 100%; width: 100%;">
+          <defs>
+            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" class="svg-grid" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" class="svg-background-grid" />
+          <g id="zoom-container">
+            <!-- SVG content rendered in app.js -->
+          </g>
+        </svg>
+        
+        <!-- Zoom & Pan Toolbar -->
+        <div class="canvas-controls">
+          <button id="zoom-in" title="Zoom In"><i data-lucide="plus"></i></button>
+          <button id="zoom-out" title="Zoom Out"><i data-lucide="minus"></i></button>
+          <button id="zoom-reset" title="Reset View"><i data-lucide="maximize"></i></button>
+        </div>
+
+        <!-- Inline Dimensions / Names Editor -->
+        <input type="text" id="inline-editor" style="display: none; position: absolute; z-index: 100; width: 110px; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 4px; border: 2px solid var(--accent); background: var(--bg-secondary); color: var(--text-primary); border-radius: var(--r-sm); outline: none;" placeholder="Edit value">
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Diagnostics & Visualizations -->
+    <div class="diagnostics-panel">
+      
+      <!-- Top Alert Notification Banner -->
+      <div id="compliance-banner" class="banner banner-success">
+        <i data-lucide="check-circle" id="banner-icon"></i>
+        <span id="banner-text">All harness parameters meet ISO 11898 physical layer constraints.</span>
+      </div>
+
+      <!-- Signal Integrity Risk Card -->
+      <div class="stats-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div class="stat-label" style="margin-top: 0; display: flex; align-items: center; justify-content: space-between;">
+            <span>SIGNAL REFLECTION RISK</span>
+            <span id="risk-badge" class="risk-level-badge risk-low">LOW</span>
+          </div>
+          <div class="risk-gauge-container">
+            <div class="risk-gauge-bar">
+              <div class="risk-gauge-fill" id="risk-gauge-fill"></div>
+            </div>
+          </div>
+          
+          <!-- Qualitative Waveform Preview -->
+          <div class="waveform-container">
+            <span class="waveform-title">Estimated Ringing / Reflections</span>
+            <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
+          </div>
+        </div>
+        <div class="stat-footer" style="margin-top: 8px;">
+          Qualitative signal analysis at receiving ends. Ringing increases with stub lengths.
+        </div>
+      </div>
+
+      <!-- Equivalent Resistance & Timing Card (Status) -->
+      <div class="stats-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div>
+            <div class="stat-value" id="val-resistance">60 Ω</div>
+            <div class="stat-label">BUS IMPEDANCE (Req)</div>
+          </div>
+          <div>
+            <div class="stat-value" id="val-trunk-len">35.0 m</div>
+            <div class="stat-label">TOTAL BUS LENGTH</div>
+          </div>
+          <div>
+            <div class="stat-value" id="val-prop-time">350 ns</div>
+            <div class="stat-label">ROUND-TRIP PROP TIME</div>
+          </div>
+          <div>
+            <div class="stat-value" id="val-time-budget">800 ns</div>
+            <div class="stat-label">BIT TIME BUDGET</div>
+          </div>
+        </div>
+        <div class="stat-footer" style="margin-top: 12px;">
+          Target impedance: 60 Ω. Round-trip prop time must not exceed sample point time budget.
+        </div>
+      </div>
+
+      <!-- Compliance Diagnostics Checklist -->
+      <div class="checklist-card">
+        <span class="panel-title" style="margin-bottom: 12px;">
+          <i data-lucide="shield-alert" style="color: var(--accent);"></i>
+          ISO 11898 / Physics Compliance Checklist
+        </span>
+        <div class="checklist" id="checklist-body">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
