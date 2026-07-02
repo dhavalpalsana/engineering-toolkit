@@ -235,9 +235,13 @@
             </div>
           </div>
           
-          <!-- Qualitative Waveform Preview -->
+          <!-- Waveform & Eye Diagram Preview -->
           <div class="waveform-container">
-            <span class="waveform-title">Estimated Ringing / Reflections</span>
+            <span class="waveform-title" id="waveform-title-text">Estimated Ringing / Reflections</span>
+            <div class="scope-toggle-container">
+              <button id="scope-btn-scope" class="scope-toggle-btn active" title="Show continuous transient signal trace">Scope</button>
+              <button id="scope-btn-eye" class="scope-toggle-btn" title="Show folded transitions eye diagram">Eye Diagram</button>
+            </div>
             <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
           </div>
         </div>

@@ -683,11 +683,10 @@ select.input-field {
   color: var(--text-secondary);
   margin-top: 2px;
 }
-
 /* Signal Waveform Preview */
 .waveform-container {
   margin-top: 8px;
-  height: 80px;
+  height: 120px;
   background: #0b0f19;
   border-radius: var(--r-md);
   position: relative;
@@ -709,6 +708,39 @@ select.input-field {
   color: #94a3b8;
   text-transform: uppercase;
   font-family: var(--font-mono);
+}
+
+.scope-toggle-container {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+}
+
+.scope-toggle-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: all var(--tr);
+}
+
+.scope-toggle-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.scope-toggle-btn.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* Alert Notification Banner */

@@ -378,6 +378,9 @@ const inputDataSP = document.getElementById('input-data-sp');
 // Unit DOM Elements
 const selectUnit = document.getElementById('select-unit');
 
+// Scope Visualization Mode
+let scopeMode = 'scope';
+
 // Visualizations DOM
 const harnessSvg = document.getElementById('harness-svg');
 const zoomContainer = document.getElementById('zoom-container');
@@ -465,6 +468,10 @@ function bindEvents() {
 
   // Theme Toggler
   themeToggle.addEventListener('click', toggleTheme);
+
+  // Scope and Eye Diagram Toggles
+  document.getElementById('scope-btn-scope').addEventListener('click', () => setScopeMode('scope'));
+  document.getElementById('scope-btn-eye').addEventListener('click', () => setScopeMode('eye'));
 }
 
 function initCanvasInteractions() {
@@ -1990,7 +1997,23 @@ function addStationAtPosition(cumPos) {
   render();
 }
 
-// Qualitatively Simulate and Draw CAN Signals with Ringing & Reflection Errors on Canvas
+// Toggle Scope / Eye Diagram View Mode
+function setScopeMode(mode) {
+  scopeMode = mode;
+  document.getElementById('scope-btn-scope').classList.toggle('active', mode === 'scope');
+  document.getElementById('scope-btn-eye').classList.toggle('active', mode === 'eye');
+  
+  const titleText = document.getElementById('waveform-title-text');
+  if (mode === 'scope') {
+    titleText.textContent = 'Estimated Ringing / Reflections';
+  } else {
+    titleText.textContent = 'Eye Diagram at Receiving Nodes';
+  }
+  
+  render(); // Re-render to trigger waveform update
+}
+
+// Physically Simulate and Draw CAN Signals with Ringing & Reflection Errors on Canvas
 function drawWaveform(riskPercent = 0) {
   const w = waveformCanvas.width;
   const h = waveformCanvas.height;
@@ -2013,77 +2036,215 @@ function drawWaveform(riskPercent = 0) {
   }
   ctxWaveform.stroke();
 
-  // Draw wave
-  ctxWaveform.strokeStyle = riskPercent > 65 ? '#ef4444' : riskPercent > 25 ? '#f59e0b' : '#10b981';
-  ctxWaveform.lineWidth = 2.5;
-  ctxWaveform.shadowBlur = 4;
-  ctxWaveform.shadowColor = ctxWaveform.strokeStyle;
+  // 1. Calculate physical network parameters dynamically from stations data
+  let totalTrunkLength = 0;
+  let maxStubLength = 0;
+  let unterminatedStubsCount = 0;
+  let reflectionsWeight = 0;
+  let totalTerminations = 0;
 
-  const midY = h / 2;
-  const amp = h / 4; 
+  stations.forEach(s => {
+    totalTrunkLength += s.distanceFromPrev;
+    s.devices.forEach(d => {
+      if (d.termination === 120) {
+        totalTerminations++;
+      } else {
+        unterminatedStubsCount++;
+        maxStubLength = Math.max(maxStubLength, d.stubLength);
+        // Reflection weight is proportional to stub length and mismatch factor
+        reflectionsWeight += d.stubLength * (1 - (d.termination || 0) / 120);
+      }
+    });
+  });
 
-  // Generate steps for rendering
-  const steps = [];
-  if (networkConfig.enableCanFD) {
-    steps.push({ xStart: 0, yVal: midY - amp });
-    steps.push({ xStart: 0.15 * w, yVal: midY + amp });
+  // Calculate transceiver sample point based on configuration (nominal or data phase)
+  const isFD = networkConfig.enableCanFD;
+  const baud = isFD ? networkConfig.dataBaudRate : networkConfig.baudRate;
+  const bitTime = 1000000 / baud; // Bit time in nanoseconds
+  const samplePointPercent = isFD ? networkConfig.dataSamplePoint : networkConfig.samplePoint;
+  const samplePointTime = bitTime * (samplePointPercent / 100);
+
+  // 2. Generate a bit pattern sequence
+  // We use a fixed sequence that contains both short and long pulses to highlight inter-symbol interference (ISI)
+  const bits = [1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1];
+  const numBits = bits.length;
+
+  // Let the canvas width 'w' map to the time window of all bits in 'scope' mode.
+  // In 'eye' mode, we will fold the bits into 2x bit period.
+  const points = [];
+  const samplesPerBit = 60;
+  const totalSamples = numBits * samplesPerBit;
+
+  // Physical constants
+  const v_prop = 0.2; // Propagation speed: 0.2 meters per nanosecond (approx 2/3 speed of light)
+  
+  // Calculate transition rise time (tau) based on trunk length and termination mismatch
+  const termMismatchPenalty = Math.abs(totalTerminations - 2) * 15;
+  const tau = 10 + 0.25 * totalTrunkLength + termMismatchPenalty; // Rise-time constant in nanoseconds
+
+  // Ringing frequency and damping
+  // Lower resonant frequency for longer stubs: f = v_prop / (4 * L_stub)
+  const longestStubMeters = maxStubLength;
+  const ringFreq = longestStubMeters > 0 ? (2 * Math.PI * (v_prop / (4 * longestStubMeters))) : 0;
+  const ringDamping = longestStubMeters > 0 ? (0.01 + 0.005 / longestStubMeters + (1 / (totalTrunkLength + 5))) : 0.05;
+  const ringAmp = reflectionsWeight * 0.45; // Amplitude coefficient
+
+  let v_smooth = bits[0] === 1 ? 0.0 : 2.0;
+
+  // Compute the continuous voltage waveform
+  for (let i = 0; i < totalSamples; i++) {
+    const t_ns = i * (bitTime / samplesPerBit); // Time in nanoseconds
+    const bitIdx = Math.floor(t_ns / bitTime);
+    const targetBit = bits[Math.min(numBits - 1, bitIdx)];
     
-    const fastBitW = (w * 0.7) / 10;
-    for (let i = 0; i < 10; i++) {
-      const xStart = 0.3 * w + (i * fastBitW);
-      steps.push({ xStart: xStart, yVal: midY + (i % 2 === 0 ? -amp : amp) });
+    // Ideal driver voltage (0V recessive differential, 2.0V dominant differential)
+    const v_ideal = targetBit === 1 ? 0.0 : 2.0;
+
+    // Apply low-pass rise/fall time dispersion
+    const dt = bitTime / samplesPerBit;
+    v_smooth += (v_ideal - v_smooth) * (1 - Math.exp(-dt / tau));
+
+    // Calculate sum of reflections from all past bit transition edges
+    let v_reflections = 0;
+    for (let k = 1; k < numBits; k++) {
+      const edgeTime = k * bitTime;
+      if (t_ns > edgeTime) {
+        const t_elapsed = t_ns - edgeTime;
+        const prevBit = bits[k - 1];
+        const currBit = bits[k];
+        if (prevBit !== currBit) {
+          const edgeDirection = prevBit === 1 ? 1 : -1; // 1 for rising, -1 for falling edge
+          
+          // Add ringing term
+          if (longestStubMeters > 0) {
+            // Round-trip delay in stub
+            const delay_ns = (2 * longestStubMeters) / v_prop;
+            if (t_elapsed > delay_ns) {
+              const t_ring = t_elapsed - delay_ns;
+              v_reflections += edgeDirection * ringAmp * Math.exp(-ringDamping * t_ring) * Math.sin(ringFreq * t_ring);
+            }
+          }
+        }
+      }
     }
+
+    points.push({
+      time: t_ns,
+      voltage: Math.max(-0.5, Math.min(3.5, v_smooth + v_reflections))
+    });
+  }
+
+  // Visual voltage coordinates mapping
+  const mapY = (v) => {
+    const baseRecessive = h - 20; // Recessive base position near bottom
+    const baseDominant = 20; // Dominant base position near top
+    const scale = (baseRecessive - baseDominant) / 2.0;
+    return baseRecessive - v * scale;
+  };
+
+  if (scopeMode === 'scope') {
+    // --- DRAW CONTINUOUS SCOPE VIEW ---
+    ctxWaveform.strokeStyle = riskPercent > 65 ? '#ef4444' : riskPercent > 25 ? '#f59e0b' : '#10b981';
+    ctxWaveform.lineWidth = 2.5;
+    ctxWaveform.shadowBlur = 4;
+    ctxWaveform.shadowColor = ctxWaveform.strokeStyle;
+    ctxWaveform.beginPath();
+
+    points.forEach((p, idx) => {
+      const x = (p.time / (numBits * bitTime)) * w;
+      const y = mapY(p.voltage);
+      if (idx === 0) {
+        ctxWaveform.moveTo(x, y);
+      } else {
+        ctxWaveform.lineTo(x, y);
+      }
+    });
+
+    ctxWaveform.stroke();
+    ctxWaveform.shadowBlur = 0;
   } else {
-    const bitW = w / 6;
-    for (let i = 0; i < 6; i++) {
-      steps.push({ xStart: i * bitW, yVal: midY + (i % 2 === 0 ? -amp : amp) });
+    // --- DRAW EYE DIAGRAM VIEW ---
+    const eyePeriod = 2 * bitTime; // 2 bits wide window
+    const halfBit = bitTime / 2;
+
+    ctxWaveform.lineWidth = 1.5;
+    ctxWaveform.strokeStyle = riskPercent > 65 ? 'rgba(239, 68, 68, 0.25)' : riskPercent > 25 ? 'rgba(245, 158, 11, 0.25)' : 'rgba(16, 185, 129, 0.25)';
+    
+    // Overlay sliced segments
+    for (let k = 1; k < numBits - 1; k++) {
+      const sliceStartTime = k * bitTime - halfBit;
+      const sliceEndTime = sliceStartTime + eyePeriod;
+      
+      ctxWaveform.beginPath();
+      let firstPoint = true;
+
+      points.forEach(p => {
+        if (p.time >= sliceStartTime && p.time <= sliceEndTime) {
+          const relativeTime = p.time - sliceStartTime;
+          const x = (relativeTime / eyePeriod) * w;
+          const y = mapY(p.voltage);
+          if (firstPoint) {
+            ctxWaveform.moveTo(x, y);
+            firstPoint = false;
+          } else {
+            ctxWaveform.lineTo(x, y);
+          }
+        }
+      });
+      ctxWaveform.stroke();
     }
+
+    // Draw Transceiver Receiver Threshold Lines (0.5V and 0.9V)
+    ctxWaveform.lineWidth = 1;
+    ctxWaveform.setLineDash([4, 4]);
+
+    // Recessive Threshold (0.5V)
+    ctxWaveform.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+    ctxWaveform.beginPath();
+    ctxWaveform.moveTo(0, mapY(0.5));
+    ctxWaveform.lineTo(w, mapY(0.5));
+    ctxWaveform.stroke();
+
+    // Dominant Threshold (0.9V)
+    ctxWaveform.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+    ctxWaveform.beginPath();
+    ctxWaveform.moveTo(0, mapY(0.9));
+    ctxWaveform.lineTo(w, mapY(0.9));
+    ctxWaveform.stroke();
+    ctxWaveform.setLineDash([]);
+
+    // Draw text labels for thresholds
+    ctxWaveform.fillStyle = '#ef4444';
+    ctxWaveform.font = '8px var(--font-mono)';
+    ctxWaveform.fillText('Recessive Limit (0.5V)', 6, mapY(0.5) - 3);
+
+    ctxWaveform.fillStyle = '#10b981';
+    ctxWaveform.fillText('Dominant Limit (0.9V)', 6, mapY(0.9) - 3);
+
+    // Draw Keep-out Mask Box (Eye Opening Limit)
+    const eyeCenterTime = halfBit + samplePointTime;
+    const eyeCenterPct = eyeCenterTime / eyePeriod;
+    const maskWidth = 24; // Width of sample window
+    const maskX = (eyeCenterPct * w) - maskWidth / 2;
+
+    const maskYTop = mapY(0.9);
+    const maskYBottom = mapY(0.5);
+
+    ctxWaveform.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+    ctxWaveform.fillStyle = 'rgba(239, 68, 68, 0.08)';
+    ctxWaveform.lineWidth = 1.5;
+    ctxWaveform.strokeRect(maskX, maskYTop, maskWidth, maskYBottom - maskYTop);
+    ctxWaveform.fillRect(maskX, maskYTop, maskWidth, maskYBottom - maskYTop);
+
+    // Draw Sampling Point indicator arrow
+    ctxWaveform.fillStyle = '#94a3b8';
+    ctxWaveform.beginPath();
+    ctxWaveform.moveTo(eyeCenterPct * w, h - 2);
+    ctxWaveform.lineTo(eyeCenterPct * w - 3, h - 6);
+    ctxWaveform.lineTo(eyeCenterPct * w + 3, h - 6);
+    ctxWaveform.fill();
+    ctxWaveform.fillText('SAMPLE POINT', (eyeCenterPct * w) - 28, h - 10);
   }
-
-  ctxWaveform.beginPath();
-  ctxWaveform.moveTo(0, steps[0].yVal);
-
-  for (let i = 1; i < steps.length; i++) {
-    const prevStep = steps[i - 1];
-    const currStep = steps[i];
-    const nextX = i < steps.length - 1 ? steps[i + 1].xStart : w;
-
-    const edgeW = Math.min(10, (currStep.xStart - prevStep.xStart) * 0.3); // transition width
-    
-    ctxWaveform.lineTo(currStep.xStart - edgeW, prevStep.yVal);
-
-    const edgePoints = 10;
-    const ringingAmp = (riskPercent / 100) * amp * 1.5;
-    
-    const isFast = currStep.xStart >= 0.3 * w && networkConfig.enableCanFD;
-    const freq = isFast ? 0.7 : 0.4;
-    const damping = isFast ? (0.05 - (riskPercent / 100) * 0.03) : (0.08 - (riskPercent / 100) * 0.06);
-
-    for (let p = 0; p <= edgePoints; p++) {
-      const t = p / edgePoints;
-      const px = (currStep.xStart - edgeW) + t * edgeW;
-      const baseY = prevStep.yVal + t * (currStep.yVal - prevStep.yVal);
-
-      const ringT = p;
-      const ringOffset = ringingAmp * Math.exp(-damping * ringT) * Math.sin(freq * ringT);
-      ctxWaveform.lineTo(px, baseY + ringOffset);
-    }
-
-    const flatStart = currStep.xStart;
-    const flatEnd = nextX - (i < steps.length - 1 ? Math.min(10, (nextX - currStep.xStart) * 0.3) : 0);
-    
-    const flatPoints = 30;
-    for (let p = 0; p <= flatPoints; p++) {
-      const t = p / flatPoints;
-      const px = flatStart + t * (flatEnd - flatStart);
-      const ringT = edgePoints + (t * 20);
-      const ringOffset = ringingAmp * Math.exp(-damping * ringT) * Math.sin(freq * ringT);
-      ctxWaveform.lineTo(px, currStep.yVal + ringOffset);
-    }
-  }
-
-  ctxWaveform.stroke();
-  ctxWaveform.shadowBlur = 0;
 }
 
 // State Sharing and Exporting
