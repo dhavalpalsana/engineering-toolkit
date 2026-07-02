@@ -5,7 +5,13 @@
     // Sync theme immediately to prevent flashing
     (function() {
       const savedTheme = localStorage.getItem('theme') || 'light';
-      document.documentElement.setAttribute('data-theme', savedTheme);
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
     })();
   </script>
   <meta charset="UTF-8">
@@ -203,7 +209,7 @@
         </div>
 
         <!-- Inline Dimensions / Names Editor -->
-        <input type="text" id="inline-editor" style="display: none; position: absolute; z-index: 100; width: 110px; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 4px; border: 2px solid var(--accent); background: var(--bg-secondary); color: var(--text-primary); border-radius: var(--r-sm); outline: none;" placeholder="Edit value">
+        <input type="text" id="inline-editor" style="display: none; position: absolute; z-index: 100; width: 110px; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 4px; border: 2px solid var(--accent); background: var(--bg-interactive); color: var(--text-primary); border-radius: var(--r-sm); outline: none;" placeholder="Edit value">
       </div>
     </div>
 

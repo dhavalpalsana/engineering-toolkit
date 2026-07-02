@@ -685,26 +685,43 @@ function renderStationCards() {
   }
 
   stations.forEach((station, index) => {
+    const isFirst = index === 0;
+
+    // Render connection line and spacing input in-between stations
+    if (!isFirst) {
+      const connector = document.createElement('div');
+      connector.className = 'station-connector';
+      connector.innerHTML = `
+        <div class="connector-line"></div>
+        <div class="connector-input-wrapper">
+          <i data-lucide="route" style="width: 13px; height: 13px; color: var(--text-muted);"></i>
+          <span class="connector-label">Spacing:</span>
+          <input type="number" class="station-dist-input" value="${fromMeters(station.distanceFromPrev).toFixed(currentUnit === 'mm' ? 0 : 1)}" data-action="edit-station-dist" min="0.001" step="any" title="Distance from previous node in ${currentUnit}">
+          <span style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">${currentUnit}</span>
+        </div>
+        <div class="connector-line"></div>
+      `;
+
+      // Bind spacing edit event
+      connector.querySelector('[data-action="edit-station-dist"]').addEventListener('change', (e) => {
+        station.distanceFromPrev = Math.max(0.001, toMeters(parseFloat(e.target.value) || 0));
+        render();
+      });
+
+      stationListContainer.appendChild(connector);
+    }
+
     const card = document.createElement('div');
     card.className = 'station-card';
     card.dataset.id = station.id;
 
-    const isFirst = index === 0;
-
     card.innerHTML = `
       <div class="station-header">
-        <div class="station-title-group">
+        <div class="station-title-group" style="cursor: grab;">
+          <i data-lucide="grip-vertical" style="width: 14px; height: 14px; color: var(--text-muted); margin-right: -4px;"></i>
           <i data-lucide="map-pin" style="width: 14px; height: 14px; color: var(--accent);"></i>
           <input type="text" class="station-name-input" value="${station.name}" data-action="edit-station-name" title="Station name">
-        </div>
-        
-        <div class="station-dist-group">
-          ${isFirst 
-            ? `<span>Start (0.0 ${currentUnit})</span>` 
-            : `<span>Spacing:</span>
-               <input type="number" class="station-dist-input" value="${fromMeters(station.distanceFromPrev).toFixed(currentUnit === 'mm' ? 0 : 1)}" data-action="edit-station-dist" min="0.001" step="any" title="Distance from previous node in ${currentUnit}">
-               <span>${currentUnit}</span>`
-          }
+          ${isFirst ? `<span class="start-badge">Start</span>` : ''}
         </div>
         
         <button class="btn-delete" data-action="delete-station" title="Delete this entire station & connected devices" style="margin-left: 8px;">
@@ -718,10 +735,56 @@ function renderStationCards() {
           <!-- Populated inside loop -->
         </div>
         <button class="btn-add-device" data-action="add-device">
-          <i data-lucide="plus-circle" style="width: 12px; height: 12px;"></i> Add Star Device (Splice)
+          <i data-lucide="plus-circle" style="width: 12px; height: 12px;"></i> Add Device
         </button>
       </div>
     `;
+
+    // Drag-and-drop for Stations (only active when dragging the grab handle)
+    const titleGroup = card.querySelector('.station-title-group');
+    titleGroup.addEventListener('mousedown', () => {
+      card.setAttribute('draggable', 'true');
+    });
+    titleGroup.addEventListener('mouseup', () => {
+      card.removeAttribute('draggable');
+    });
+
+    card.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/station-id', station.id);
+      card.classList.add('dragging');
+    });
+
+    card.addEventListener('dragend', () => {
+      card.removeAttribute('draggable');
+      card.classList.remove('dragging');
+    });
+
+    card.addEventListener('dragover', (e) => {
+      if (e.dataTransfer.types.includes('text/station-id')) {
+        e.preventDefault();
+        card.classList.add('drag-over');
+      }
+    });
+
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('drag-over');
+    });
+
+    card.addEventListener('drop', (e) => {
+      const sourceId = e.dataTransfer.getData('text/station-id');
+      if (sourceId && sourceId !== station.id) {
+        e.preventDefault();
+        card.classList.remove('drag-over');
+        const sourceIndex = stations.findIndex(s => s.id === sourceId);
+        const targetIndex = stations.findIndex(s => s.id === station.id);
+        if (sourceIndex > -1 && targetIndex > -1) {
+          const [movedStation] = stations.splice(sourceIndex, 1);
+          stations.splice(targetIndex, 0, movedStation);
+          stations[0].distanceFromPrev = 0;
+          render();
+        }
+      }
+    });
 
     // Populate devices
     const deviceListDiv = card.querySelector(`#device-list-${station.id}`);
@@ -731,7 +794,8 @@ function renderStationCards() {
       devRow.dataset.deviceId = device.id;
 
       devRow.innerHTML = `
-        <div>
+        <div style="display: flex; align-items: center; gap: 4px; cursor: grab;">
+          <i data-lucide="grip-vertical" style="width: 12px; height: 12px; color: var(--text-muted); margin-right: -4px;"></i>
           <input type="text" class="device-input" value="${device.name}" data-action="edit-device-name" title="Device name">
         </div>
         <div style="display: flex; align-items: center; gap: 4px;">
@@ -752,6 +816,40 @@ function renderStationCards() {
           </button>
         </div>
       `;
+
+      // Drag-and-drop for Devices inside this row
+      const devGrip = devRow.querySelector('div:first-child');
+      devGrip.addEventListener('mousedown', () => {
+        devRow.setAttribute('draggable', 'true');
+      });
+      devGrip.addEventListener('mouseup', () => {
+        devRow.removeAttribute('draggable');
+      });
+
+      devRow.addEventListener('dragstart', (e) => {
+        e.stopPropagation(); // Stop parent station card from dragging
+        e.dataTransfer.setData('text/device-id', device.id);
+        e.dataTransfer.setData('text/source-station-id', station.id);
+        devRow.classList.add('dragging');
+      });
+
+      devRow.addEventListener('dragend', () => {
+        devRow.removeAttribute('draggable');
+        devRow.classList.remove('dragging');
+      });
+
+      devRow.addEventListener('dragover', (e) => {
+        if (e.dataTransfer.types.includes('text/device-id')) {
+          e.preventDefault();
+          e.stopPropagation();
+          devRow.classList.add('drag-over');
+        }
+      });
+
+      devRow.addEventListener('dragleave', (e) => {
+        e.stopPropagation();
+        devRow.classList.remove('drag-over');
+      });
 
       // Bind device events
       devRow.querySelectorAll('.device-input').forEach(input => {
@@ -780,6 +878,7 @@ function renderStationCards() {
         });
       });
 
+      // Delete device event
       devRow.querySelector('[data-action="delete-device"]').addEventListener('click', () => {
         station.devices = station.devices.filter(d => d.id !== device.id);
         render();
@@ -788,10 +887,60 @@ function renderStationCards() {
       deviceListDiv.appendChild(devRow);
     });
 
-    // Add device button action
+    // Drag-and-drop targets for device lists inside stations
+    const devContainer = card.querySelector(`.station-devices-container`);
+    devContainer.addEventListener('dragover', (e) => {
+      if (e.dataTransfer.types.includes('text/device-id')) {
+        e.preventDefault();
+        e.stopPropagation();
+        devContainer.classList.add('drag-over');
+      }
+    });
+
+    devContainer.addEventListener('dragleave', (e) => {
+      e.stopPropagation();
+      devContainer.classList.remove('drag-over');
+    });
+
+    devContainer.addEventListener('drop', (e) => {
+      const deviceId = e.dataTransfer.getData('text/device-id');
+      const sourceStationId = e.dataTransfer.getData('text/source-station-id');
+      if (deviceId && sourceStationId) {
+        e.preventDefault();
+        e.stopPropagation();
+        devContainer.classList.remove('drag-over');
+
+        const sourceStation = stations.find(s => s.id === sourceStationId);
+        const targetStation = station;
+
+        if (sourceStation && targetStation) {
+          const deviceIndex = sourceStation.devices.findIndex(d => d.id === deviceId);
+          if (deviceIndex > -1) {
+            const [movedDevice] = sourceStation.devices.splice(deviceIndex, 1);
+            
+            // Check if dropped on a specific device row inside container
+            const targetRow = e.target.closest('.device-row');
+            if (targetRow && targetRow.dataset.deviceId) {
+              targetRow.classList.remove('drag-over');
+              const targetDevIndex = targetStation.devices.findIndex(d => d.id === targetRow.dataset.deviceId);
+              if (targetDevIndex > -1) {
+                targetStation.devices.splice(targetDevIndex, 0, movedDevice);
+              } else {
+                targetStation.devices.push(movedDevice);
+              }
+            } else {
+              targetStation.devices.push(movedDevice);
+            }
+            render();
+          }
+        }
+      }
+    });
+
+    // Add device event
     card.querySelector('[data-action="add-device"]').addEventListener('click', () => {
       station.devices.push({
-        id: 'd_' + Date.now().toString(),
+        id: 'd_' + Date.now().toString() + '_' + Math.floor(Math.random() * 1000),
         name: `Node ${station.devices.length + 1}`,
         stubLength: 0.1,
         termination: 0
@@ -804,14 +953,6 @@ function renderStationCards() {
       station.name = e.target.value;
       render();
     });
-
-    // Edit spacing/distance
-    if (!isFirst) {
-      card.querySelector('[data-action="edit-station-dist"]').addEventListener('change', (e) => {
-        station.distanceFromPrev = Math.max(0.001, toMeters(parseFloat(e.target.value) || 0));
-        render();
-      });
-    }
 
     // Delete Station
     card.querySelector('[data-action="delete-station"]').addEventListener('click', () => {

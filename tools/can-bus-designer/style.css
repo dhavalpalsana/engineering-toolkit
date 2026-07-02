@@ -1,52 +1,29 @@
+@import url('../../css/theme.css');
+
 :root {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f1f5f9;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --accent: #2563eb;
-  --accent-light: #dbeafe;
-  --accent-glow: rgba(37, 99, 235, 0.1);
-  --success: #10b981;
-  --success-bg: rgba(16, 185, 129, 0.08);
-  --warning: #f59e0b;
-  --warning-bg: rgba(245, 158, 11, 0.08);
-  --error: #ef4444;
-  --error-bg: rgba(239, 68, 68, 0.08);
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 20px;
-  --sh-sm: 0 1px 3px rgba(0,0,0,.05);
-  --sh-md: 0 4px 12px rgba(0,0,0,.05), 0 0 0 1px rgba(0,0,0,.01);
-  --sh-lg: 0 12px 32px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.02);
-  --tr: .25s cubic-bezier(.4, 0, .2, 1);
+  /* Alias variables mapping can-bus-designer tokens to global theme.css values */
+  --accent: var(--accent-primary);
+  --accent-light: var(--accent-secondary-glow);
+  --accent-glow: var(--accent-primary-glow);
+  --success: var(--color-success);
+  --success-bg: var(--color-success-bg);
+  --warning: var(--color-warning);
+  --warning-bg: var(--color-warning-bg);
+  --error: var(--color-error);
+  --error-bg: var(--color-error-bg);
+  --r-sm: var(--radius-sm);
+  --r-md: var(--radius-md);
+  --r-lg: var(--radius-lg);
+  --r-xl: var(--radius-lg);
+  --sh-sm: var(--shadow-sm);
+  --sh-md: var(--shadow-md);
+  --sh-lg: var(--shadow-lg);
+  --tr: var(--transition-normal);
 }
 
 [data-theme="dark"] {
-  --bg-primary: #090d16;
-  --bg-secondary: #0f1422;
-  --bg-tertiary: #171e30;
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --border-color: #1e293b;
-  --accent: #3b82f6;
-  --accent-light: #1e293b;
-  --accent-glow: rgba(59, 130, 246, 0.15);
-  --success: #34d399;
-  --success-bg: rgba(52, 211, 153, 0.1);
-  --warning: #fbbf24;
-  --warning-bg: rgba(251, 191, 36, 0.1);
-  --error: #f87171;
-  --error-bg: rgba(248, 113, 113, 0.1);
-  --sh-sm: 0 1px 3px rgba(0,0,0,.3);
-  --sh-md: 0 4px 12px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.02);
-  --sh-lg: 0 12px 32px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.03);
+  --accent-light: var(--accent-secondary-glow);
+  --accent-glow: var(--accent-primary-glow);
 }
 
 * {
@@ -86,7 +63,7 @@ header {
 
 .hdr {
   width: 100%;
-  max-width: 1600px;
+  max-width: var(--max-width);
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -134,15 +111,15 @@ header {
 }
 
 .hdr-titles h1 {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
   letter-spacing: -.2px;
 }
 
 .hdr-titles p {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .hdr-actions {
@@ -193,7 +170,7 @@ header {
 
 main {
   flex: 1;
-  max-width: 1700px;
+  max-width: var(--max-width);
   width: 100%;
   margin: 0 auto;
   padding: 24px;
@@ -307,14 +284,20 @@ label {
 .input-field {
   width: 100%;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-family: inherit;
   border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  background: var(--bg-interactive);
   color: var(--text-primary);
   border-radius: var(--r-md);
   transition: all var(--tr);
   outline: none;
+}
+
+.input-field:disabled {
+  background: var(--bg-interactive-disabled);
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .input-field:focus {
@@ -360,38 +343,30 @@ select.input-field {
 }
 
 .station-name-input {
-  font-weight: 700;
-  font-size: 13px;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
   border: none;
   background: transparent;
   color: var(--text-primary);
-  width: 120px;
+  width: 150px;
   padding: 2px 4px;
   border-radius: var(--r-sm);
   outline: none;
 }
 
 .station-name-input:focus {
-  background: var(--bg-primary);
+  background: var(--bg-interactive);
   box-shadow: 0 0 0 1.5px var(--accent);
 }
 
-.station-dist-group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
+
 
 .station-dist-input {
-  width: 68px;
+  width: 80px;
   padding: 4px 6px;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   border: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  background: var(--bg-interactive);
   color: var(--text-primary);
   border-radius: var(--r-sm);
   text-align: center;
@@ -424,9 +399,9 @@ select.input-field {
 .device-input {
   width: 100%;
   padding: 4px 6px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   border: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  background: var(--bg-interactive);
   color: var(--text-primary);
   border-radius: var(--r-sm);
   outline: none;
@@ -858,5 +833,85 @@ input[type="number"]::-webkit-inner-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* Station Spacing Connectors (rendered between node cards) */
+.station-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: -10px 0;
+  position: relative;
+  z-index: 10;
+}
+
+.connector-line {
+  width: 2px;
+  height: 14px;
+  background: var(--border-color);
+}
+
+.connector-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--r-md);
+  padding: 4px 10px;
+  box-shadow: var(--sh-sm);
+}
+
+.connector-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+/* First node visual start indicator */
+.start-badge {
+  background-color: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+  user-select: none;
+}
+
+/* Drag and Drop Sorting States */
+.station-card.dragging {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.station-card.drag-over {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.device-row.dragging {
+  opacity: 0.4;
+  background: var(--bg-tertiary);
+}
+
+.device-row.drag-over {
+  border-top: 2px solid var(--accent) !important;
+  background: var(--accent-glow);
+}
+
+.station-devices-container {
+  transition: background-color var(--tr);
+}
+
+.station-devices-container.drag-over {
+  background-color: var(--accent-glow);
+  border-radius: var(--r-sm);
+  padding: 4px;
 }
 

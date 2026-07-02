@@ -1,65 +1,21 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
+@import url('theme.css');
+
 /* ==========================================
    CSS Design Tokens & Theme Configuration
    ========================================== */
 :root {
-  /* Light Theme - Slate & Electric Teal (Default) */
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f1f5f9;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --accent-teal: #0d9488;
-  --accent-teal-hover: #0f766e;
-  --accent-teal-glow: rgba(13, 148, 136, 0.08);
-  --accent-blue: #2563eb;
-  --accent-blue-hover: #1d4ed8;
-  --accent-blue-glow: rgba(37, 99, 235, 0.08);
-  --success: #10b981;
+  /* Alias variables mapping style.css legacy tokens to global theme.css values */
+  --accent-teal: var(--accent-primary);
+  --accent-teal-hover: var(--accent-primary-hover);
+  --accent-teal-glow: var(--accent-primary-glow);
   
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --accent-blue: var(--accent-secondary);
+  --accent-blue-hover: var(--accent-secondary-hover);
+  --accent-blue-glow: var(--accent-secondary-glow);
   
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-full: 9999px;
-  
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.02);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.03);
-  --shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  
-  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  
-  --max-width: 1200px;
-}
-
-[data-theme="dark"] {
-  /* Dark Theme Configuration */
-  --bg-primary: #090d16;
-  --bg-secondary: #0f1422;
-  --bg-tertiary: #171e30;
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --border-color: #1e293b;
-  --accent-teal: #14b8a6;
-  --accent-teal-hover: #2dd4bf;
-  --accent-teal-glow: rgba(20, 184, 166, 0.12);
-  --accent-blue: #3b82f6;
-  --accent-blue-hover: #60a5fa;
-  --accent-blue-glow: rgba(59, 130, 246, 0.12);
-  
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.02);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --success: var(--color-success);
 }
 
 /* ==========================================
@@ -249,8 +205,8 @@ header {
 }
 
 .hero-title {
-  font-size: 48px;
-  font-weight: 800;
+  font-size: var(--font-size-5xl);
+  font-weight: var(--font-weight-extrabold);
   line-height: 1.15;
   letter-spacing: -1.5px;
   margin-bottom: 16px;
@@ -264,11 +220,11 @@ header {
 }
 
 .hero-subtitle {
-  font-size: 18px;
+  font-size: var(--font-size-lg);
   color: var(--text-secondary);
   max-width: 600px;
   margin: 0 auto 36px;
-  font-weight: 400;
+  font-weight: var(--font-weight-normal);
 }
 
 .search-box-wrapper {
@@ -458,22 +414,18 @@ header {
 }
 
 .tool-card-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
   margin-bottom: 8px;
   color: var(--text-primary);
   line-height: 1.3;
 }
 
 .tool-card-desc {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
   margin-bottom: 24px;
   flex: 1;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .tool-card-tags {
@@ -485,7 +437,7 @@ header {
 
 .tool-tag {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
   background-color: var(--bg-tertiary);
   padding: 3px 8px;
@@ -506,8 +458,8 @@ header {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
   color: var(--accent-teal);
   transition: gap var(--transition-fast);
 }
@@ -518,8 +470,8 @@ header {
 }
 
 .coming-soon-text {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   color: var(--text-muted);
 }
 
@@ -687,7 +639,7 @@ footer {
 
 .form-input, .form-textarea {
   border: 1px solid var(--border-color);
-  background-color: var(--bg-primary);
+  background-color: var(--bg-interactive);
   border-radius: var(--radius-md);
   padding: 10px 14px;
   font-family: var(--font-sans);

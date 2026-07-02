@@ -80,11 +80,22 @@ Full physics-based busbar design implementing the **CDA "Copper for Busbars"** m
 
 ---
 
+### 🔌 CAN Bus Harness Designer & Analyzer (`tools/can-bus-designer/`)
+
+An interactive physical-layer designer and compliance checker for CAN/CAN FD electrical harnesses.
+
+- **Interactive SVG Topology Canvas** — Drag nodes and edit spacing or stub lengths on a live coordinate-snapping grid
+- **Compliance Checking** — Automated validation against ISO 11898 standard requirements (maximum stub/trunk lengths, termination, bit-rate limits)
+- **Signal Integrity Simulation** — Qualitative reflection engine estimates signal degradation and ringing based on impedance mismatches
+- **Timing & Budget Analysis** — Verifies round-trip propagation times and Loop Delays against sample point constraints (supports dual rates in CAN FD phase)
+- **State Serialization** — Save and reload configurations via JSON schemas, and share setups through hash-encoded links
+
+---
+
 ## 🔜 Coming Soon
 
 | Tool | Domain |
 |---|---|
-| Busbar Capacity Calculator | Electrical |
 | Bolt Torque & Tension Calculator | Mechanical |
 | Pipe Pressure Drop & Flow Calculator | Fluids |
 
@@ -111,8 +122,14 @@ engineering-toolkit/
 │   ├── wire-gauge/
 │   │   ├── index.html        # HTML + Tailwind CDN
 │   │   └── app.js            # All solver logic (~1100 lines)
-│   └── unit-converter/
-│       └── index.html        # Self-contained (no Tailwind, uses design tokens)
+│   ├── unit-converter/
+│   │   └── index.html        # Self-contained (no Tailwind, uses design tokens)
+│   ├── busbar-sizing/
+│   │   └── index.html        # Physics solver (no Tailwind, uses design tokens)
+│   └── can-bus-designer/
+│       ├── index.html        # CAN visual designer HTML
+│       ├── style.css         # Local stylesheets
+│       └── app.js            # Design & simulation engine (~2100 lines)
 ├── robots.txt
 └── sitemap.xml
 ```
@@ -132,7 +149,13 @@ engineering-toolkit/
      status: "active"         // "active" | "coming-soon"
    }
    ```
-3. That's it — the hub auto-renders the card, badge, and stats.
+3. **Integrate Unified Styling**:
+   - Link the global stylesheet: `<link rel="stylesheet" href="../../css/theme.css">`
+   - Bind layout container widths to `max-width: var(--max-width);` (sets a standard `1600px` max-width).
+   - Set interactive inputs/selects backgrounds to `var(--bg-interactive)` (and `var(--bg-interactive-disabled)` when locked).
+   - Align fonts to global typography variables (e.g., `var(--font-size-sm)` for inputs/labels, `var(--font-size-base)` for minor titles).
+   - Include early theme syncing scripts in `<head>` to prevent flash of un-themed mode (FOUC).
+4. That's it — the hub auto-renders the card, badge, and stats.
 
 ---
 
