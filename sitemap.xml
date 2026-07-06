@@ -2,42 +2,42 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
   <url>
-    <loc>https://engineering-toolkit.pages.dev/</loc>
+    <loc>https://dhavalpalsana.github.io/engineering-toolkit/</loc>
     <lastmod>2026-06-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
-    <loc>https://engineering-toolkit.pages.dev/tools/fishbone-diagram/</loc>
+    <loc>https://dhavalpalsana.github.io/engineering-toolkit/tools/fishbone-diagram/</loc>
     <lastmod>2026-06-19</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://engineering-toolkit.pages.dev/tools/wire-gauge/</loc>
+    <loc>https://dhavalpalsana.github.io/engineering-toolkit/tools/wire-gauge/</loc>
     <lastmod>2026-06-19</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://engineering-toolkit.pages.dev/tools/unit-converter/</loc>
+    <loc>https://dhavalpalsana.github.io/engineering-toolkit/tools/unit-converter/</loc>
     <lastmod>2026-06-19</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://engineering-toolkit.pages.dev/tools/busbar-sizing/</loc>
+    <loc>https://dhavalpalsana.github.io/engineering-toolkit/tools/busbar-sizing/</loc>
     <lastmod>2026-06-22</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
   <url>
-    <loc>https://engineering-toolkit.pages.dev/tools/can-bus-designer/</loc>
+    <loc>https://dhavalpalsana.github.io/engineering-toolkit/tools/can-bus-designer/</loc>
     <lastmod>2026-07-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
