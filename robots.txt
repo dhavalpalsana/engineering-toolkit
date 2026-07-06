@@ -4,4 +4,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://dhavalpalsana.github.io/engineering-toolkit/sitemap.xml
+Sitemap: https://engineering-toolkit.pages.dev/sitemap.xml

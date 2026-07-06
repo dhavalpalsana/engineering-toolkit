@@ -4,7 +4,7 @@ A curated, unified suite of high-performance interactive design calculators, sim
 
 The toolkit runs entirely client-side as a static site: no backend, no build step, no dependencies. Double-click `index.html` to run offline, or access it live on GitHub Pages.
 
-🔗 **Live site:** [dhavalpalsana.github.io/engineering-toolkit/](https://dhavalpalsana.github.io/engineering-toolkit/)
+🔗 **Live site:** [engineering-toolkit.pages.dev](https://engineering-toolkit.pages.dev/)
 
 ---
 
