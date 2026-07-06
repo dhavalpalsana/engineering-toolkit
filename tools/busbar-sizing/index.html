@@ -130,8 +130,22 @@
     .preview-header h3{font-size:13px;font-weight:700;color:var(--text-primary);}
     .preview-meta{display:flex;gap:8px;flex-wrap:wrap;}
     .meta-pill{background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:99px;padding:3px 10px;font-size:11px;font-weight:600;color:var(--text-muted);font-family:var(--font-mono);}
-    .preview-svg-wrap{display:flex;justify-content:center;background:var(--bg-tertiary);border-radius:var(--r-lg);padding:20px;min-height:160px;align-items:center;}
+    .preview-card-body{display:flex;gap:20px;align-items:stretch;}
+    .preview-svg-wrap{display:flex;justify-content:center;background:var(--bg-tertiary);border-radius:var(--r-lg);padding:20px;min-height:160px;align-items:center;flex:1;}
     #busbar-svg{overflow:visible;}
+
+    .thermal-profile {flex:1;display:flex;flex-direction:column;gap:12px;background:var(--bg-tertiary);border-radius:var(--r-lg);padding:20px;border:1px solid var(--border-color);justify-content:center;}
+    .thermal-profile-header {font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);}
+    .temp-bar-container {position:relative;height:12px;background:linear-gradient(to right, #3b82f6 0%, #eab308 50%, #ef4444 100%);border-radius:99px;margin:28px 0 24px;border:1px solid rgba(255,255,255,0.1);box-shadow:inset 0 1px 3px rgba(0,0,0,0.15);}
+    .temp-marker {position:absolute;top:-8px;width:2px;height:28px;box-shadow:0 0 4px rgba(0,0,0,0.25);border-radius:99px;}
+    .temp-marker::after {content:attr(data-label);position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--text-muted);white-space:nowrap;}
+    .temp-marker .temp-val {position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:800;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;}
+    .temp-stats {display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .temp-stat-card {background:var(--bg-primary);padding:8px 12px;border-radius:var(--r-md);border:1px solid var(--border-color);display:flex;flex-direction:column;gap:2px;}
+    .temp-stat-card .lbl {font-size:10px;color:var(--text-muted);font-weight:600;}
+    .temp-stat-card .val {font-size:16px;font-weight:800;color:var(--text-primary);font-family:var(--font-mono);}
+
+    @media(max-width:768px){.preview-card-body{flex-direction:column;}.preview-svg-wrap,.thermal-profile{flex:none;width:100%;}}
 
     /* ── MODULE GRID ── */
     .mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -212,11 +226,6 @@
   <div class="hero">
     <h2>Busbar <span>Capacity Calculator</span></h2>
     <p>Physics-based design tool implementing the full CDA methodology: thermal current rating, AC skin effect, multi-bar derating, short-circuit withstand, mechanical deflection, and voltage drop.</p>
-    <div class="hero-meta">
-      <span class="tag"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>CDA Copper for Busbars</span>
-      <span class="tag"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>IEC 60865-1 Adiabatic</span>
-      <span class="tag"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="3"></line></svg>Cu &amp; Al · DC/AC 50/60 Hz</span>
-    </div>
   </div>
 
   <div class="main-tabs" role="tablist">
@@ -297,6 +306,24 @@
                 <option value="vertical">Vertical (edge-on)</option>
                 <option value="horizontal">Horizontal (flat)</option>
               </select>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- Cooling & Thermal -->
+          <div class="input-section">
+            <div class="section-label">Cooling &amp; Thermal</div>
+            <div class="field">
+              <label>Cooling Mode</label>
+              <select id="inp-cooling">
+                <option value="natural" selected>Natural Convection</option>
+                <option value="forced">Forced Convection (Airflow)</option>
+              </select>
+            </div>
+            <div class="field" id="field-velocity" style="display: none;">
+              <label>Air Velocity (m/s)</label>
+              <input type="number" id="inp-vel" value="2.0" min="0.1" max="25" step="0.5">
             </div>
           </div>
 
@@ -384,11 +411,34 @@
           <!-- SVG Preview -->
           <div class="preview-card">
             <div class="preview-header">
-              <h3>Cross-Section Preview</h3>
+              <h3>Design Visualization</h3>
               <div class="preview-meta" id="preview-meta"></div>
             </div>
-            <div class="preview-svg-wrap">
-              <svg id="busbar-svg" width="380" height="140" viewBox="0 0 380 140"></svg>
+            <div class="preview-card-body">
+              <div class="preview-svg-wrap">
+                <svg id="busbar-svg" width="380" height="140" viewBox="0 0 380 140"></svg>
+              </div>
+              <div class="thermal-profile">
+                <div class="thermal-profile-header">Thermal Operating Profile</div>
+                <div class="temp-bar-container">
+                  <div class="temp-marker" id="marker-ambient" style="background:#3b82f6;">
+                    <span class="temp-val" id="val-ambient">--</span>
+                  </div>
+                  <div class="temp-marker" id="marker-operating" style="background:#ef4444;">
+                    <span class="temp-val" id="val-operating">--</span>
+                  </div>
+                </div>
+                <div class="temp-stats">
+                  <div class="temp-stat-card">
+                    <span class="lbl">Ambient Temp</span>
+                    <span class="val" id="card-val-amb">--</span>
+                  </div>
+                  <div class="temp-stat-card">
+                    <span class="lbl">Busbar Temp</span>
+                    <span class="val" id="card-val-op" style="color:var(--accent);">--</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -450,19 +500,27 @@ k_s = u × [sinh(2u) + sin(2u)] / [cosh(2u) − cos(2u)]</div>
       </div>
 
       <div class="formula-card">
-        <div class="formula-card-hdr"><div class="formula-num">3</div><h3>Thermal Current Capacity (CDA Method)</h3></div>
+        <div class="formula-card-hdr"><div class="formula-num">3</div><h3>Thermal Current Capacity &amp; Convection</h3></div>
         <div class="formula-body">
-          <div class="formula-note">At thermal equilibrium, heat generated by I²R equals heat dissipated by natural convection and radiation. Given target ΔT, solve directly for I.</div>
+          <div class="formula-note">At thermal equilibrium, heat generated by I²R equals heat dissipated by convection and radiation. Given target ΔT, solve directly for I.</div>
           <div class="formula-eq">I² × R_AC = Q_conv + Q_rad
 
-Q_conv = 1.71 × P_c^0.75 × ΔT^1.25   [W/m, vertical]
-Q_conv = 1.21 × P_c^0.75 × ΔT^1.25   [W/m, horizontal]
+<strong>Natural Convection (CDA empirical formula):</strong>
+Q_conv = C_c × P^0.75 × ΔT^1.25 [W/m]
+(C_c = 1.71 for vertical, 1.21 for horizontal orientation)
 
-Q_rad = 5.67×10⁻⁸ × ε × P_r × (T_bar⁴ − T_amb⁴) [W/m]
+<strong>Forced Convection (Airflow - Jurges formula):</strong>
+Q_conv = h_forced × P × ΔT [W/m]
+- For v ≤ 5 m/s: h_forced = 5.6 + 3.8 × v  [W/(m²·K)]
+- For v > 5 m/s: h_forced = 7.2 × v^0.78  [W/(m²·K)]
+
+<strong>Radiation (Stefan-Boltzmann):</strong>
+Q_rad = 5.67×10⁻⁸ × ε × P × (T_bar⁴ − T_amb⁴) [W/m]
 
 I = √[(Q_conv + Q_rad) / R_AC]</div>
           <table class="param-table">
-            <tr><td>P_c</td><td>Cooling perimeter = 2(W + T) [m] — exposed surfaces</td></tr>
+            <tr><td>P</td><td>Cooling perimeter = 2(W + T) [m] — exposed surfaces</td></tr>
+            <tr><td>v</td><td>Airflow velocity [m/s]</td></tr>
             <tr><td>ε</td><td>Emissivity: 0.10 (bright), 0.50 (oxidized), 0.90 (painted)</td></tr>
             <tr><td>T_bar, T_amb</td><td>Absolute temperatures in Kelvin (add 273.15)</td></tr>
             <tr><td>ΔT</td><td>Temperature rise = T_bar − T_amb [°C]</td></tr>
@@ -631,6 +689,8 @@ function runCalc() {
   const Isc_kA = gv('inp-Isc');
   const tf   = gv('inp-tf');
   const d_mm = gv('inp-d');
+  const cooling = $('inp-cooling').value;
+  const vel = gv('inp-vel');
 
   const M = MAT[mat];
 
@@ -666,11 +726,23 @@ function runCalc() {
   const T_bar_K = T_op + 273.15;
   const T_amb_K = Tamb + 273.15;
 
-  // Convection (CDA empirical formula)
-  // Vertical: 1.71 × P^0.75 × ΔT^1.25 (W/m)
-  // Horizontal: ~0.71× less effective → use factor 0.71 (CDA)
-  const cv_factor = orient === 'vertical' ? 1.71 : 1.21;
-  const Q_conv = cv_factor * Math.pow(P, 0.75) * Math.pow(dT, 1.25);
+  // Convection (CDA empirical formula or forced convection)
+  let Q_conv, h_forced = 0;
+  if (cooling === 'forced') {
+    // Jurges formula for forced convection of air on flat surfaces
+    if (vel <= 5.0) {
+      h_forced = 5.6 + 3.8 * vel;
+    } else {
+      h_forced = 7.2 * Math.pow(vel, 0.78);
+    }
+    Q_conv = h_forced * P * dT;
+  } else {
+    // Natural convection (CDA empirical formula)
+    // Vertical: 1.71 × P^0.75 × ΔT^1.25 (W/m)
+    // Horizontal: ~0.71× less effective → use factor 1.21 (CDA)
+    const cv_factor = orient === 'vertical' ? 1.71 : 1.21;
+    Q_conv = cv_factor * Math.pow(P, 0.75) * Math.pow(dT, 1.25);
+  }
 
   // Radiation (Stefan-Boltzmann)
   const Q_rad = SIGMA_SB * eps * P * (Math.pow(T_bar_K, 4) - Math.pow(T_amb_K, 4));
@@ -728,6 +800,7 @@ function runCalc() {
   return {
     // Inputs for display
     W_mm, T_mm, L, N, span, mat, eps, orient, acdc, f, Tamb, dT, V_sys, Isc_kA, tf, d_mm,
+    cooling, vel, h_forced,
     M,
     // Mod 1
     A_mm2, weight_pm, R_dc,
@@ -772,14 +845,25 @@ const ICONS = {
 function renderSVG(r) {
   const svg = $('busbar-svg');
   const VW = 380, VH = 140;
-  const MAX_W = 300, MAX_T = 100;
-  const scale = Math.min(MAX_W / r.W_mm, MAX_T / r.T_mm, 5);
-  const bW = r.W_mm * scale;
-  const bT = r.T_mm * scale;
+
+  // Set dimensions based on orientation
+  let barW_mm, barH_mm;
+  if (r.orient === 'vertical') {
+    barW_mm = r.T_mm; // thickness is horizontal
+    barH_mm = r.W_mm; // width is vertical
+  } else {
+    barW_mm = r.W_mm; // width is horizontal
+    barH_mm = r.T_mm; // thickness is vertical
+  }
+
+  const MAX_W = 280, MAX_H = 100;
+  const scale = Math.min(MAX_W / barW_mm, MAX_H / barH_mm, 5);
+
+  const bW = barW_mm * scale;
+  const bH = barH_mm * scale;
+
   const barsToShow = Math.min(r.N, 3);
   const gap = Math.max(4, r.T_mm * scale * 0.7);
-  const totalH = barsToShow * bT + (barsToShow - 1) * gap;
-  const ox = (VW - bW) / 2, oy = (VH - totalH) / 2;
 
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const barFill = isDark ? '#92400e' : '#fef3c7';
@@ -790,44 +874,121 @@ function renderSVG(r) {
 
   let html = '';
 
-  for (let i = 0; i < barsToShow; i++) {
-    const cy = oy + i * (bT + gap);
+  if (r.orient === 'vertical') {
+    // Bars are side-by-side horizontally
+    const totalW = barsToShow * bW + (barsToShow - 1) * gap;
+    const ox = (VW - totalW) / 2, oy = (VH - bH) / 2;
 
-    // skin depth indicator (if AC and skin depth < half-thickness)
-    if (r.acdc === 'AC' && r.ks > 1.02 && r.delta_mm < r.T_mm / 2) {
-      const sd_px = Math.min(r.delta_mm * scale, bT / 2 - 1);
-      // Skin depth rings on left/right
-      html += `<rect x="${ox}" y="${cy}" width="${sd_px}" height="${bT}" fill="${skinFill}" rx="2"/>`;
-      html += `<rect x="${ox + bW - sd_px}" y="${cy}" width="${sd_px}" height="${bT}" fill="${skinFill}" rx="2"/>`;
-      // top/bottom
-      html += `<rect x="${ox}" y="${cy}" width="${bW}" height="${sd_px}" fill="${skinFill}" rx="2"/>`;
-      html += `<rect x="${ox}" y="${cy + bT - sd_px}" width="${bW}" height="${sd_px}" fill="${skinFill}" rx="2"/>`;
-    }
+    for (let i = 0; i < barsToShow; i++) {
+      const cx = ox + i * (bW + gap);
 
-    // Main bar
-    html += `<rect x="${ox}" y="${cy}" width="${bW}" height="${bT}" fill="${barFill}" stroke="${barStroke}" stroke-width="1.5" rx="2"/>`;
+      // skin depth indicator (if AC and skin depth < half-thickness/half-width)
+      if (r.acdc === 'AC' && r.ks > 1.02) {
+        const sd_px = r.delta_mm * scale;
+        // left/right skin depth
+        if (sd_px < bW / 2) {
+          html += `<rect x="${cx}" y="${oy}" width="${sd_px}" height="${bH}" fill="${skinFill}" rx="2"/>`;
+          html += `<rect x="${cx + bW - sd_px}" y="${oy}" width="${sd_px}" height="${bH}" fill="${skinFill}" rx="2"/>`;
+        }
+        // top/bottom skin depth
+        if (sd_px < bH / 2) {
+          html += `<rect x="${cx}" y="${oy}" width="${bW}" height="${sd_px}" fill="${skinFill}" rx="2"/>`;
+          html += `<rect x="${cx}" y="${oy + bH - sd_px}" width="${bW}" height="${sd_px}" fill="${skinFill}" rx="2"/>`;
+        }
+      }
 
-    if (i === 0) {
-      // Dimension arrows
-      // Width arrow
-      const ay = cy + bT + 16;
-      html += `<line x1="${ox}" y1="${ay}" x2="${ox + bW}" y2="${ay}" stroke="${dimColor}" stroke-width="1" marker-start="url(#a)" marker-end="url(#a)"/>`;
-      html += `<text x="${ox + bW/2}" y="${ay - 4}" text-anchor="middle" font-size="10" fill="${dimColor}" font-family="JetBrains Mono,monospace" font-weight="600">${r.W_mm}mm</text>`;
+      // Main bar
+      html += `<rect x="${cx}" y="${oy}" width="${bW}" height="${bH}" fill="${barFill}" stroke="${barStroke}" stroke-width="1.5" rx="2"/>`;
 
-      // Thickness label inside bar
-      if (bT > 16) {
-        html += `<text x="${ox + bW/2}" y="${cy + bT/2 + 4}" text-anchor="middle" font-size="10" fill="${textFill}" font-family="JetBrains Mono,monospace" font-weight="600">${r.T_mm}mm</text>`;
+      if (i === 0) {
+        // Dimension arrows
+        // Width arrow (vertical dimension) on the left
+        const ax = cx - 16;
+        html += `<line x1="${ax}" y1="${oy}" x2="${ax}" y2="${oy + bH}" stroke="${dimColor}" stroke-width="1" marker-start="url(#a)" marker-end="url(#a)"/>`;
+        html += `<text x="${ax - 4}" y="${oy + bH/2 + 4}" text-anchor="end" font-size="10" fill="${dimColor}" font-family="JetBrains Mono,monospace" font-weight="600">${r.W_mm}mm</text>`;
+
+        // Thickness label (horizontal dimension) at the bottom
+        const ay = oy + bH + 16;
+        html += `<line x1="${cx}" y1="${ay}" x2="${cx + bW}" y2="${ay}" stroke="${dimColor}" stroke-width="1" marker-start="url(#a)" marker-end="url(#a)"/>`;
+        html += `<text x="${cx + bW/2}" y="${ay - 4}" text-anchor="middle" font-size="10" fill="${dimColor}" font-family="JetBrains Mono,monospace" font-weight="600">${r.T_mm}mm</text>`;
       }
     }
-  }
 
-  if (barsToShow < r.N) {
-    const dotY = oy + barsToShow * (bT + gap) + 6;
-    html += `<text x="${ox + bW/2}" y="${dotY + 10}" text-anchor="middle" font-size="11" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif">+${r.N - barsToShow} more bar${r.N - barsToShow > 1 ? 's' : ''}</text>`;
+    // Support Clamps (gripping vertical edges at top/bottom)
+    const clampH = 8;
+    const overlap = 4;
+    const clampColor = isDark ? '#475569' : '#94a3b8';
+    const clampStroke = isDark ? '#334155' : '#64748b';
+    html += `<rect x="${ox - 10}" y="${oy - clampH + overlap}" width="${totalW + 20}" height="${clampH}" fill="${clampColor}" stroke="${clampStroke}" stroke-width="1" rx="2" opacity="0.85"/>`;
+    html += `<rect x="${ox - 10}" y="${oy + bH - overlap}" width="${totalW + 20}" height="${clampH}" fill="${clampColor}" stroke="${clampStroke}" stroke-width="1" rx="2" opacity="0.85"/>`;
+    html += `<text x="${ox + totalW/2}" y="${oy - clampH - 2}" text-anchor="middle" font-size="8" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif" font-weight="700" letter-spacing="0.5">INSULATOR CLAMP (EDGE-MOUNTED)</text>`;
+
+    if (barsToShow < r.N) {
+      const dotX = ox + barsToShow * (bW + gap) + 6;
+      html += `<text x="${dotX + 10}" y="${oy + bH/2 + 4}" text-anchor="start" font-size="11" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif">+${r.N - barsToShow} more</text>`;
+    }
+
+  } else {
+    // Horizontal: bars are stacked vertically
+    const totalH = barsToShow * bH + (barsToShow - 1) * gap;
+    const ox = (VW - bW) / 2, oy = (VH - totalH) / 2;
+
+    for (let i = 0; i < barsToShow; i++) {
+      const cy = oy + i * (bH + gap);
+
+      // skin depth indicator (if AC and skin depth < half-thickness/half-width)
+      if (r.acdc === 'AC' && r.ks > 1.02) {
+        const sd_px = r.delta_mm * scale;
+        // left/right
+        if (sd_px < bW / 2) {
+          html += `<rect x="${ox}" y="${cy}" width="${sd_px}" height="${bH}" fill="${skinFill}" rx="2"/>`;
+          html += `<rect x="${ox + bW - sd_px}" y="${cy}" width="${sd_px}" height="${bH}" fill="${skinFill}" rx="2"/>`;
+        }
+        // top/bottom
+        if (sd_px < bH / 2) {
+          html += `<rect x="${ox}" y="${cy}" width="${bW}" height="${sd_px}" fill="${skinFill}" rx="2"/>`;
+          html += `<rect x="${ox}" y="${cy + bH - sd_px}" width="${bW}" height="${sd_px}" fill="${skinFill}" rx="2"/>`;
+        }
+      }
+
+      // Main bar
+      html += `<rect x="${ox}" y="${cy}" width="${bW}" height="${bH}" fill="${barFill}" stroke="${barStroke}" stroke-width="1.5" rx="2"/>`;
+
+      if (i === 0) {
+        // Dimension arrows
+        // Width arrow (horizontal dimension) at the bottom of first bar
+        const ay = cy + bH + 16;
+        html += `<line x1="${ox}" y1="${ay}" x2="${ox + bW}" y2="${ay}" stroke="${dimColor}" stroke-width="1" marker-start="url(#a)" marker-end="url(#a)"/>`;
+        html += `<text x="${ox + bW/2}" y="${ay - 4}" text-anchor="middle" font-size="10" fill="${dimColor}" font-family="JetBrains Mono,monospace" font-weight="600">${r.W_mm}mm</text>`;
+
+        // Thickness label (vertical dimension) inside the bar or on the left
+        if (bH > 16) {
+          html += `<text x="${ox + bW/2}" y="${cy + bH/2 + 4}" text-anchor="middle" font-size="10" fill="${textFill}" font-family="JetBrains Mono,monospace" font-weight="600">${r.T_mm}mm</text>`;
+        } else {
+          const ax = ox - 16;
+          html += `<line x1="${ax}" y1="${cy}" x2="${ax}" y2="${cy + bH}" stroke="${dimColor}" stroke-width="1" marker-start="url(#a)" marker-end="url(#a)"/>`;
+          html += `<text x="${ax - 4}" y="${cy + bH/2 + 4}" text-anchor="end" font-size="10" fill="${dimColor}" font-family="JetBrains Mono,monospace" font-weight="600">${r.T_mm}mm</text>`;
+        }
+      }
+    }
+
+    // Support Clamps (gripping top and bottom flat horizontal faces of stack)
+    const clampH = 8;
+    const overlap = 4;
+    const clampColor = isDark ? '#475569' : '#94a3b8';
+    const clampStroke = isDark ? '#334155' : '#64748b';
+    html += `<rect x="${ox - 10}" y="${oy - clampH + overlap}" width="${bW + 20}" height="${clampH}" fill="${clampColor}" stroke="${clampStroke}" stroke-width="1" rx="2" opacity="0.85"/>`;
+    html += `<rect x="${ox - 10}" y="${oy + totalH - overlap}" width="${bW + 20}" height="${clampH}" fill="${clampColor}" stroke="${clampStroke}" stroke-width="1" rx="2" opacity="0.85"/>`;
+    html += `<text x="${ox + bW/2}" y="${oy - clampH - 2}" text-anchor="middle" font-size="8" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif" font-weight="700" letter-spacing="0.5">INSULATOR CLAMP (FLAT-MOUNTED)</text>`;
+
+    if (barsToShow < r.N) {
+      const dotY = oy + barsToShow * (bH + gap) + 6;
+      html += `<text x="${ox + bW/2}" y="${dotY + 10}" text-anchor="middle" font-size="11" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif">+${r.N - barsToShow} more bar${r.N - barsToShow > 1 ? 's' : ''}</text>`;
+    }
   }
 
   // Legend for skin depth
-  if (r.acdc === 'AC' && r.ks > 1.02 && r.delta_mm < r.T_mm / 2) {
+  if (r.acdc === 'AC' && r.ks > 1.02 && r.delta_mm < Math.min(r.W_mm, r.T_mm) / 2) {
     html += `<rect x="12" y="8" width="10" height="10" fill="${skinFill}" stroke="${barStroke}" stroke-width="1" rx="2"/>`;
     html += `<text x="26" y="18" font-size="10" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif">Skin depth δ = ${fmt(r.delta_mm, 1)} mm</text>`;
   }
@@ -906,15 +1067,17 @@ function renderModules(r) {
   </div>`;
 
   // ── MOD 3 ──
+  const coolingText = r.cooling === 'forced' ? `Forced (${r.vel} m/s)` : 'Natural';
   const mod3 = `
   <div class="mod-card highlight-pass">
     <div class="mod-header">
       <div class="mod-icon" style="background:var(--red-bg);color:var(--red)">
         <svg viewBox="0 0 24 24"><path d="M12 22a8 8 0 0 1-8-8c0-4.314 6-12 8-12s8 7.686 8 12a8 8 0 0 1-8 8z"></path></svg>
       </div>
-      <div><div class="mod-title">3 · Continuous Current Capacity</div><div class="mod-subtitle">ΔT = ${r.dT} °C · ${r.orient} · ε = ${r.eps}</div></div>
+      <div><div class="mod-title">3 · Continuous Current Capacity</div><div class="mod-subtitle">Cooling: ${coolingText} · ${r.orient} · ε = ${r.eps}</div></div>
     </div>
     <div class="mod-body">
+      ${r.cooling === 'forced' ? row('Convective coeff h_c', fmt(r.h_forced, 2), 'W/(m²·K)') : ''}
       ${row('Q_convection', fmt(r.Q_conv, 2), 'W/m')}
       ${row('Q_radiation', fmt(r.Q_rad, 2), 'W/m')}
       ${row('Q_total dissipated', fmt(r.Q_total, 2), 'W/m')}
@@ -1091,6 +1254,22 @@ function calculate() {
       <span class="meta-pill">${r.M.name}</span>
       <span class="meta-pill">${r.acdc}${r.acdc==='AC'?' '+r.f+'Hz':''}</span>`;
 
+    // Update thermal profile gauge
+    const tMin = 0;
+    const tMax = 120;
+    const pctAmb = Math.min(100, Math.max(0, ((r.Tamb - tMin) / (tMax - tMin)) * 100));
+    const pctOp = Math.min(100, Math.max(0, ((r.T_op - tMin) / (tMax - tMin)) * 100));
+
+    $('marker-ambient').style.left = `${pctAmb}%`;
+    $('marker-ambient').setAttribute('data-label', 'Ambient');
+    $('val-ambient').textContent = `${fmt(r.Tamb,0)}°C`;
+    $('card-val-amb').textContent = `${fmt(r.Tamb,0)}°C`;
+
+    $('marker-operating').style.left = `${pctOp}%`;
+    $('marker-operating').setAttribute('data-label', 'Busbar');
+    $('val-operating').textContent = `${fmt(r.T_op,0)}°C`;
+    $('card-val-op').textContent = `${fmt(r.T_op,0)}°C (+${fmt(r.dT,0)}°C)`;
+
     renderModules(r);
     renderResultsTab(r);
 
@@ -1150,6 +1329,14 @@ $('theme-toggle').addEventListener('click', () => {
 $('inp-acdc').addEventListener('change', () => {
   $('inp-freq').disabled = $('inp-acdc').value === 'DC';
 });
+
+// Cooling mode toggle — show/hide velocity field
+const toggleCoolingMode = () => {
+  const isForced = $('inp-cooling').value === 'forced';
+  $('field-velocity').style.display = isForced ? 'block' : 'none';
+};
+$('inp-cooling').addEventListener('change', toggleCoolingMode);
+toggleCoolingMode();
 
 // ================================================================
 //  INIT — run once on load
