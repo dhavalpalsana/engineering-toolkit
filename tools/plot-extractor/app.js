@@ -59,6 +59,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const zoomSlider = document.getElementById("zoom-slider");
   const zoomLabel = document.getElementById("zoom-label");
   const btnToggleLegend = document.getElementById("btn-toggle-legend");
+  const btnUndo = document.getElementById("btn-undo");
+  const btnRedo = document.getElementById("btn-redo");
   
   // Application State Variables
   let currentMode = "calibrate"; // "calibrate" or "digitize"
@@ -69,6 +71,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let compressedImgData = null; // Stored as base64 string for saving
   let zoomFactor = 1.0;
   let legendVisible = true;
+  let historyStack = [];
+  let historyPointer = -1;
   
   // Calibration Handles (in image pixel space)
   let calibrationPoints = {
@@ -183,6 +187,11 @@ document.addEventListener("DOMContentLoaded", () => {
       dropzone.style.display = "none";
       canvasWrapper.style.display = "block";
       imageActions.style.display = "flex";
+      
+      // Seed undo history at image-load point
+      historyStack = [snapshotSeriesList()];
+      historyPointer = 0;
+      updateUndoRedoButtons();
       
       resizeCanvas();
       updateHelperBanner();
@@ -413,6 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // If clicked empty space, add a new point
       const activeSeriesObj = seriesList.find(s => s.id === activeSeriesId);
       if (activeSeriesObj) {
+        pushHistory(); // snapshot before mutation
         const newPt = { px: Math.round(pos.x), py: Math.round(pos.y) };
         activeSeriesObj.points.push(newPt);
         activeSeriesObj.points.sort((a, b) => a.px - b.px);
@@ -503,8 +513,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   
   canvas.addEventListener("mouseup", () => {
+    const wasDraggingPoint = isDragging && dragTarget && typeof dragTarget === "object";
     isDragging = false;
     isPanning = false;
+    if (wasDraggingPoint) {
+      pushHistory(); // snapshot after drag completes
+    }
     dragTarget = null;
     dragSeriesId = null;
     canvas.style.cursor = currentMode === "pan" ? "grab" : "crosshair";
@@ -530,6 +544,7 @@ document.addEventListener("DOMContentLoaded", () => {
       for (let i = 0; i < activeSeries.points.length; i++) {
         const pt = activeSeries.points[i];
         if (Math.hypot(pos.x - pt.px, pos.y - pt.py) < clickThreshold) {
+          pushHistory(); // snapshot before delete
           if (pt === selectedDataPoint) selectedDataPoint = null;
           activeSeries.points.splice(i, 1);
           triggerProjectChange();
@@ -1227,6 +1242,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.id;
         if (seriesList.length > 1) {
+          pushHistory();
           seriesList = seriesList.filter(s => s.id !== id);
           if (activeSeriesId === id) {
             activeSeriesId = seriesList[0].id;
@@ -1275,6 +1291,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const colors = ["#0d9488", "#2563eb", "#ea580c", "#16a34a", "#db2777", "#ca8a04"];
     const col = colors[count % colors.length];
     
+    pushHistory();
     seriesList.push({
       id,
       name: `Series ${count}`,
@@ -1296,6 +1313,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const activeSeriesObj = seriesList.find(s => s.id === activeSeriesId);
     if (activeSeriesObj && activeSeriesObj.points.length > 0) {
       if (confirm(`Are you sure you want to clear all points in "${activeSeriesObj.name}"?`)) {
+        pushHistory();
         activeSeriesObj.points = [];
         triggerProjectChange();
         renderAll();
@@ -1574,6 +1592,57 @@ document.addEventListener("DOMContentLoaded", () => {
   function triggerProjectChange() {
     document.dispatchEvent(new Event("input"));
   }
+
+  // ── Undo / Redo History Stack ──────────────────────────────────
+  const MAX_HISTORY = 60;
+
+  function snapshotSeriesList() {
+    return JSON.parse(JSON.stringify(seriesList));
+  }
+
+  function pushHistory() {
+    // Discard any forward history when a new action occurs
+    historyStack = historyStack.slice(0, historyPointer + 1);
+    historyStack.push(snapshotSeriesList());
+    if (historyStack.length > MAX_HISTORY) historyStack.shift();
+    historyPointer = historyStack.length - 1;
+    updateUndoRedoButtons();
+  }
+
+  function updateUndoRedoButtons() {
+    if (btnUndo) btnUndo.disabled = historyPointer <= 0;
+    if (btnRedo) btnRedo.disabled = historyPointer >= historyStack.length - 1;
+  }
+
+  function applyHistory(snapshot) {
+    seriesList = JSON.parse(JSON.stringify(snapshot));
+    // Ensure activeSeriesId still exists; if not, fall back to first series
+    if (!seriesList.find(s => s.id === activeSeriesId)) {
+      activeSeriesId = seriesList[0]?.id;
+    }
+    selectedDataPoint = null;
+    triggerProjectChange();
+    renderAll();
+    updateSeriesUI();
+  }
+
+  function undo() {
+    if (historyPointer <= 0) return;
+    historyPointer--;
+    applyHistory(historyStack[historyPointer]);
+    updateUndoRedoButtons();
+  }
+
+  function redo() {
+    if (historyPointer >= historyStack.length - 1) return;
+    historyPointer++;
+    applyHistory(historyStack[historyPointer]);
+    updateUndoRedoButtons();
+  }
+
+  // Bind Undo/Redo toolbar buttons
+  if (btnUndo) btnUndo.addEventListener("click", undo);
+  if (btnRedo) btnRedo.addEventListener("click", redo);
   
   // Register with project manager
   window.projectManagerConfig = {
@@ -1712,6 +1781,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Keyboard Arrow Nudging Listener
   window.addEventListener("keydown", (e) => {
+    // Undo / Redo shortcuts (before the input-field guard)
+    if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+      e.preventDefault();
+      redo();
+      return;
+    }
+    
     // Avoid interfering if editing input text fields
     if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT" || document.activeElement.getAttribute("contenteditable") === "true") {
       return;
