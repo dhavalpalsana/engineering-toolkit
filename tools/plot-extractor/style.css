@@ -2,6 +2,15 @@
    Plot Data Extractor Style System
    ========================================================================== */
 
+/* Typography & Reset */
+body, input, textarea, select, button {
+  font-family: var(--font-sans);
+}
+body {
+  margin: 0;
+  padding: 0;
+}
+
 /* Main layout grid */
 main {
   flex: 1;
@@ -211,21 +220,24 @@ main {
 
 .input-group input,
 .input-group select {
-  height: 36px;
-  padding: 0 10px;
+  height: 42px;
+  padding: 0 14px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-interactive);
   color: var(--text-primary);
   font-family: var(--font-sans);
+  font-weight: 600;
   font-size: 13px;
   outline: none;
   transition: all var(--transition-fast);
+  box-sizing: border-box;
 }
 
 .input-group input:focus,
 .input-group select:focus {
   border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-glow);
 }
 
 /* Mode toggles */

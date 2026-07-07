@@ -389,6 +389,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isDragging) {
       if (currentMode === "calibrate") {
         calibrationPoints[dragTarget] = { px: Math.round(pos.x), py: Math.round(pos.y) };
+        hoverInfo = { x: pos.x, y: pos.y, label: dragTarget.toUpperCase() };
       } else if (dragTarget) {
         dragTarget.px = Math.round(pos.x);
         dragTarget.py = Math.round(pos.y);
@@ -396,6 +397,13 @@ document.addEventListener("DOMContentLoaded", () => {
         // Re-sort current active series points since we adjusted X
         const activeSeries = seriesList.find(s => s.id === dragSeriesId);
         if (activeSeries) activeSeries.points.sort((a, b) => a.px - b.px);
+        
+        const mathCoords = toMathCoords(pos.x, pos.y);
+        hoverInfo = {
+          x: pos.x,
+          y: pos.y,
+          label: `(${mathCoords.x.toFixed(2)}, ${mathCoords.y.toFixed(2)})`
+        };
       }
       triggerProjectChange();
       renderAll();
@@ -548,8 +556,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     
-    // Draw magnifier loupe on hover
-    if (mouseOnCanvas && !isDragging) {
+    // Draw magnifier loupe on hover or drag
+    if (mouseOnCanvas) {
       drawLoupe();
     }
     
