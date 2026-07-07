@@ -120,10 +120,10 @@ window.fbHelper = {
     }
   },
 
-  saveProject: async (toolId, name, config) => {
+  saveProject: async (toolId, name, config, projectId = null) => {
     if (!isConfigured) {
       const local = JSON.parse(localStorage.getItem(`local_projects_${toolId}`) || "[]");
-      const existingIdx = local.findIndex(p => p.name === name);
+      const existingIdx = projectId ? local.findIndex(p => p.id === projectId) : local.findIndex(p => p.name === name);
       const newProj = {
         id: existingIdx >= 0 ? local[existingIdx].id : Math.random().toString(36).substr(2, 9),
         name,
@@ -136,14 +136,14 @@ window.fbHelper = {
         local.push(newProj);
       }
       localStorage.setItem(`local_projects_${toolId}`, JSON.stringify(local));
-      return { data: newProj, error: null };
+      return { id: newProj.id, error: null };
     }
 
     try {
       const user = auth.currentUser;
       if (!user) {
         const local = JSON.parse(localStorage.getItem(`local_projects_${toolId}`) || "[]");
-        const existingIdx = local.findIndex(p => p.name === name);
+        const existingIdx = projectId ? local.findIndex(p => p.id === projectId) : local.findIndex(p => p.name === name);
         const newProj = {
           id: existingIdx >= 0 ? local[existingIdx].id : Math.random().toString(36).substr(2, 9),
           name,
@@ -156,18 +156,9 @@ window.fbHelper = {
           local.push(newProj);
         }
         localStorage.setItem(`local_projects_${toolId}`, JSON.stringify(local));
-        return { data: newProj, error: null };
+        return { id: newProj.id, error: null };
       }
 
-      // Check if project with same name already exists for this user/tool
-      const snapshot = await db.collection("projects")
-        .where("userId", "==", user.uid)
-        .where("toolId", "==", toolId)
-        .where("name", "==", name)
-        .limit(1)
-        .get();
-
-      let docRef;
       const projData = {
         userId: user.uid,
         toolId,
@@ -176,34 +167,59 @@ window.fbHelper = {
         updatedAt: new Date().toISOString()
       };
 
+      if (projectId) {
+        await db.collection("projects").doc(projectId).update({ name, config, updatedAt: projData.updatedAt });
+        return { id: projectId, error: null };
+      }
+
+      const snapshot = await db.collection("projects")
+        .where("userId", "==", user.uid)
+        .where("toolId", "==", toolId)
+        .where("name", "==", name)
+        .limit(1)
+        .get();
+
       if (!snapshot.empty) {
         const docId = snapshot.docs[0].id;
-        docRef = db.collection("projects").doc(docId);
-        await docRef.update({ config, updatedAt: projData.updatedAt });
-        return { data: { id: docId, ...projData }, error: null };
+        await db.collection("projects").doc(docId).update({ name, config, updatedAt: projData.updatedAt });
+        return { id: docId, error: null };
       } else {
-        docRef = await db.collection("projects").add(projData);
-        return { data: { id: docRef.id, ...projData }, error: null };
+        const docRef = await db.collection("projects").add(projData);
+        return { id: docRef.id, error: null };
       }
     } catch (e) {
-      return { data: null, error: e };
+      return { id: null, error: e };
     }
   },
 
-  deleteProject: async (toolId, projectId) => {
+  deleteProject: async (projectId, toolId = null) => {
     if (!isConfigured) {
-      let local = JSON.parse(localStorage.getItem(`local_projects_${toolId}`) || "[]");
-      local = local.filter(p => p.id !== projectId);
-      localStorage.setItem(`local_projects_${toolId}`, JSON.stringify(local));
+      const keys = Object.keys(localStorage);
+      for (const key of keys) {
+        if (key.startsWith("local_projects_")) {
+          let local = JSON.parse(localStorage.getItem(key) || "[]");
+          if (local.some(p => p.id === projectId)) {
+            local = local.filter(p => p.id !== projectId);
+            localStorage.setItem(key, JSON.stringify(local));
+          }
+        }
+      }
       return { error: null };
     }
 
     try {
       const user = auth.currentUser;
       if (!user) {
-        let local = JSON.parse(localStorage.getItem(`local_projects_${toolId}`) || "[]");
-        local = local.filter(p => p.id !== projectId);
-        localStorage.setItem(`local_projects_${toolId}`, JSON.stringify(local));
+        const keys = Object.keys(localStorage);
+        for (const key of keys) {
+          if (key.startsWith("local_projects_")) {
+            let local = JSON.parse(localStorage.getItem(key) || "[]");
+            if (local.some(p => p.id === projectId)) {
+              local = local.filter(p => p.id !== projectId);
+              localStorage.setItem(key, JSON.stringify(local));
+            }
+          }
+        }
         return { error: null };
       }
 
@@ -211,6 +227,74 @@ window.fbHelper = {
       return { error: null };
     } catch (e) {
       return { error: e };
+    }
+  },
+
+  getProjectById: async (projectId) => {
+    if (!isConfigured) {
+      const keys = Object.keys(localStorage);
+      for (const key of keys) {
+        if (key.startsWith("local_projects_")) {
+          const list = JSON.parse(localStorage.getItem(key) || "[]");
+          const found = list.find(p => p.id === projectId);
+          if (found) return { data: found, error: null };
+        }
+      }
+      return { data: null, error: new Error("Project not found.") };
+    }
+
+    try {
+      const doc = await db.collection("projects").doc(projectId).get();
+      if (!doc.exists) {
+        return { data: null, error: new Error("Project not found.") };
+      }
+      return { data: { id: doc.id, ...doc.data() }, error: null };
+    } catch (e) {
+      return { data: null, error: e };
+    }
+  },
+
+  getAllProjects: async () => {
+    if (!isConfigured) {
+      const all = [];
+      const keys = Object.keys(localStorage);
+      for (const key of keys) {
+        if (key.startsWith("local_projects_")) {
+          const toolId = key.replace("local_projects_", "");
+          const list = JSON.parse(localStorage.getItem(key) || "[]");
+          list.forEach(p => all.push({ ...p, toolId }));
+        }
+      }
+      return { data: all, error: null };
+    }
+
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        const all = [];
+        const keys = Object.keys(localStorage);
+        for (const key of keys) {
+          if (key.startsWith("local_projects_")) {
+            const toolId = key.replace("local_projects_", "");
+            const list = JSON.parse(localStorage.getItem(key) || "[]");
+            list.forEach(p => all.push({ ...p, toolId }));
+          }
+        }
+        return { data: all, error: null };
+      }
+
+      const snapshot = await db.collection("projects")
+        .where("userId", "==", user.uid)
+        .get();
+
+      const data = [];
+      snapshot.forEach(doc => {
+        data.push({ id: doc.id, ...doc.data() });
+      });
+      data.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      return { data, error: null };
+    } catch (e) {
+      return { data: [], error: e };
     }
   }
 };
