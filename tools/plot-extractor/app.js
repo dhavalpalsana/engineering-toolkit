@@ -973,9 +973,8 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <input type="text" class="series-name-input" data-id="${series.id}" value="${escapeHtml(series.name)}" style="flex: 1; min-width: 50px; font-size: 13px; font-weight: 600; background: transparent; border: none; color: var(--text-primary); outline: none; border-bottom: 1px dashed transparent; padding: 2px 4px; box-sizing: border-box;" onfocus="this.style.borderBottomColor='var(--accent-primary)'" onblur="this.style.borderBottomColor='transparent'" />
           <div class="flex gap-1" style="align-items: center;">
-            <button class="hdr-btn ${isDigitizing ? "hdr-btn-accent" : ""} series-activate-btn" data-id="${series.id}" style="height: 28px; padding: 0 8px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="Add data points to this series">
-              <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-              <span>${isDigitizing ? "Adding" : "Add Points"}</span>
+            <button class="hdr-btn ${isDigitizing ? "hdr-btn-accent" : ""} series-activate-btn" data-id="${series.id}" style="height: 28px; width: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center;" title="Edit and digitize points for this series">
+              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
             </button>
             <button class="btn-icon danger series-delete-btn" data-id="${series.id}" title="Delete Series" ${seriesList.length === 1 ? "disabled style='opacity:0.3; pointer-events:none;'" : ""}>
               <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
