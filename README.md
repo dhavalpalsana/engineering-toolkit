@@ -2,14 +2,16 @@
 
 A curated, unified suite of high-performance interactive design calculators, simulation solvers, and engineering utilities — built for mechanical, electrical, aerospace, and industrial engineers.
 
-The toolkit runs entirely client-side as a static site: no backend, no build step, no dependencies. Double-click `index.html` to run offline, or access it live on GitHub Pages.
+The toolkit runs entirely client-side as a static site with optional user authentication and Firestore cloud database integration. Double-click `index.html` to run offline, or access it live on Firebase Hosting.
 
-🔗 **Live site:** [dhavalpalsana.github.io/engineering-toolkit/](https://dhavalpalsana.github.io/engineering-toolkit/)
+🔗 **Live site:** [eng-toolkit.web.app](https://eng-toolkit.web.app)
 
 ---
 
 ## 🌟 Key Features
 
+- **Centralized Project Manager** — Unified slide-out Projects Drawer on both the homepage and within individual tools. Authenticated users can save, search, delete, and cross-load their designs.
+- **Firebase Authentication** — Multi-provider sign-in (Email/Password and Google OAuth) with security rules protecting user-owned data in Cloud Firestore.
 - **Premium Interactive Dashboard** — Sleek, dark-capable design with micro-animations, global search (`Ctrl + K` or `/`), and instant tool filtering by tag.
 - **Bi-Directional Theme Sync** — Light ↔ Dark mode synced across all tool pages via `localStorage`. Toggle anywhere; every page follows.
 - **Open Suggestion Portal** — Built-in workflow for requesting new engineering utilities.
@@ -26,10 +28,10 @@ An interactive, high-fidelity cause-and-effect diagram builder for professional 
 
 - **Pre-built Templates** — Manufacturing (6M), Service (8P), Software (4S), and custom frameworks
 - **Dynamic Layout Engine** — Auto-scales branches and spine based on cause density
-- **AI Brainstorm Mode** — Gemini-powered cause generation from a problem description
 - **Export** — SVG vector and PNG raster download at any resolution
 - **Dark/Light Themes** — Full theme support with custom color palettes
-- **State Persistence** — Diagrams auto-save to `localStorage`
+- **State Persistence** — Auto-saves to `localStorage` (offline) and Firestore (cloud) under user accounts
+- **Project Manager Integration** — Load, save, rename, and delete designs directly via the slide-out drawer
 
 ---
 
@@ -40,8 +42,8 @@ A thermodynamic + electrodynamic solver for multi-segment series-spliced cable h
 - **Proportional SVG Heat Map** — Real-time diagram of splicing points and local temperature rise per segment
 - **Physical Envelope Checks** — Tracks peak thermal limits and voltage drop budgets against NEC/IEC derating
 - **Dynamic Optimization Matrix** — Iterative AWG/metric wire-size shifts to suggest the optimal conductor cross-section
-- **AI Design Assistant** — Natural language interface (Gemini) translates system descriptions into simulation parameters
-- **State Export / Import** — Full configuration snapshots as JSON payloads
+- **State Persistence** — Auto-saves to `localStorage` (offline) and Firestore (cloud) under user accounts
+- **Project Manager Integration** — Load, save, rename, and delete designs directly via the slide-out drawer
 
 ---
 
@@ -77,6 +79,8 @@ Full physics-based busbar design implementing the **CDA "Copper for Busbars"** m
 - **Module 7 — Voltage Drop:** mV/m, total ΔV, % of system voltage
 - **Materials:** Copper HC (ETP) and Aluminium 1350-H19 with correct physical constants
 - **Live SVG Preview:** Scaled cross-section with skin depth shading; multi-bar arrangement
+- **State Persistence** — Auto-saves to `localStorage` (offline) and Firestore (cloud) under user accounts
+- **Project Manager Integration** — Load, save, rename, and delete designs directly via the slide-out drawer
 
 ---
 
@@ -88,7 +92,8 @@ An interactive physical-layer designer and compliance checker for CAN/CAN FD ele
 - **Compliance Checking** — Automated validation against ISO 11898 standard requirements (maximum stub/trunk lengths, termination, bit-rate limits)
 - **Signal Integrity Simulation** — Qualitative reflection engine estimates signal degradation and ringing based on impedance mismatches
 - **Timing & Budget Analysis** — Verifies round-trip propagation times and Loop Delays against sample point constraints (supports dual rates in CAN FD phase)
-- **State Serialization** — Save and reload configurations via JSON schemas, and share setups through hash-encoded links
+- **State Persistence** — Auto-saves to `localStorage` (offline) and Firestore (cloud) under user accounts
+- **Project Manager Integration** — Load, save, rename, and delete designs directly via the slide-out drawer
 
 ---
 
@@ -108,8 +113,13 @@ The project is a **pure static site** — no build system, no Node.js, no packag
 ```
 engineering-toolkit/
 ├── index.html                # Hub / dashboard
-├── css/style.css             # Global shared design system (tokens, layout, components)
+├── css/
+│   ├── style.css             # Global shared design system (tokens, layout, components)
+│   └── theme.css             # Global dark/light theme variables and UI inputs
 ├── js/
+│   ├── firebase.js           # Firebase app init & Firestore CRUD operations
+│   ├── auth-ui.js            # Injected sign-in/up/forgot modal interface & styling
+│   ├── project-manager.js    # Slide-out saved project list drawer & active load sync
 │   ├── tools-data.js         # ← SINGLE SOURCE OF TRUTH for tool registry
 │   ├── registry.js           # Thin shim: const toolsRegistry = TOOLS_DATA
 │   └── app.js                # Dashboard rendering, search, filtering, theme
@@ -117,19 +127,19 @@ engineering-toolkit/
 │   └── og-image.png          # Social preview (1200×630)
 ├── tools/
 │   ├── fishbone-diagram/
-│   │   ├── index.html        # HTML + Tailwind CDN
-│   │   └── app.js            # All diagram logic (~1100 lines)
+│   │   ├── index.html        # Ishikawa creator HTML
+│   │   └── app.js            # Fishbone canvas engine and project hook mapping
 │   ├── wire-gauge/
-│   │   ├── index.html        # HTML + Tailwind CDN
-│   │   └── app.js            # All solver logic (~1100 lines)
+│   │   ├── index.html        # Conductor synthesis HTML
+│   │   └── app.js            # Cable thermodynamics & project hook mapping
 │   ├── unit-converter/
-│   │   └── index.html        # Self-contained (no Tailwind, uses design tokens)
+│   │   └── index.html        # Self-contained unit converter
 │   ├── busbar-sizing/
-│   │   └── index.html        # Physics solver (no Tailwind, uses design tokens)
+│   │   └── index.html        # Busbar calculations & project hook mapping
 │   └── can-bus-designer/
 │       ├── index.html        # CAN visual designer HTML
 │       ├── style.css         # Local stylesheets
-│       └── app.js            # Design & simulation engine (~2100 lines)
+│       └── app.js            # Design & simulation engine
 ├── robots.txt
 └── sitemap.xml
 ```
