@@ -34,6 +34,7 @@
     <meta name="twitter:image" content="https://eng-toolkit.web.app/assets/og-image.png">
 
     <link rel="stylesheet" href="../../css/tailwind.css">
+    <link rel="stylesheet" href="../../css/theme.css">
     <link rel="stylesheet" href="../../css/header.css">
 
     <!-- Lucide Icons CDN -->
@@ -99,10 +100,10 @@
                     <i data-lucide="share-2"></i> Share Link
                 </button>
                 <button onclick="exportStateJSON()" class="hdr-btn" title="Save configuration to a JSON file">
-                    <i data-lucide="download"></i> Export
+                    <i data-lucide="download"></i> Export JSON
                 </button>
                 <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import configuration from a JSON file">
-                    <i data-lucide="upload"></i> Import
+                    <i data-lucide="upload"></i> Import JSON
                 </button>
                 <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importStateJSON(event)" />
                 <div class="hdr-divider"></div>
