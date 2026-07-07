@@ -83,6 +83,69 @@ document.addEventListener("DOMContentLoaded", () => {
       from { transform: translateY(20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
+    .auth-modal-content .form-input {
+      width: 100%;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-interactive);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color var(--transition-fast);
+      box-sizing: border-box;
+    }
+    .auth-modal-content .form-input:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--accent-primary-glow);
+    }
+    .auth-modal-content .calc-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary, #3b82f6));
+      border: none;
+      border-radius: var(--radius-md);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all var(--transition-normal);
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .auth-modal-content .calc-btn:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+    .auth-modal-content .calc-btn:active {
+      transform: translateY(0);
+    }
+    .auth-modal-content #auth-google-btn {
+      background: var(--bg-interactive) !important;
+      border: 1px solid var(--border-color) !important;
+      color: var(--text-primary) !important;
+      box-shadow: none !important;
+    }
+    .auth-modal-content #auth-google-btn:hover {
+      background: var(--bg-tertiary) !important;
+      transform: translateY(-1px);
+    }
+    #auth-btn {
+      border-radius: var(--radius-md) !important;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    #auth-btn.signed-in {
+      background: var(--accent-primary-glow) !important;
+      border-color: var(--accent-primary) !important;
+      color: var(--accent-primary) !important;
+    }
   `;
   document.head.appendChild(style);
 
