@@ -88,6 +88,7 @@ main {
   overflow: hidden;
   width: fit-content;
   height: fit-content;
+  flex-shrink: 0;
 }
 
 #plot-image {
