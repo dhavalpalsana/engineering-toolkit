@@ -22,6 +22,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../css/theme.css">
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
 
   <style>
     :root {
@@ -215,10 +220,16 @@
         <p>CDA Copper for Busbars · IEC 60865-1 · 7 Design Modules</p>
       </div>
     </div>
-    <button class="theme-btn" id="theme-toggle" aria-label="Toggle theme">
-      <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-      <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-    </button>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="theme-btn" id="auth-btn" title="Sign In" style="width:auto;padding:0 12px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <span id="auth-btn-text">Sign In</span>
+      </button>
+      <button class="theme-btn" id="theme-toggle" aria-label="Toggle theme">
+        <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+    </div>
   </div>
 </header>
 
@@ -390,6 +401,27 @@
           <button class="calc-btn" id="calc-btn">
             ⚡ Calculate All Modules
           </button>
+        </div>
+      </div>
+
+      <!-- SAVED PROJECTS CARD -->
+      <div class="input-card" id="projects-card" style="margin-top: 16px; position: static;">
+        <div class="input-card-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          <h3>Saved Projects</h3>
+        </div>
+        <div class="input-body">
+          <div class="field" id="save-project-form">
+            <label>Project Name</label>
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="project-name-input" placeholder="e.g. Main Feeder 1" style="flex:1;">
+              <button class="calc-btn" id="save-project-btn" style="margin-top:0; width:auto; padding:9px 14px; flex-shrink:0;">Save</button>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <div id="saved-projects-list" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;padding-right:4px;">
+            <!-- list items rendered dynamically -->
+          </div>
         </div>
       </div>
 
@@ -1339,8 +1371,163 @@ $('inp-cooling').addEventListener('change', toggleCoolingMode);
 toggleCoolingMode();
 
 // ================================================================
+//  SAVED PROJECTS MANAGEMENT (Firebase + LocalStorage Fallback)
+// ================================================================
+function getInputsConfig() {
+  return {
+    W: gv('inp-W'),
+    T: gv('inp-T'),
+    L: gv('inp-L'),
+    N: $('inp-N').value,
+    span: gv('inp-span'),
+    mat: $('inp-mat').value,
+    emis: $('inp-emis').value,
+    orient: $('inp-orient').value,
+    acdc: $('inp-acdc').value,
+    freq: $('inp-freq').value,
+    Tamb: gv('inp-Tamb'),
+    dT: gv('inp-dT'),
+    V: gv('inp-V'),
+    Isc: gv('inp-Isc'),
+    tf: gv('inp-tf'),
+    d: gv('inp-d'),
+    cooling: $('inp-cooling').value,
+    vel: gv('inp-vel')
+  };
+}
+
+function setInputsConfig(c) {
+  if (!c) return;
+  if (c.W !== undefined) $('inp-W').value = c.W;
+  if (c.T !== undefined) $('inp-T').value = c.T;
+  if (c.L !== undefined) $('inp-L').value = c.L;
+  if (c.N !== undefined) $('inp-N').value = c.N;
+  if (c.span !== undefined) $('inp-span').value = c.span;
+  if (c.mat !== undefined) $('inp-mat').value = c.mat;
+  if (c.emis !== undefined) $('inp-emis').value = c.emis;
+  if (c.orient !== undefined) $('inp-orient').value = c.orient;
+  if (c.acdc !== undefined) $('inp-acdc').value = c.acdc;
+  if (c.freq !== undefined) $('inp-freq').value = c.freq;
+  if (c.Tamb !== undefined) $('inp-Tamb').value = c.Tamb;
+  if (c.dT !== undefined) $('inp-dT').value = c.dT;
+  if (c.V !== undefined) $('inp-V').value = c.V;
+  if (c.Isc !== undefined) $('inp-Isc').value = c.Isc;
+  if (c.tf !== undefined) $('inp-tf').value = c.tf;
+  if (c.d !== undefined) $('inp-d').value = c.d;
+  if (c.cooling !== undefined) {
+    $('inp-cooling').value = c.cooling;
+    toggleCoolingMode();
+  }
+  if (c.vel !== undefined) $('inp-vel').value = c.vel;
+  
+  $('inp-freq').disabled = $('inp-acdc').value === 'DC';
+  calculate();
+}
+
+async function loadProjectsList() {
+  const listEl = $('saved-projects-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="font-size:11px;color:var(--text-muted);text-align:center;padding:10px;">Loading projects...</div>';
+
+  try {
+    const { data: projects, error } = await window.fbHelper.getProjects("busbar-sizing");
+    if (error) {
+      listEl.innerHTML = `<div style="font-size:11px;color:var(--color-error);text-align:center;padding:10px;">Error loading projects</div>`;
+      return;
+    }
+
+    if (!projects || projects.length === 0) {
+      listEl.innerHTML = '<div style="font-size:11px;color:var(--text-muted);text-align:center;padding:20px 10px;">No saved projects.</div>';
+      return;
+    }
+
+    listEl.innerHTML = "";
+    projects.forEach(p => {
+      const item = document.createElement("div");
+      item.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:var(--r-sm);padding:8px 10px;transition:all var(--tr);";
+      
+      const details = document.createElement("div");
+      details.style.cssText = "flex:1;cursor:pointer;text-align:left;";
+      details.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:var(--text-primary);line-height:1.2;">${p.name}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${p.config.N}×${p.config.W}x${p.config.T}mm ${p.config.mat}</div>
+      `;
+      details.addEventListener("click", () => {
+        setInputsConfig(p.config);
+        showToast(`Loaded: ${p.name}`);
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.style.cssText = "background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px;display:flex;align-items:center;justify-content:center;transition:color var(--tr);";
+      delBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+      delBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (confirm(`Delete project "${p.name}"?`)) {
+          const { error } = await window.fbHelper.deleteProject("busbar-sizing", p.id);
+          if (error) {
+            alert("Error deleting project: " + error.message);
+          } else {
+            showToast(`Deleted: ${p.name}`);
+            loadProjectsList();
+          }
+        }
+      });
+      delBtn.addEventListener("mouseenter", () => delBtn.style.color = "var(--color-error)");
+      delBtn.addEventListener("mouseleave", () => delBtn.style.color = "var(--text-muted)");
+
+      item.appendChild(details);
+      item.appendChild(delBtn);
+      listEl.appendChild(item);
+    });
+  } catch (e) {
+    console.error(e);
+    listEl.innerHTML = '<div style="font-size:11px;color:var(--color-error);text-align:center;padding:10px;">Load error.</div>';
+  }
+}
+
+async function saveActiveProject() {
+  const nameInput = $('project-name-input');
+  const name = nameInput.value.trim();
+  if (!name) {
+    alert("Please enter a project name.");
+    nameInput.focus();
+    return;
+  }
+
+  const config = getInputsConfig();
+  const saveBtn = $('save-project-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = "...";
+
+  try {
+    const { data, error } = await window.fbHelper.saveProject("busbar-sizing", name, config);
+    if (error) {
+      alert("Error saving project: " + error.message);
+    } else {
+      showToast(`Saved project: ${name}`);
+      nameInput.value = "";
+      loadProjectsList();
+    }
+  } catch (e) {
+    alert("Error saving: " + e.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save";
+  }
+}
+
+// Bind save button click
+$('save-project-btn').addEventListener('click', saveActiveProject);
+
+// Listen to auth changes
+document.addEventListener("auth-state-changed", () => {
+  loadProjectsList();
+});
+
+// ================================================================
 //  INIT — run once on load
 // ================================================================
+loadProjectsList();
 calculate();
 </script>
 </body>
