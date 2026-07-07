@@ -1,4 +1,4 @@
-﻿        // Initialize dynamic AWG structures (1 to 31 AWG)
+        // Initialize dynamic AWG structures (1 to 31 AWG)
         const AWG_DATA = [];
         for (let n = 1; n <= 31; n++) {
             const d_cond = 0.127 * Math.pow(92, (36 - n) / 39.0);
@@ -1125,3 +1125,10 @@
                 });
             }
         });
+
+        // Register project manager hooks
+        window.projectManagerConfig = {
+            toolId: "wire-gauge",
+            getInputs: () => captureCurrentState(),
+            setInputs: (data) => loadStateObject(data)
+        };
