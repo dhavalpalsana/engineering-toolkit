@@ -61,7 +61,12 @@
           <i data-lucide="line-chart"></i>
         </div>
         <div class="hdr-titles">
-          <h1>Plot Data Extractor</h1>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h1 style="margin: 0;">Plot Data Extractor</h1>
+            <span id="save-status-badge" style="font-size: 10px; font-weight: 700; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 6px; display: inline-flex; align-items: center; gap: 4px; opacity: 0; transition: opacity 0.3s ease; height: 16px; margin-top: 4px;">
+              <span style="width: 5px; height: 5px; border-radius: 50%; background: #10b981;"></span> Synced
+            </span>
+          </div>
           <p>Digitize charts, calibrate scales, extract points &amp; fit curves</p>
         </div>
       </div>
@@ -130,6 +135,10 @@
         <div id="plot-canvas-wrapper" style="display: none;">
           <img id="plot-image" alt="Plot screen to digitize" />
           <canvas id="interaction-canvas"></canvas>
+          
+          <!-- Canvas Floating Legend -->
+          <div id="canvas-legend" style="position: absolute; top: 12px; right: 12px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-md); padding: 8px 12px; display: none; flex-direction: column; gap: 4px; z-index: 10; pointer-events: none; color: #ffffff; font-size: 11px; font-family: var(--font-sans); box-shadow: var(--shadow-md);">
+          </div>
         </div>
       </div>
 

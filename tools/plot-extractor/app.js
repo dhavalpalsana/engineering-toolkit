@@ -537,6 +537,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Render Cycle: Overlay Drawing ───────────────────────────
   function renderAll() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    updateCanvasLegend();
     if (!imageLoaded) return;
     
     // Draw regression curve if selected
@@ -583,6 +584,32 @@ document.addEventListener("DOMContentLoaded", () => {
     {
       const isCalMode = currentMode === "calibrate";
       ctx.lineWidth = isCalMode ? 2 : 1.2;
+      
+      // Feature 1: Draw extended calibration alignment guidelines across the full canvas
+      if (isCalMode) {
+        ctx.strokeStyle = "rgba(225, 29, 72, 0.25)";
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        
+        // Vertical guidelines for X1 and X2
+        ctx.beginPath();
+        ctx.moveTo(calibrationPoints.x1.px * imgScale, 0);
+        ctx.lineTo(calibrationPoints.x1.px * imgScale, canvas.height);
+        ctx.moveTo(calibrationPoints.x2.px * imgScale, 0);
+        ctx.lineTo(calibrationPoints.x2.px * imgScale, canvas.height);
+        ctx.stroke();
+        
+        // Horizontal guidelines for Y1 and Y2
+        ctx.beginPath();
+        ctx.moveTo(0, calibrationPoints.y1.py * imgScale);
+        ctx.lineTo(canvas.width, calibrationPoints.y1.py * imgScale);
+        ctx.moveTo(0, calibrationPoints.y2.py * imgScale);
+        ctx.lineTo(canvas.width, calibrationPoints.y2.py * imgScale);
+        ctx.stroke();
+        
+        ctx.setLineDash([]);
+      }
+      
       for (let key in calibrationPoints) {
         const pt = calibrationPoints[key];
         const screenX = pt.px * imgScale;
@@ -614,6 +641,35 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.fillStyle = isCalMode ? "#ffffff" : "rgba(255, 255, 255, 0.75)";
         ctx.fillText(labelText, screenX + 9, screenY - 6);
       }
+    }
+    
+    // Feature 3: Draw coordinate hover tooltip bubble above hovered point
+    if (currentMode === "digitize" && hoverInfo && mouseOnCanvas) {
+      const screenX = hoverInfo.x * imgScale;
+      const screenY = hoverInfo.y * imgScale;
+      
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.font = "bold 10px var(--font-sans)";
+      const labelText = hoverInfo.label;
+      const textW = ctx.measureText(labelText).width;
+      
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(screenX - textW/2 - 6, screenY - 28, textW + 12, 17, 4);
+      } else {
+        ctx.rect(screenX - textW/2 - 6, screenY - 28, textW + 12, 17);
+      }
+      ctx.fill();
+      
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(labelText, screenX - textW/2, screenY - 16);
+      
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.beginPath();
+      ctx.moveTo(screenX - 4, screenY - 11);
+      ctx.lineTo(screenX + 4, screenY - 11);
+      ctx.lineTo(screenX, screenY - 7);
+      ctx.fill();
     }
     
     // Draw magnifier loupe on hover or drag
@@ -1175,6 +1231,35 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     });
+    updateCanvasLegend();
+  }
+  
+  function updateCanvasLegend() {
+    const legend = document.getElementById("canvas-legend");
+    if (!legend) return;
+    if (!imageLoaded) {
+      legend.style.display = "none";
+      return;
+    }
+    legend.style.display = "flex";
+    legend.style.flexDirection = "column";
+    
+    let html = `<div style="font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.25); padding-bottom: 4px; margin-bottom: 4px; display:flex; align-items:center; gap:4px; font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#fff;"><svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-primary);"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg> Series Legend</div>`;
+    
+    seriesList.forEach(series => {
+      const isActive = series.id === activeSeriesId;
+      const isDigitizing = isActive && currentMode === "digitize";
+      const fitText = series.fitType && series.fitType !== "none" ? ` [${series.fitType.toUpperCase()}]` : "";
+      
+      html += `
+        <div style="display: flex; align-items: center; gap: 8px; opacity: ${isActive ? 1.0 : 0.55}; font-weight: ${isActive ? 700 : 400}; line-height:1.4; color:#fff;">
+          <div style="width: 7px; height: 7px; border-radius: 50%; background: ${series.color}; border: 1.5px solid #fff; flex-shrink:0;"></div>
+          <span style="white-space:nowrap; font-size:10px;">${escapeHtml(series.name)}: <strong>${series.points.length}</strong> pts${fitText}</span>
+          ${isDigitizing ? '<span style="color:#f43f5e; font-size:8px; font-weight:700; margin-left:auto; display:flex; align-items:center; gap:2px; animation: pulse 1.2s infinite;"><span style="width:4px; height:4px; border-radius:50%; background:#f43f5e;"></span>REC</span>' : ''}
+        </div>
+      `;
+    });
+    legend.innerHTML = html;
   }
   
   btnAddSeries.addEventListener("click", () => {
@@ -1709,4 +1794,22 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-nudge-down").addEventListener("click", (e) => { e.preventDefault(); nudgePoint(0, 1); });
   document.getElementById("btn-nudge-left").addEventListener("click", (e) => { e.preventDefault(); nudgePoint(-1, 0); });
   document.getElementById("btn-nudge-right").addEventListener("click", (e) => { e.preventDefault(); nudgePoint(1, 0); });
+
+  // Save Status Badge Handler
+  const saveStatusBadge = document.getElementById("save-status-badge");
+  let saveBadgeTimeout = null;
+  document.addEventListener("input", () => {
+    if (saveStatusBadge) {
+      if (saveBadgeTimeout) clearTimeout(saveBadgeTimeout);
+      saveStatusBadge.style.opacity = "1";
+      saveStatusBadge.innerHTML = '<span style="width:5px; height:5px; border-radius:50%; background:#f59e0b; display:inline-block; animation: pulse 1s infinite;"></span> Saving...';
+      
+      saveBadgeTimeout = setTimeout(() => {
+        saveStatusBadge.innerHTML = '<span style="width:5px; height:5px; border-radius:50%; background:#10b981; display:inline-block;"></span> Synced';
+        saveBadgeTimeout = setTimeout(() => {
+          saveStatusBadge.style.opacity = "0";
+        }, 1500);
+      }, 850);
+    }
+  });
 });
