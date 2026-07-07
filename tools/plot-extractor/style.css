@@ -86,6 +86,8 @@ main {
   box-shadow: var(--shadow-lg);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  width: fit-content;
+  height: fit-content;
 }
 
 #plot-image {

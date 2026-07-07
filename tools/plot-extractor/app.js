@@ -191,7 +191,10 @@ document.addEventListener("DOMContentLoaded", () => {
   
   function resizeCanvas() {
     if (!imageLoaded) return;
-    const displayWidth = plotImg.clientWidth;
+    let displayWidth = plotImg.clientWidth;
+    if (plotImg.style.width) {
+      displayWidth = parseFloat(plotImg.style.width);
+    }
     const displayHeight = displayWidth * (imgHeight / imgWidth);
     canvas.width = displayWidth;
     canvas.height = displayHeight;
