@@ -97,6 +97,19 @@ An interactive physical-layer designer and compliance checker for CAN/CAN FD ele
 
 ---
 
+### 📊 Plot Data Extractor (`tools/plot-extractor/`)
+
+**Plot Data Extractor** — Upload or paste a plot/graph image and digitize data points with pixel-accurate calibration. Supports linear/log axes, multi-series extraction, undo/redo, curve fitting (linear, polynomial, power, exponential), and CSV export.
+
+- **Pixel-Accurate Calibration** — Set axis origin and scale with sub-pixel magnifier zoom for precise coordinate mapping
+- **Linear & Log Axes** — Independently configure X/Y axes as linear or logarithmic
+- **Multi-Series Extraction** — Label and color-code multiple data series on a single image
+- **Undo / Redo** — Full history stack for non-destructive point editing
+- **Curve Fitting** — Automatic regression: linear, polynomial (2nd–5th order), power-law, and exponential models with R² display
+- **CSV Export** — Download extracted coordinates in standard comma-separated format
+
+---
+
 ## 🔜 Coming Soon
 
 | Tool | Domain |
@@ -140,6 +153,9 @@ engineering-toolkit/
 │       ├── index.html        # CAN visual designer HTML
 │       ├── style.css         # Local stylesheets
 │       └── app.js            # Design & simulation engine
+│   └── plot-extractor/
+│       ├── index.html        # Plot digitizer HTML
+│       └── style.css         # Local stylesheets
 ├── robots.txt
 └── sitemap.xml
 ```
