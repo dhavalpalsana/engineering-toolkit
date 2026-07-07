@@ -333,6 +333,111 @@ document.addEventListener("DOMContentLoaded", () => {
       from { transform: translateY(20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
+
+    /* Skeleton loading cards */
+    @keyframes pmSkeleton {
+      0% { background-position: -200px 0; }
+      100% { background-position: calc(200px + 100%) 0; }
+    }
+    .pm-skeleton {
+      background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+      background-size: 400px 100%;
+      animation: pmSkeleton 1.4s ease-in-out infinite;
+      border-radius: var(--radius-sm);
+    }
+    .pm-skeleton-card {
+      height: 54px;
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+    }
+
+    /* Unsaved dot on Save button */
+    .project-btn.unsaved {
+      position: relative;
+    }
+    .project-btn.unsaved::after {
+      content: '';
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 7px;
+      height: 7px;
+      background: var(--color-warning, #f59e0b);
+      border-radius: 50%;
+      border: 2px solid var(--bg-primary);
+    }
+
+    /* Delete confirm modal */
+    .pm-confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      z-index: 20001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pmFadeIn 0.15s ease;
+    }
+    .pm-confirm-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: var(--shadow-lg);
+      animation: pmSlideUp 0.2s cubic-bezier(0.16,1,0.3,1);
+    }
+    .pm-confirm-box h4 {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .pm-confirm-box p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .pm-confirm-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .pm-confirm-cancel {
+      height: 36px;
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 600;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .pm-confirm-cancel:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+    .pm-confirm-delete {
+      height: 36px;
+      padding: 0 16px;
+      font-size: 13px;
+      font-weight: 600;
+      background: var(--color-error-bg, #fee2e2);
+      border: 1px solid var(--color-error, #ef4444);
+      border-radius: var(--radius-md);
+      color: var(--color-error, #ef4444);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .pm-confirm-delete:hover {
+      background: var(--color-error, #ef4444);
+      color: #fff;
+    }
   `;
   document.head.appendChild(style);
 
@@ -395,7 +500,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const loadProjects = async () => {
-    drawerList.innerHTML = `<div class="pm-empty-state">Loading saved projects...</div>`;
+    // Show skeleton cards while loading
+    drawerList.innerHTML = `
+      <div class="pm-skeleton pm-skeleton-card"></div>
+      <div class="pm-skeleton pm-skeleton-card" style="opacity:0.7"></div>
+      <div class="pm-skeleton pm-skeleton-card" style="opacity:0.4"></div>
+    `;
     try {
       const { data, error } = await fb.getAllProjects();
       if (error) {
@@ -439,6 +549,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const relativeTime = (dateStr) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+
   const renderProjectsList = (filter = "") => {
     const filtered = allProjects.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
     if (filtered.length === 0) {
@@ -465,7 +587,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="pm-item">
             <div class="pm-item-info" data-id="${p.id}" data-tool="${p.toolId}">
               <span class="pm-item-name">${escapeHtml(p.name)}</span>
-              <span class="pm-item-date">Updated: ${dateStr}</span>
+              <span class="pm-item-date">${relativeTime(p.updatedAt)}</span>
             </div>
             <div class="pm-item-actions">
               <button class="pm-item-btn pm-item-delete" data-id="${p.id}" data-name="${escapeHtml(p.name)}" title="Delete project">
@@ -514,7 +636,28 @@ document.addEventListener("DOMContentLoaded", () => {
         e.stopPropagation();
         const id = btn.dataset.id;
         const name = btn.dataset.name;
-        if (confirm(`Are you sure you want to delete "${name}"?`)) {
+
+        // Styled confirm modal instead of browser confirm()
+        const confirmOverlay = document.createElement("div");
+        confirmOverlay.className = "pm-confirm-overlay";
+        confirmOverlay.innerHTML = `
+          <div class="pm-confirm-box">
+            <h4>Delete project?</h4>
+            <p>"${escapeHtml(name)}" will be permanently deleted and cannot be recovered.</p>
+            <div class="pm-confirm-actions">
+              <button class="pm-confirm-cancel" id="pm-confirm-no">Cancel</button>
+              <button class="pm-confirm-delete" id="pm-confirm-yes">Delete</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(confirmOverlay);
+
+        const closeConfirm = () => confirmOverlay.remove();
+        confirmOverlay.querySelector("#pm-confirm-no").addEventListener("click", closeConfirm);
+        confirmOverlay.addEventListener("click", e => { if (e.target === confirmOverlay) closeConfirm(); });
+
+        confirmOverlay.querySelector("#pm-confirm-yes").addEventListener("click", async () => {
+          closeConfirm();
           btn.disabled = true;
           const { error } = await fb.deleteProject(id);
           if (error) {
@@ -530,7 +673,7 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast(`Deleted "${name}"`);
             renderProjectsList(searchInput.value);
           }
-        }
+        });
       });
     });
   };
@@ -543,7 +686,10 @@ document.addEventListener("DOMContentLoaded", () => {
   searchInput.addEventListener("input", (e) => {
     renderProjectsList(e.target.value);
   });
-
+  // Escape key closes drawer
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("show")) closeDrawer();
+  });
 
   // ----------------------------------------------------
   // CASE A: HOMEPAGE PROJECT DRAWER INTEGRATION
@@ -621,6 +767,28 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
+    let isDirty = false;
+
+    const markDirty = () => {
+      if (activeProject && !isDirty) {
+        isDirty = true;
+        saveBtn.classList.add("unsaved");
+      }
+    };
+
+    const markClean = () => {
+      isDirty = false;
+      saveBtn.classList.remove("unsaved");
+    };
+
+    // Warn user if they navigate away with unsaved changes
+    window.addEventListener("beforeunload", (e) => {
+      if (isDirty && activeProject) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
+
     const updateActiveIndicator = () => {
       if (activeProject) {
         activeNameEl.textContent = activeProject.name;
@@ -630,13 +798,14 @@ document.addEventListener("DOMContentLoaded", () => {
         activeNameEl.textContent = "";
         activeNameEl.style.display = "none";
         saveBtn.title = "Save current design";
+        markClean();
       }
     };
 
     // Open button click opens drawer directly on this page!
     openBtn.addEventListener("click", openDrawer);
 
-    // Save current design Modal
+    // Mark project as saved (clean) when first loaded
     const openSaveModal = (prefill = "") => {
       const overlayModal = document.createElement("div");
       overlayModal.className = "pm-modal-overlay";
@@ -691,6 +860,7 @@ document.addEventListener("DOMContentLoaded", () => {
             activeProject = { id, name };
             localStorage.setItem(`pm_active_id_${config.toolId}`, id);
             updateActiveIndicator();
+            markClean();
             showToast(`Saved "${name}"`);
             closeModal();
           }
@@ -719,18 +889,39 @@ document.addEventListener("DOMContentLoaded", () => {
           if (error) {
             showToast("Auto-save failed: " + error.message, false);
           } else {
-            showToast(`Auto-saved "${activeProject.name}"`);
+            markClean();
+            showToast(`Saved "${activeProject.name}"`);
           }
         } catch (err) {
           showToast("Auto-save failed: " + (err.message || "Unknown error"), false);
         } finally {
           saveBtn.disabled = false;
           saveBtn.innerHTML = originalHtml;
+          // Restore unsaved dot if still dirty
+          if (isDirty) saveBtn.classList.add("unsaved");
         }
       } else {
         openSaveModal();
       }
     });
+
+    // Listen for input changes to mark dirty
+    document.addEventListener("input", markDirty);
+    document.addEventListener("change", markDirty);
+
+    // 60-second periodic background auto-save for active projects
+    setInterval(async () => {
+      if (activeProject && isDirty && fb.isConfigured()) {
+        try {
+          const data = config.getInputs();
+          const { error } = await fb.saveProject(config.toolId, activeProject.name, data, activeProject.id);
+          if (!error) {
+            markClean();
+            showToast(`Auto-saved "${activeProject.name}"`);
+          }
+        } catch (_) { /* silent fail — user can still manually save */ }
+      }
+    }, 60000);
 
     // Check login state changes
     document.addEventListener("auth-state-changed", (e) => {

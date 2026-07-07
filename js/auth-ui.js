@@ -9,6 +9,45 @@ document.addEventListener("DOMContentLoaded", () => {
   // Inject styles dynamically to keep integration self-contained
   const style = document.createElement("style");
   style.textContent = `
+    /* ── Universal Auth Button – consistent across every page ── */
+    #auth-btn {
+      height: 36px !important;
+      padding: 0 14px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      background: var(--bg-tertiary) !important;
+      border: 1px solid var(--border-color) !important;
+      border-radius: var(--radius-md) !important;
+      color: var(--text-secondary) !important;
+      cursor: pointer !important;
+      transition: all var(--transition-fast) !important;
+      white-space: nowrap !important;
+      font-family: var(--font-sans) !important;
+      width: auto !important;
+    }
+    #auth-btn:hover {
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+      border-color: var(--text-muted) !important;
+    }
+    #auth-btn.signed-in {
+      background: var(--accent-primary-glow) !important;
+      border-color: var(--accent-primary) !important;
+      color: var(--accent-primary) !important;
+    }
+    #auth-btn.signed-in:hover {
+      background: var(--accent-primary) !important;
+      color: #fff !important;
+    }
+    #auth-btn svg, #auth-btn i[data-lucide] {
+      width: 15px !important;
+      height: 15px !important;
+      flex-shrink: 0 !important;
+    }
+
     .auth-modal-overlay {
       position: fixed;
       top: 0;
@@ -23,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
       justify-content: center;
       animation: authFadeIn 0.2s ease-out;
     }
+
     .auth-modal-content {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
