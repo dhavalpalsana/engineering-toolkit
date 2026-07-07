@@ -155,6 +155,12 @@ document.addEventListener("DOMContentLoaded", () => {
   modalDiv.className = "auth-modal-overlay";
   modalDiv.style.display = "none";
   modalDiv.innerHTML = `
+    <div class="auth-modal-content">
+      <button class="auth-modal-close" id="auth-modal-close-btn">&times;</button>
+      <div class="auth-modal-header">
+        <h3 id="auth-modal-title">Sign In</h3>
+        <p id="auth-modal-subtitle">Save your engineering calculations securely</p>
+      </div>
       <div id="auth-google-container" style="margin-bottom:12px;">
         <button type="button" id="auth-google-btn" class="calc-btn" style="width:100%;margin-bottom:0;background:var(--bg-interactive);border:1px solid var(--border-color);color:var(--text-primary);display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition-fast);">
           <svg viewBox="0 0 24 24" width="18" height="18" style="flex-shrink:0;">
