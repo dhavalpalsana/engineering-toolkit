@@ -88,12 +88,14 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
   let activeSeriesId = "series-1";
   
-  // Interaction Tracking
   let isDragging = false;
   let dragTarget = null; // "x1", "x2", "y1", "y2", or point object
   let dragSeriesId = null;
   let hoverInfo = null; // { x, y, label }
   let selectedDataPoint = null;
+  let isPanning = false;
+  let startX = 0, startY = 0;
+  let startScrollLeft = 0, startScrollTop = 0;
   let mouseOnCanvas = false;
   let lastMousePos = { x: 0, y: 0 };
   
@@ -189,9 +191,11 @@ document.addEventListener("DOMContentLoaded", () => {
   
   function resizeCanvas() {
     if (!imageLoaded) return;
-    canvas.width = plotImg.clientWidth;
-    canvas.height = plotImg.clientHeight;
-    imgScale = canvas.width / imgWidth;
+    const displayWidth = plotImg.clientWidth;
+    const displayHeight = displayWidth * (imgHeight / imgWidth);
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
+    imgScale = displayWidth / imgWidth;
   }
   
   window.addEventListener("resize", () => {
@@ -233,8 +237,14 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // ── Mode Toggles ─────────────────────────────────────────────
   modeBtnCalibrate.addEventListener("click", () => {
-    currentMode = "calibrate";
-    modeBtnCalibrate.classList.add("active");
+    if (currentMode === "calibrate") {
+      currentMode = "pan";
+      modeBtnCalibrate.classList.remove("active");
+    } else {
+      currentMode = "calibrate";
+      modeBtnCalibrate.classList.add("active");
+    }
+    selectedDataPoint = null;
     updateSeriesUI();
     updateHelperBanner();
     renderAll();
@@ -247,8 +257,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (currentMode === "calibrate") {
       helperText.textContent = "Drag calibration points (X1, X2, Y1, Y2) to known axis lines and input their values in the sidebar.";
-    } else {
-      helperText.textContent = "Click inside the chart to record data points. Drag existing points to adjust, or double-click to delete.";
+    } else if (currentMode === "digitize") {
+      const activeSeries = seriesList.find(s => s.id === activeSeriesId);
+      const name = activeSeries ? activeSeries.name : "active series";
+      helperText.textContent = `Digitizing "${name}": Click canvas to add points. Drag points to adjust. Double-click to delete.`;
+    } else if (currentMode === "pan") {
+      helperText.textContent = "Pan Mode: Click and drag anywhere on the canvas to pan. Click Calibrate or a series pencil to edit.";
     }
   }
   
@@ -340,8 +354,18 @@ document.addEventListener("DOMContentLoaded", () => {
   
   canvas.addEventListener("mousedown", (e) => {
     if (!imageLoaded) return;
-    const pos = getMouseCoordinates(e);
     
+    if (currentMode === "pan") {
+      isPanning = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startScrollLeft = canvasContainer.scrollLeft;
+      startScrollTop = canvasContainer.scrollTop;
+      canvas.style.cursor = "grabbing";
+      return;
+    }
+    
+    const pos = getMouseCoordinates(e);
     const clickThreshold = 10 / imgScale; // 10 display pixels
     
     if (currentMode === "calibrate") {
@@ -357,7 +381,7 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
       }
-    } else {
+    } else if (currentMode === "digitize") {
       // Check if clicked close to active series point to edit/drag it
       const activeSeries = seriesList.find(s => s.id === activeSeriesId);
       if (activeSeries) {
@@ -393,6 +417,15 @@ document.addEventListener("DOMContentLoaded", () => {
   
   canvas.addEventListener("mousemove", (e) => {
     if (!imageLoaded) return;
+    
+    if (isPanning) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      canvasContainer.scrollLeft = startScrollLeft - dx;
+      canvasContainer.scrollTop = startScrollTop - dy;
+      return;
+    }
+    
     const pos = getMouseCoordinates(e);
     lastMousePos = pos;
     mouseOnCanvas = true;
@@ -453,7 +486,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       if (!found) {
-        canvas.style.cursor = "crosshair";
+        canvas.style.cursor = currentMode === "pan" ? "grab" : "crosshair";
         hoverInfo = null;
       }
       renderAll();
@@ -462,15 +495,17 @@ document.addEventListener("DOMContentLoaded", () => {
   
   canvas.addEventListener("mouseup", () => {
     isDragging = false;
+    isPanning = false;
     dragTarget = null;
     dragSeriesId = null;
-    canvas.style.cursor = currentMode === "calibrate" ? "crosshair" : "crosshair";
+    canvas.style.cursor = currentMode === "pan" ? "grab" : "crosshair";
     renderAll();
   });
   
   canvas.addEventListener("mouseleave", () => {
     mouseOnCanvas = false;
     isDragging = false;
+    isPanning = false;
     dragTarget = null;
     renderAll();
   });
@@ -655,6 +690,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Table Builder ────────────────────────────────────────────
   function populatePointsTable() {
     const activeSeries = seriesList.find(s => s.id === activeSeriesId);
+    if (document.activeElement && document.activeElement.classList.contains("coord-cell")) {
+      return;
+    }
     if (!activeSeries || activeSeries.points.length === 0) {
       pointsTableBody.innerHTML = `
         <tr>
@@ -1095,14 +1133,20 @@ document.addEventListener("DOMContentLoaded", () => {
     // Bind activation clicks
     seriesContainer.querySelectorAll(".series-activate-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        activeSeriesId = btn.dataset.id;
-        currentMode = "digitize";
-        modeBtnCalibrate.classList.remove("active");
-        
-        // Sync Curve Fitting dropdown with newly selected series fit type
-        const activeSeries = seriesList.find(s => s.id === activeSeriesId);
-        if (activeSeries) {
-          selectFitType.value = activeSeries.fitType || "none";
+        const id = btn.dataset.id;
+        if (activeSeriesId === id && currentMode === "digitize") {
+          // Toggle off to pan mode
+          currentMode = "pan";
+        } else {
+          activeSeriesId = id;
+          currentMode = "digitize";
+          modeBtnCalibrate.classList.remove("active");
+          
+          // Sync Curve Fitting dropdown with newly selected series fit type
+          const activeSeries = seriesList.find(s => s.id === activeSeriesId);
+          if (activeSeries) {
+            selectFitType.value = activeSeries.fitType || "none";
+          }
         }
         
         triggerProjectChange();
