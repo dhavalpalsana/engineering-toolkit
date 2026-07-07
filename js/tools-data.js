@@ -51,6 +51,15 @@ const TOOLS_DATA = [
     status: "active"
   },
   {
+    id: "plot-extractor",
+    name: "Plot Data Extractor",
+    description: "Upload or paste plot images to digitize and extract coordinates with sub-pixel loupe precision. Supports linear/logarithmic scales, multi-series extraction, regression curve fitting, and CSV lookup table generation.",
+    tags: ["general", "math", "curve-fitting", "plot", "digitizer", "data-extraction"],
+    icon: "line-chart",
+    path: "./tools/plot-extractor/index.html",
+    status: "active"
+  },
+  {
     id: "bolt-torque",
     name: "Bolt Torque & Tension Calculator",
     description: "Determine target bolt torque, preload tension, and friction coefficient adjustments for mechanical design.",

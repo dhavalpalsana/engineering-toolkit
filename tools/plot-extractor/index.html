@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plot Data Extractor — Engineering Toolkit</title>
+  
+  <!-- SEO & Social Meta Tags -->
+  <meta name="description" content="Digitize and extract coordinate data from plots, graphs, and chart images. Supports linear/log axes calibration, precision magnifier, multi-series extraction, and curve fitting.">
+  <meta name="keywords" content="plot digitizer, graph data extractor, extract data from plot, curve fitting, chart digitizer, engineering tools">
+  
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eng-toolkit.web.app/tools/plot-extractor/">
+  <meta property="og:title" content="Plot Data Extractor — Engineering Toolkit">
+  <meta property="og:description" content="Extract data points and coordinates from plot screenshots with sub-pixel precision calibration and regression curve fitting.">
+  <meta property="og:image" content="https://eng-toolkit.web.app/assets/og-image.png">
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Plot Data Extractor — Engineering Toolkit">
+  <meta name="twitter:description" content="Extract data points and coordinates from plot screenshots with calibration.">
+  <meta name="twitter:image" content="https://eng-toolkit.web.app/assets/og-image.png">
+
+  <!-- Style Sheets -->
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Theme Sync Script to Prevent Flash -->
+  <script>
+    (function() {
+      const theme = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+
+  <!-- Firebase Integration -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/project-manager.js"></script>
+</head>
+<body class="bg-primary text-primary min-h-screen flex flex-col transition-colors duration-200">
+
+  <!-- Standard Toolkit Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        <div class="hdr-icon">
+          <i data-lucide="line-chart"></i>
+        </div>
+        <div class="hdr-titles">
+          <h1>Plot Data Extractor</h1>
+          <p>Digitize charts, calibrate scales, extract points &amp; fit curves</p>
+        </div>
+      </div>
+      
+      <div class="hdr-right">
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <i data-lucide="share-2"></i> Share Link
+        </button>
+        <button id="btn-export" class="hdr-btn" title="Export diagram/points to JSON file">
+          <i data-lucide="download"></i> Export JSON
+        </button>
+        <button id="btn-import" class="hdr-btn" title="Import diagram/points from JSON file">
+          <i data-lucide="upload"></i> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" />
+        
+        <div class="hdr-divider"></div>
+        
+        <button id="auth-btn" title="Sign In">
+          <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+        </button>
+        
+        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+          <i data-lucide="moon" class="moon-icon"></i>
+          <i data-lucide="sun" class="sun-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive Workspace -->
+  <main>
+    <!-- Left Column: Interactive Image Digitizer Canvas -->
+    <div class="workspace-card">
+      <div class="workspace-header">
+        <div class="workspace-title">
+          <i data-lucide="image"></i>
+          <span id="workspace-mode-title">Plot Image Canvas</span>
+        </div>
+        <div id="image-actions" style="display: none; gap: 8px;">
+          <button id="btn-reset-zoom" class="hdr-btn" style="height:28px; padding:0 8px; font-size:11px;" title="Reset Zoom and Offset">
+            <i data-lucide="maximize-2"></i> Reset View
+          </button>
+          <button id="btn-remove-image" class="hdr-btn" style="height:28px; padding:0 8px; font-size:11px; color:var(--color-error);" title="Remove current plot">
+            <i data-lucide="trash-2"></i> Clear Image
+          </button>
+        </div>
+      </div>
+
+      <!-- Dropzone when no image is loaded -->
+      <div class="canvas-container" id="canvas-container-root">
+        <div class="dropzone" id="image-dropzone">
+          <i data-lucide="upload-cloud"></i>
+          <h3>Upload Plot Image</h3>
+          <p>Drag &amp; drop, browse files, or simply paste an image link or clipboard screenshot (Ctrl+V)</p>
+          <input type="file" id="file-upload-input" accept="image/*" class="hidden" />
+        </div>
+        
+        <!-- Canvas wrapper visible after load -->
+        <div id="plot-canvas-wrapper" style="display: none;">
+          <img id="plot-image" alt="Plot screen to digitize" />
+          <canvas id="interaction-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Helper instruction footer -->
+      <div class="instruction-banner" id="helper-banner">
+        <i data-lucide="info"></i>
+        <span id="helper-text">Start by dragging or pasting a plot image to begin digitization.</span>
+      </div>
+    </div>
+
+    <!-- Right Column: Calibration Controls, Series, Curves & Export -->
+    <div class="sidebar-panel">
+      
+      <!-- Interactive Digitizing / Setup Mode -->
+      <div class="control-card">
+        <span class="card-title">
+          <i data-lucide="settings-2"></i> Mode &amp; Calibration
+        </span>
+        <div class="mode-toggle-group">
+          <button class="mode-btn active" id="mode-btn-calibrate" title="Calibrate axes scale settings">
+            <i data-lucide="compass"></i> Calibrate
+          </button>
+          <button class="mode-btn" id="mode-btn-digitize" title="Click on image to extract coordinates">
+            <i data-lucide="pin"></i> Digitize Points
+          </button>
+        </div>
+
+        <!-- Calibration Parameters -->
+        <div id="calibration-settings" class="flex flex-col gap-3">
+          <div class="form-row">
+            <div class="input-group">
+              <label for="cal-x1">X1 Reference Point</label>
+              <input type="number" id="cal-x1" value="0" step="any" />
+            </div>
+            <div class="input-group">
+              <label for="cal-x2">X2 Reference Point</label>
+              <input type="number" id="cal-x2" value="10" step="any" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="input-group">
+              <label for="cal-y1">Y1 Reference Point</label>
+              <input type="number" id="cal-y1" value="0" step="any" />
+            </div>
+            <div class="input-group">
+              <label for="cal-y2">Y2 Reference Point</label>
+              <input type="number" id="cal-y2" value="10" step="any" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="input-group">
+              <label for="scale-x">X-Axis Scale</label>
+              <select id="scale-x">
+                <option value="linear">Linear</option>
+                <option value="log">Logarithmic</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="scale-y">Y-Axis Scale</label>
+              <select id="scale-y">
+                <option value="linear">Linear</option>
+                <option value="log">Logarithmic</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Series Management -->
+      <div class="control-card">
+        <span class="card-title">
+          <i data-lucide="layers"></i> Data Series
+        </span>
+        <div class="flex flex-col gap-2" id="series-list-container">
+          <!-- Populated dynamically via JS -->
+        </div>
+        <div class="flex gap-2">
+          <button id="btn-add-series" class="action-btn secondary" style="height:32px; font-size:12px;">
+            <i data-lucide="plus"></i> Add Series
+          </button>
+          <button id="btn-clear-points" class="action-btn secondary" style="height:32px; font-size:12px; color:var(--color-error);">
+            <i data-lucide="trash"></i> Clear Points
+          </button>
+        </div>
+      </div>
+
+      <!-- Extracted Points Table -->
+      <div class="control-card">
+        <span class="card-title">
+          <i data-lucide="list"></i> Extracted Data Points
+        </span>
+        <div class="table-container">
+          <table class="points-table">
+            <thead>
+              <tr>
+                <th>X</th>
+                <th>Y</th>
+                <th style="width: 40px; text-align: center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="points-table-body">
+              <tr>
+                <td colspan="3" style="text-align: center; color: var(--text-muted); font-family: var(--font-sans); padding: 20px 0;">No points digitized yet. Click in Digitize mode.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Curve Fitting & Calculations -->
+      <div class="control-card">
+        <span class="card-title">
+          <i data-lucide="trending-up"></i> Regression &amp; Curve Fitting
+        </span>
+        <div class="input-group">
+          <label for="fit-type">Model Fitting Type</label>
+          <select id="fit-type">
+            <option value="none">None (Scatter Only)</option>
+            <option value="linear">Linear (y = mx + c)</option>
+            <option value="poly2">Quadratic (y = ax² + bx + c)</option>
+            <option value="poly3">Cubic (y = ax³ + bx² + cx + d)</option>
+            <option value="exponential">Exponential (y = ae^(bx))</option>
+            <option value="logarithmic">Logarithmic (y = a*ln(x) + b)</option>
+            <option value="power">Power (y = ax^b)</option>
+          </select>
+        </div>
+        
+        <div class="stats-box" id="fit-stats-box" style="display: none;">
+          <div class="stat-r2" id="val-r2">R² = --</div>
+          <div class="stat-formula" id="val-formula">y = --</div>
+        </div>
+      </div>
+
+      <!-- Exporters & Actions -->
+      <div class="control-card">
+        <span class="card-title">
+          <i data-lucide="file-output"></i> Export Options
+        </span>
+        <div class="flex flex-col gap-2">
+          <div class="action-button-group">
+            <button id="btn-copy-csv" class="action-btn primary" title="Copy coordinate table to clipboard as CSV">
+              <i data-lucide="clipboard"></i> Copy CSV
+            </button>
+            <button id="btn-download-csv" class="action-btn secondary" title="Download coordinate table as CSV file">
+              <i data-lucide="file-spreadsheet"></i> Save CSV
+            </button>
+          </div>
+          <button id="btn-export-table" class="action-btn secondary" title="Generate lookup table with custom interpolation intervals">
+            <i data-lucide="grid"></i> Generate Lookup Table
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Interactive Interpolated Lookup Table Modal -->
+  <div id="lookup-modal" class="pm-modal-overlay pm-fade-out" style="display: none; z-index: 20000; animation: none;">
+    <div class="pm-modal-content" style="max-width: 500px;">
+      <button class="pm-modal-close" id="btn-close-lookup">&times;</button>
+      <div class="pm-modal-header">
+        <h3>Generate Lookup Table</h3>
+        <p>Interpolate points along the fitted curve at set X-axis intervals</p>
+      </div>
+      
+      <div class="flex flex-col gap-4">
+        <div class="form-row">
+          <div class="input-group">
+            <label for="lookup-start">Start X</label>
+            <input type="number" id="lookup-start" value="0" step="any" />
+          </div>
+          <div class="input-group">
+            <label for="lookup-end">End X</label>
+            <input type="number" id="lookup-end" value="10" step="any" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="input-group">
+            <label for="lookup-step">Interval Step size</label>
+            <input type="number" id="lookup-step" value="1" step="any" />
+          </div>
+          <div class="input-group">
+            <label for="lookup-decimals">Decimal accuracy</label>
+            <input type="number" id="lookup-decimals" value="4" min="0" max="10" />
+          </div>
+        </div>
+
+        <button id="btn-calculate-lookup" class="action-btn primary" style="width: 100%;">Generate &amp; Copy Table</button>
+
+        <div class="table-container" style="max-height: 180px; display: none;" id="lookup-results-container">
+          <table class="points-table">
+            <thead>
+              <tr>
+                <th>X Value</th>
+                <th>Calculated Y Value</th>
+              </tr>
+            </thead>
+            <tbody id="lookup-results-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
