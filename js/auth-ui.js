@@ -184,9 +184,12 @@ document.addEventListener("DOMContentLoaded", () => {
           <label for="auth-email">Email Address</label>
           <input type="email" id="auth-email" class="form-input" style="width:100%;" required placeholder="name@company.com">
         </div>
-        <div class="auth-form-group" style="margin-bottom: 16px;">
-          <label for="auth-password">Password</label>
-          <input type="password" id="auth-password" class="form-input" style="width:100%;" required placeholder="••••••••">
+        <div class="auth-form-group" id="auth-password-group" style="margin-bottom: 16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <label for="auth-password">Password</label>
+            <a href="#" id="auth-forgot-link" style="font-size:11px;color:var(--accent-primary);text-decoration:none;font-weight:700;">Forgot?</a>
+          </div>
+          <input type="password" id="auth-password" class="form-input" style="width:100%;margin-top:4px;" placeholder="••••••••">
         </div>
         <div id="auth-error-msg" style="color:var(--color-error);font-size:11px;font-weight:600;margin-bottom:12px;display:none;"></div>
         <button type="submit" class="calc-btn" id="auth-submit-btn" style="width:100%;margin-top:4px;">Sign In</button>
@@ -210,8 +213,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const authToggleLink = document.getElementById("auth-toggle-link");
   const authCloseBtn = document.getElementById("auth-modal-close-btn");
   const authGoogleBtn = document.getElementById("auth-google-btn");
+  const authGoogleContainer = document.getElementById("auth-google-container");
+  const authPasswordGroup = document.getElementById("auth-password-group");
+  const authForgotLink = document.getElementById("auth-forgot-link");
+  const authPasswordInput = document.getElementById("auth-password");
   
-  let isSignUpMode = false;
+  let authMode = "signin"; // "signin", "signup", "forgot"
   let currentUser = null;
 
   const openAuthModal = () => {
@@ -221,7 +228,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     authErrorMsg.style.display = "none";
     authForm.reset();
-    setMode(false);
+    setMode("signin");
     authModal.style.display = "flex";
   };
 
@@ -229,28 +236,58 @@ document.addEventListener("DOMContentLoaded", () => {
     authModal.style.display = "none";
   };
 
-  const setMode = (isSignUp) => {
-    isSignUpMode = isSignUp;
-    if (isSignUpMode) {
+  const setMode = (mode) => {
+    authMode = mode;
+    authErrorMsg.style.display = "none";
+    authErrorMsg.style.color = "var(--color-error)"; // Reset color default
+
+    if (authMode === "signup") {
       authTitle.textContent = "Create Account";
       authSubtitle.textContent = "Get started saving your projects online";
       authSubmitBtn.textContent = "Sign Up";
       authToggleText.textContent = "Already have an account?";
       authToggleLink.textContent = "Sign In";
+      authPasswordGroup.style.display = "flex";
+      authGoogleContainer.style.display = "block";
+      authForgotLink.style.display = "none";
+    } else if (authMode === "forgot") {
+      authTitle.textContent = "Reset Password";
+      authSubtitle.textContent = "We will email you a password recovery link";
+      authSubmitBtn.textContent = "Send Reset Link";
+      authToggleText.textContent = "Back to";
+      authToggleLink.textContent = "Sign In";
+      authPasswordGroup.style.display = "none";
+      authGoogleContainer.style.display = "none";
     } else {
+      // Default: "signin"
       authTitle.textContent = "Sign In";
       authSubtitle.textContent = "Save your engineering calculations securely";
       authSubmitBtn.textContent = "Sign In";
       authToggleText.textContent = "Don't have an account?";
       authToggleLink.textContent = "Sign Up";
+      authPasswordGroup.style.display = "flex";
+      authGoogleContainer.style.display = "block";
+      authForgotLink.style.display = "inline";
     }
   };
 
   // Toggle Mode Event
   authToggleLink.addEventListener("click", (e) => {
     e.preventDefault();
-    setMode(!isSignUpMode);
+    if (authMode === "signup" || authMode === "forgot") {
+      setMode("signin");
+    } else {
+      setMode("signup");
+    }
   });
+
+  // Forgot Password click
+  if (authForgotLink) {
+    authForgotLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      setMode("forgot");
+    });
+  }
 
   // Modal interactions
   authCloseBtn.addEventListener("click", closeAuthModal);
@@ -265,32 +302,65 @@ document.addEventListener("DOMContentLoaded", () => {
   authForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     authErrorMsg.style.display = "none";
+    authErrorMsg.style.color = "var(--color-error)"; // Default to error color
+    
     const email = document.getElementById("auth-email").value;
-    const password = document.getElementById("auth-password").value;
+    const password = authPasswordInput.value;
+
+    if (authMode !== "forgot" && !password) {
+      authErrorMsg.textContent = "Password is required.";
+      authErrorMsg.style.display = "block";
+      return;
+    }
 
     authSubmitBtn.disabled = true;
-    authSubmitBtn.textContent = isSignUpMode ? "Registering..." : "Signing In...";
+    if (authMode === "forgot") {
+      authSubmitBtn.textContent = "Sending...";
+    } else if (authMode === "signup") {
+      authSubmitBtn.textContent = "Registering...";
+    } else {
+      authSubmitBtn.textContent = "Signing In...";
+    }
 
     try {
-      let result;
-      if (isSignUpMode) {
-        result = await fb.signUp(email, password);
+      if (authMode === "forgot") {
+        const result = await fb.sendPasswordResetEmail(email);
+        if (result.error) {
+          authErrorMsg.textContent = result.error.message;
+          authErrorMsg.style.display = "block";
+        } else {
+          authErrorMsg.style.color = "var(--color-success)";
+          authErrorMsg.textContent = "Password reset email sent! Check your inbox.";
+          authErrorMsg.style.display = "block";
+          authForm.reset();
+        }
       } else {
-        result = await fb.signIn(email, password);
-      }
+        let result;
+        if (authMode === "signup") {
+          result = await fb.signUp(email, password);
+        } else {
+          result = await fb.signIn(email, password);
+        }
 
-      if (result.error) {
-        authErrorMsg.textContent = result.error.message;
-        authErrorMsg.style.display = "block";
-      } else {
-        closeAuthModal();
+        if (result.error) {
+          authErrorMsg.textContent = result.error.message;
+          authErrorMsg.style.display = "block";
+        } else {
+          closeAuthModal();
+        }
       }
     } catch (err) {
       authErrorMsg.textContent = err.message || "An auth error occurred.";
       authErrorMsg.style.display = "block";
     } finally {
       authSubmitBtn.disabled = false;
-      authSubmitBtn.textContent = isSignUpMode ? "Sign Up" : "Sign In";
+      if (authMode === "forgot") {
+        authSubmitBtn.textContent = "Send Reset Link";
+      } else if (authMode === "signup") {
+        authSubmitBtn.textContent = "Sign Up";
+      } else {
+        authSubmitBtn.textContent = "Sign In";
+      }
     }
   });
 
@@ -298,6 +368,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (authGoogleBtn) {
     authGoogleBtn.addEventListener("click", async () => {
       authErrorMsg.style.display = "none";
+      authErrorMsg.style.color = "var(--color-error)";
       authGoogleBtn.disabled = true;
       const originalHtml = authGoogleBtn.innerHTML;
       authGoogleBtn.innerHTML = "Connecting...";

@@ -59,6 +59,13 @@ window.fbHelper = {
       .catch(error => ({ user: null, error }));
   },
 
+  sendPasswordResetEmail: async (email) => {
+    if (!isConfigured) throw new Error("Firebase is not configured.");
+    return await auth.sendPasswordResetEmail(email)
+      .then(() => ({ error: null }))
+      .catch(error => ({ error }));
+  },
+
   signOut: async () => {
     if (!isConfigured) return { error: null };
     return await auth.signOut()
