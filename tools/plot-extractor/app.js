@@ -55,6 +55,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnCalculateLookup = document.getElementById("btn-calculate-lookup");
   const lookupResultsContainer = document.getElementById("lookup-results-container");
   const lookupResultsBody = document.getElementById("lookup-results-body");
+  const btnDownloadPlot = document.getElementById("btn-download-plot");
+  const zoomSlider = document.getElementById("zoom-slider");
+  const zoomLabel = document.getElementById("zoom-label");
   
   // Application State Variables
   let currentMode = "calibrate"; // "calibrate" or "digitize"
@@ -63,6 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let imgHeight = 0;
   let imgScale = 1.0;
   let compressedImgData = null; // Stored as base64 string for saving
+  let zoomFactor = 1.0;
   
   // Calibration Handles (in image pixel space)
   let calibrationPoints = {
@@ -78,7 +82,8 @@ document.addEventListener("DOMContentLoaded", () => {
       id: "series-1",
       name: "Series 1",
       color: "#0d9488",
-      points: [] // array of { px, py }
+      points: [], // array of { px, py }
+      fitType: "none"
     }
   ];
   let activeSeriesId = "series-1";
@@ -88,6 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let dragTarget = null; // "x1", "x2", "y1", "y2", or point object
   let dragSeriesId = null;
   let hoverInfo = null; // { x, y, label }
+  let selectedDataPoint = null;
   let mouseOnCanvas = false;
   let lastMousePos = { x: 0, y: 0 };
   
@@ -207,11 +213,20 @@ document.addEventListener("DOMContentLoaded", () => {
   function clearImage() {
     imageLoaded = false;
     compressedImgData = null;
+    zoomFactor = 1.0;
+    zoomSlider.value = 1.0;
+    zoomLabel.textContent = "100%";
+    plotImg.style.width = "";
+    plotImg.style.maxWidth = "100%";
+    plotImg.style.maxHeight = "80vh";
     dropzone.style.display = "flex";
     canvasWrapper.style.display = "none";
     imageActions.style.display = "none";
     plotImg.src = "";
-    seriesList.forEach(s => s.points = []);
+    seriesList.forEach(s => {
+      s.points = [];
+      s.fitType = "none";
+    });
     updateHelperBanner();
     renderAll();
   }
@@ -330,6 +345,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const clickThreshold = 10 / imgScale; // 10 display pixels
     
     if (currentMode === "calibrate") {
+      selectedDataPoint = null;
       // Check if clicked close to calibration handles
       for (let key in calibrationPoints) {
         const pt = calibrationPoints[key];
@@ -352,7 +368,10 @@ document.addEventListener("DOMContentLoaded", () => {
             isDragging = true;
             dragTarget = pt;
             dragSeriesId = activeSeries.id;
+            selectedDataPoint = pt; // Store selection for arrow keys
             canvas.style.cursor = "grabbing";
+            renderAll();
+            updatePointsTable();
             return;
           }
         }
@@ -361,11 +380,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // If clicked empty space, add a new point
       const activeSeriesObj = seriesList.find(s => s.id === activeSeriesId);
       if (activeSeriesObj) {
-        activeSeriesObj.points.push({ px: Math.round(pos.x), py: Math.round(pos.y) });
-        // Auto sort points by X value to assist correct line graphing
+        const newPt = { px: Math.round(pos.x), py: Math.round(pos.y) };
+        activeSeriesObj.points.push(newPt);
         activeSeriesObj.points.sort((a, b) => a.px - b.px);
+        selectedDataPoint = newPt; // Select newly added point
         triggerProjectChange();
         renderAll();
+        updatePointsTable();
       }
     }
   });
@@ -465,6 +486,7 @@ document.addEventListener("DOMContentLoaded", () => {
       for (let i = 0; i < activeSeries.points.length; i++) {
         const pt = activeSeries.points[i];
         if (Math.hypot(pos.x - pt.px, pos.y - pt.py) < clickThreshold) {
+          if (pt === selectedDataPoint) selectedDataPoint = null;
           activeSeries.points.splice(i, 1);
           triggerProjectChange();
           renderAll();
@@ -507,6 +529,15 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.strokeStyle = "var(--bg-secondary)";
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        
+        // Highlight active selected data point for keyboard nudging
+        if (currentMode === "digitize" && isActive && pt === selectedDataPoint) {
+          ctx.beginPath();
+          ctx.arc(pt.px * imgScale, pt.py * imgScale, 9, 0, 2 * Math.PI);
+          ctx.strokeStyle = "var(--accent-primary)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
       });
     });
     
@@ -635,10 +666,12 @@ document.addEventListener("DOMContentLoaded", () => {
     
     pointsTableBody.innerHTML = activeSeries.points.map((pt, i) => {
       const math = toMathCoords(pt.px, pt.py);
+      const isPtSelected = selectedDataPoint === pt;
+      const rowStyle = isPtSelected ? `background: var(--accent-primary-glow); font-weight: 600;` : ``;
       return `
-        <tr>
-          <td>${math.x.toFixed(4)}</td>
-          <td>${math.y.toFixed(4)}</td>
+        <tr style="${rowStyle}">
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="x" title="Double click to edit">${math.x.toFixed(4)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="y" title="Double click to edit">${math.y.toFixed(4)}</td>
           <td style="text-align: center;">
             <button class="btn-icon danger remove-pt-btn" data-index="${i}" title="Delete point">
               <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -654,9 +687,55 @@ document.addEventListener("DOMContentLoaded", () => {
         const index = parseInt(btn.dataset.index);
         const activeSeriesObj = seriesList.find(s => s.id === activeSeriesId);
         if (activeSeriesObj) {
+          const pt = activeSeriesObj.points[index];
+          if (pt === selectedDataPoint) selectedDataPoint = null;
           activeSeriesObj.points.splice(index, 1);
           triggerProjectChange();
           renderAll();
+        }
+      });
+    });
+
+    // Bind coord-cell manual edits
+    pointsTableBody.querySelectorAll(".coord-cell").forEach(cell => {
+      // Highlight matching canvas point on table focus
+      cell.addEventListener("focus", () => {
+        const index = parseInt(cell.dataset.index);
+        if (activeSeries.points[index]) {
+          selectedDataPoint = activeSeries.points[index];
+          renderAll();
+        }
+      });
+
+      cell.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          cell.blur();
+        }
+      });
+      
+      cell.addEventListener("blur", () => {
+        const index = parseInt(cell.dataset.index);
+        const coord = cell.dataset.coord;
+        const newVal = parseFloat(cell.textContent.trim());
+        const pt = activeSeries.points[index];
+        if (pt) {
+          const math = toMathCoords(pt.px, pt.py);
+          if (!isNaN(newVal)) {
+            if (coord === "x") {
+              const pixelPt = toPixelCoords(newVal, math.y);
+              pt.px = Math.round(pixelPt.px);
+            } else {
+              const pixelPt = toPixelCoords(math.x, newVal);
+              pt.py = Math.round(pixelPt.py);
+            }
+            activeSeries.points.sort((a, b) => a.px - b.px);
+            triggerProjectChange();
+            renderAll();
+          } else {
+            // Revert cell text to original on invalid input
+            cell.textContent = coord === "x" ? math.x.toFixed(4) : math.y.toFixed(4);
+          }
         }
       });
     });
@@ -1374,13 +1453,180 @@ document.addEventListener("DOMContentLoaded", () => {
               .replace(/'/g, "&#039;");
   }
   
-  // View action view resets
-  btnResetZoom.addEventListener("click", () => {
+  // Zoom Control Implementation
+  zoomSlider.addEventListener("input", (e) => {
+    setZoom(parseFloat(e.target.value));
+  });
+  
+  // Wheel zoom via Ctrl + Scroll Wheel
+  canvas.addEventListener("wheel", (e) => {
+    if (!imageLoaded) return;
+    if (e.ctrlKey) {
+      e.preventDefault();
+      const direction = e.deltaY < 0 ? 1 : -1;
+      const nextZoom = Math.max(0.5, Math.min(3.0, zoomFactor + direction * 0.1));
+      setZoom(nextZoom);
+    }
+  }, { passive: false });
+  
+  function setZoom(factor) {
+    zoomFactor = factor;
+    zoomSlider.value = factor;
+    zoomLabel.textContent = `${Math.round(factor * 100)}%`;
+    
+    if (Math.abs(factor - 1.0) < 0.01) {
+      plotImg.style.width = "";
+      plotImg.style.maxWidth = "100%";
+      plotImg.style.maxHeight = "80vh";
+    } else {
+      plotImg.style.width = (imgWidth * factor) + "px";
+      plotImg.style.maxWidth = "none";
+      plotImg.style.maxHeight = "none";
+    }
+    
     resizeCanvas();
     renderAll();
+  }
+  
+  btnResetZoom.addEventListener("click", () => {
+    setZoom(1.0);
   });
 
-  // Advanced Position Fine-Tuning
+  // Download Plot image with points and curves overlay
+  function exportImageWithCurves() {
+    if (!imageLoaded) return;
+    
+    const offCanvas = document.createElement("canvas");
+    offCanvas.width = imgWidth;
+    offCanvas.height = imgHeight;
+    const offCtx = offCanvas.getContext("2d");
+    
+    // Draw base plot image
+    offCtx.drawImage(plotImg, 0, 0, imgWidth, imgHeight);
+    
+    // Draw all data series and fits
+    seriesList.forEach(series => {
+      // Connect points with lines
+      if (series.points.length > 1) {
+        offCtx.strokeStyle = series.color;
+        offCtx.lineWidth = 3;
+        offCtx.beginPath();
+        offCtx.moveTo(series.points[0].px, series.points[0].py);
+        for (let i = 1; i < series.points.length; i++) {
+          offCtx.lineTo(series.points[i].px, series.points[i].py);
+        }
+        offCtx.stroke();
+      }
+      
+      // Draw fitted regression curve
+      const type = series.fitType || "none";
+      if (type !== "none" && series.points.length >= 2) {
+        const mathData = series.points.map(pt => toMathCoords(pt.px, pt.py));
+        const fit = fitModel(mathData, type);
+        if (fit) {
+          const minPx = series.points[0].px;
+          const maxPx = series.points[series.points.length - 1].px;
+          
+          offCtx.strokeStyle = series.color;
+          offCtx.lineWidth = 4;
+          offCtx.setLineDash([10, 10]);
+          offCtx.beginPath();
+          let first = true;
+          for (let px = minPx; px <= maxPx; px += 2) {
+            const mathPt = toMathCoords(px, 0);
+            const predY = fit.predict(mathPt.x);
+            if (isNaN(predY) || !isFinite(predY)) continue;
+            const pixelPt = toPixelCoords(mathPt.x, predY);
+            
+            if (first) {
+              offCtx.moveTo(pixelPt.px, pixelPt.py);
+              first = false;
+            } else {
+              offCtx.lineTo(pixelPt.px, pixelPt.py);
+            }
+          }
+          offCtx.stroke();
+          offCtx.setLineDash([]);
+        }
+      }
+      
+      // Draw points
+      series.points.forEach(pt => {
+        offCtx.beginPath();
+        offCtx.arc(pt.px, pt.py, 6, 0, 2 * Math.PI);
+        offCtx.fillStyle = series.color;
+        offCtx.fill();
+        offCtx.strokeStyle = "#ffffff";
+        offCtx.lineWidth = 2;
+        offCtx.stroke();
+      });
+    });
+    
+    // Download trigger
+    const link = document.createElement("a");
+    link.download = "digitized-plot-export.png";
+    link.href = offCanvas.toDataURL("image/png");
+    link.click();
+  }
+  
+  btnDownloadPlot.addEventListener("click", exportImageWithCurves);
+
+  // Keyboard Arrow Nudging Listener
+  window.addEventListener("keydown", (e) => {
+    // Avoid interfering if editing input text fields
+    if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT" || document.activeElement.getAttribute("contenteditable") === "true") {
+      return;
+    }
+    
+    let dx = 0, dy = 0;
+    if (e.key === "ArrowUp") dy = -1;
+    else if (e.key === "ArrowDown") dy = 1;
+    else if (e.key === "ArrowLeft") dx = -1;
+    else if (e.key === "ArrowRight") dx = 1;
+    else return;
+    
+    e.preventDefault();
+    
+    if (currentMode === "calibrate") {
+      const target = nudgeTarget.value;
+      if (calibrationPoints[target]) {
+        calibrationPoints[target].px = Math.max(0, Math.min(imgWidth, calibrationPoints[target].px + dx));
+        calibrationPoints[target].py = Math.max(0, Math.min(imgHeight, calibrationPoints[target].py + dy));
+        
+        lastMousePos = { x: calibrationPoints[target].px, y: calibrationPoints[target].py };
+        mouseOnCanvas = true;
+        hoverInfo = {
+          x: lastMousePos.x,
+          y: lastMousePos.y,
+          label: target.toUpperCase()
+        };
+        
+        triggerProjectChange();
+        renderAll();
+      }
+    } else if (currentMode === "digitize" && selectedDataPoint) {
+      selectedDataPoint.px = Math.max(0, Math.min(imgWidth, selectedDataPoint.px + dx));
+      selectedDataPoint.py = Math.max(0, Math.min(imgHeight, selectedDataPoint.py + dy));
+      
+      const activeSeries = seriesList.find(s => s.id === activeSeriesId);
+      if (activeSeries) activeSeries.points.sort((a, b) => a.px - b.px);
+      
+      const mathCoords = toMathCoords(selectedDataPoint.px, selectedDataPoint.py);
+      lastMousePos = { x: selectedDataPoint.px, y: selectedDataPoint.py };
+      mouseOnCanvas = true;
+      hoverInfo = {
+        x: lastMousePos.x,
+        y: lastMousePos.y,
+        label: `(${mathCoords.x.toFixed(2)}, ${mathCoords.y.toFixed(2)})`
+      };
+      
+      triggerProjectChange();
+      renderAll();
+      populatePointsTable();
+    }
+  });
+
+  // Advanced Position Fine-Tuning D-Pad
   const btnToggleAdvanced = document.getElementById("btn-toggle-advanced");
   const advancedTuningPanel = document.getElementById("advanced-tuning-panel");
   const nudgeTarget = document.getElementById("nudge-target");
@@ -1398,7 +1644,6 @@ document.addEventListener("DOMContentLoaded", () => {
       calibrationPoints[target].px = Math.max(0, Math.min(imgWidth, calibrationPoints[target].px + dx));
       calibrationPoints[target].py = Math.max(0, Math.min(imgHeight, calibrationPoints[target].py + dy));
       
-      // Focus magnifier loupe on the nudged coordinate in real-time
       lastMousePos = { x: calibrationPoints[target].px, y: calibrationPoints[target].py };
       mouseOnCanvas = true;
       hoverInfo = {

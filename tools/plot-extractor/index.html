@@ -101,7 +101,13 @@
           <i data-lucide="image"></i>
           <span id="workspace-mode-title">Plot Image Canvas</span>
         </div>
-        <div id="image-actions" style="display: none; gap: 8px;">
+        <div id="image-actions" style="display: none; gap: 12px; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="zoom-in" style="width:14px; height:14px; color:var(--text-secondary);"></i>
+            <input type="range" id="zoom-slider" min="0.5" max="3.0" step="0.1" value="1.0" style="width: 80px; accent-color: var(--accent-primary);" />
+            <span id="zoom-label" style="font-size: 11px; font-weight: 700; width: 32px; text-align: right; color:var(--text-secondary);">100%</span>
+          </div>
+          <div class="hdr-divider" style="height:16px; margin:0;"></div>
           <button id="btn-reset-zoom" class="hdr-btn" style="height:28px; padding:0 8px; font-size:11px;" title="Reset Zoom and Offset">
             <i data-lucide="maximize-2"></i> Reset View
           </button>
@@ -305,6 +311,9 @@
           </div>
           <button id="btn-download-combined-csv" class="action-btn secondary" title="Download all series in a single combined CSV file">
             <i data-lucide="file-spreadsheet"></i> Save Combined CSV
+          </button>
+          <button id="btn-download-plot" class="action-btn secondary" title="Export plot image with data points and curves overlay">
+            <i data-lucide="image"></i> Download Plot with Curves
           </button>
           <button id="btn-export-table" class="action-btn secondary" title="Generate lookup table with custom interpolation intervals">
             <i data-lucide="grid"></i> Generate Lookup Table
