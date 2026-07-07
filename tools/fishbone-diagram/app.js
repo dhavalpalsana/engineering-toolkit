@@ -283,16 +283,7 @@
                 }
             }
 
-            // Load API key from local storage
-            const savedApiKey = localStorage.getItem('gemini_api_key');
-            if (savedApiKey) {
-                document.getElementById('api-key-input').value = savedApiKey;
-            }
 
-            // Sync API key saves
-            document.getElementById('api-key-input').addEventListener('change', (e) => {
-                localStorage.setItem('gemini_api_key', e.target.value.trim());
-            });
 
             // Initialize zoom/pan event listeners
             initZoomPanListeners();
@@ -1379,120 +1370,7 @@
             reader.readAsDataURL(svgBlob);
         }
 
-        // --- GEMINI AI CAUSE GENERATOR ENGINE ---
-        async function generateAICauses() {
-            const apiKeyInput = document.getElementById('api-key-input');
-            const apiKey = apiKeyInput.value.trim();
 
-            if (!apiKey) {
-                showAlert("Gemini API Key Required", "Please enter a valid Gemini API Key in the upper right header input box to use the AI assistant.");
-                return;
-            }
-
-            const promptFocus = document.getElementById('ai-focus-input').value.trim();
-            const submitBtn = document.getElementById('ai-generate-btn');
-            const statusEl = document.getElementById('ai-status-indicator');
-            const logContainer = document.getElementById('ai-log-container');
-            const logText = document.getElementById('ai-log-text');
-
-            submitBtn.disabled = true;
-            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            statusEl.classList.remove('hidden');
-            logContainer.classList.add('hidden');
-
-            const systemInstruction = `You are a professional systems design and quality assurance engineer specialized in Lean, Six Sigma, root cause analyses, and Ishikawa (Fishbone) diagram construction.
-Your task is to analyze the user's problem statement (Effect) and suggest a structured breakdown of categories and causes.
-Return exactly the JSON format specified in the schema. Do not output markdown code blocks or anything other than a clean JSON payload.`;
-
-            let promptText = `Effect/Problem statement to analyze: "${state.effect}".`;
-            if (promptFocus) {
-                promptText += `\nBrainstorming constraints & guidelines: ${promptFocus}`;
-            }
-            promptText += `\n\nGenerate appropriate categories (like the 6Ms of Manufacturing, the 5Ps of Software Dev, or 8Ps of Marketing/Service, depending on whichever suits the problem best) and individual plausible causes for each. Generate 4 to 6 categories, and 3 to 6 causes per category. Provide a brief explanation of your reasoning in the explanation field.`;
-
-            const responseSchema = {
-                type: "OBJECT",
-                properties: {
-                    categories: {
-                        type: "ARRAY",
-                        description: "List of categories with their brainstormed causes",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                name: { type: "STRING", description: "Name of the category, e.g. 'Manpower (People)', 'Process', etc." },
-                                causes: {
-                                    type: "ARRAY",
-                                    items: { type: "STRING", description: "A plausible root cause" }
-                                }
-                            },
-                            required: ["name", "causes"]
-                        }
-                    },
-                    explanation: { type: "STRING", description: "A brief summary explanation of the root cause hypothesis" }
-                },
-                required: ["categories", "explanation"]
-            };
-
-            const payload = {
-                contents: [{ parts: [{ text: promptText }] }],
-                systemInstruction: { parts: [{ text: systemInstruction }] },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: responseSchema
-                }
-            };
-
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-            let success = false;
-            let responseData = null;
-            let lastErr = "AI connection error";
-            const delays = [1000, 2000, 4000];
-
-            for (let attempt = 0; attempt < delays.length; attempt++) {
-                try {
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!response.ok) {
-                        const errText = await response.text();
-                        throw new Error(`HTTP ${response.status}: ${errText}`);
-                    }
-
-                    const jsonResult = await response.json();
-                    const text = jsonResult.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) {
-                        responseData = JSON.parse(text);
-                        success = true;
-                        break;
-                    }
-                } catch (e) {
-                    lastErr = e.message;
-                    if (attempt < delays.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, delays[attempt]));
-                    }
-                }
-            }
-
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-            statusEl.classList.add('hidden');
-
-            if (success && responseData) {
-                pushHistory();
-                state.categories = responseData.categories;
-                updateUI();
-                fitCanvas();
-
-                logText.innerHTML = `<strong>Root Cause Hypothesis:</strong> ${escapeHtml(responseData.explanation)}`;
-                logContainer.classList.remove('hidden');
-            } else {
-                showAlert("Gemini Connection Error", `Failed to get suggestions from Gemini AI: ${lastErr}. Verify your API Key and network connection.`);
-            }
-        }
 
         // --- CUSTOM ALERT DIALOGS ---
         function showAlert(title, message) {

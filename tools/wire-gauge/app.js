@@ -145,16 +145,18 @@
         // Tab selection switcher
         function switchTab(tabId) {
             currentTab = tabId;
-            const tabs = ['dash', 'trace', 'ai', 'theory'];
+            const tabs = ['dash', 'trace', 'theory'];
             tabs.forEach(t => {
                 const btn = document.getElementById(`tab-btn-${t}`);
                 const panel = document.getElementById(`tab-panel-${t}`);
-                if (t === tabId) {
-                    btn.className = "px-5 py-3 border-b-2 border-teal-600 dark:border-teal-400 text-teal-600 dark:text-teal-400 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5";
-                    panel.classList.remove('hidden');
-                } else {
-                    btn.className = "px-5 py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5";
-                    panel.classList.add('hidden');
+                if (btn && panel) {
+                    if (t === tabId) {
+                        btn.className = "px-5 py-3 border-b-2 border-teal-600 dark:border-teal-400 text-teal-600 dark:text-teal-400 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5";
+                        panel.classList.remove('hidden');
+                    } else {
+                        btn.className = "px-5 py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5";
+                        panel.classList.add('hidden');
+                    }
                 }
             });
             
@@ -909,200 +911,7 @@
             document.body.removeChild(tempTextArea);
         }
 
-        // ---------------------------------------------------------
-        // Gemini AI Agent API Integrations
-        // ---------------------------------------------------------
 
-        async function submitAgentPrompt() {
-            const promptText = document.getElementById('ai-prompt-input').value.trim();
-            if (!promptText) {
-                showAlert('Form Verification', 'Please write or paste a description detailing your cable sizing prompt.');
-                return;
-            }
-
-            const apiKeyInput = document.getElementById('api-key-input').value.trim();
-            const apiKey = apiKeyInput || ""; 
-
-            const statusLabel = document.getElementById('ai-status');
-            const statusPulse = document.getElementById('ai-status-pulse');
-            const submitBtn = document.getElementById('ai-submit-btn');
-            const logBox = document.getElementById('ai-analysis-output');
-
-            submitBtn.disabled = true;
-            statusLabel.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-teal-500 animate-ping"></span> Reasoning...`;
-            logBox.innerHTML = `<span class="text-teal-600 dark:text-teal-400 font-bold">The AI Agent is evaluating the thermodynamics, decoding wire matrices and simulating series models... Please stand by.</span>`;
-
-            const systemInstruction = `You are an expert electrical systems design agent. Your task is to analyze the user's natural language request, extract the physical and electrical parameters, and return them as a strict structured JSON payload. You must handle multi-segment splices. E.g., if a user specifies 1000mm of 24AWG and 100mm of 26AWG, map them as objects inside 'segments'.
-            Mappings:
-            - phase: 'dc', 'single', or 'three'
-            - voltage: Float source voltage
-            - current: Float load current
-            - pf: Power factor (0.1 to 1.0)
-            - allowableDrop: Float max drop percentage (defaults to 3.0)
-            - material: 'copper' or 'aluminum'
-            - insulation: 'TW', 'THWN', 'THHN', 'AWM_PVC', 'TEFLON_PVC', 'TEFLON_PURE'
-            - routing: 'freeAir', 'conduit', 'underground'
-            - distanceUnit: The unit for all length entries ('ft', 'm', or 'mm')
-            - explanation: Provide a detailed, friendly paragraph analyzing the choices made and outlining the calculated structural setup.`;
-
-            const responseSchema = {
-                type: "OBJECT",
-                properties: {
-                    phase: { type: "STRING", description: "System phase mode" },
-                    voltage: { type: "NUMBER", description: "Source voltage" },
-                    current: { type: "NUMBER", description: "Current draw" },
-                    pf: { type: "NUMBER", description: "Power Factor" },
-                    allowableDrop: { type: "NUMBER" },
-                    material: { type: "STRING" },
-                    insulation: { type: "STRING" },
-                    routing: { type: "STRING" },
-                    distanceUnit: { type: "STRING" },
-                    segments: {
-                        type: "ARRAY",
-                        description: "List of distinct wire segments spliced together.",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                standard: { type: "STRING", description: "'AWG' or 'Metric'" },
-                                size: { type: "STRING", description: "e.g. '24 AWG' or '1.5 mm²'" },
-                                length: { type: "NUMBER", description: "Segment length in distanceUnit" }
-                            },
-                            required: ["standard", "size", "length"]
-                        }
-                    },
-                    explanation: { type: "STRING", description: "AI analysis summary" }
-                },
-                required: ["phase", "voltage", "current", "distanceUnit", "segments", "explanation"]
-            };
-
-            const payload = {
-                contents: [{ parts: [{ text: promptText }] }],
-                systemInstruction: { parts: [{ text: systemInstruction }] },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: responseSchema
-                }
-            };
-
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-            // Handle exponential retries logic
-            let success = false;
-            let responseData = null;
-            let lastErr = "AI connection error";
-            const delays = [1000, 2000, 4000, 8000, 16000];
-
-            for (let attempt = 0; attempt < delays.length; attempt++) {
-                try {
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!response.ok) {
-                        const errText = await response.text();
-                        throw new Error(`HTTP ${response.status}: ${errText}`);
-                    }
-
-                    const jsonResult = await response.json();
-                    const text = jsonResult.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) {
-                        responseData = JSON.parse(text);
-                        success = true;
-                        break;
-                    }
-                } catch (e) {
-                    lastErr = e.message;
-                    if (attempt < delays.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, delays[attempt]));
-                    }
-                }
-            }
-
-            submitBtn.disabled = false;
-
-            if (success && responseData) {
-                statusLabel.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Agent Status: Applied`;
-                applyAgentData(responseData);
-            } else {
-                statusLabel.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500"></span> Agent Error`;
-                logBox.innerHTML = `
-                    <div class="text-rose-600 dark:text-rose-400 font-bold space-y-1">
-                        <p>Unable to connect to AI Server.</p>
-                        <p class="text-[10px] font-mono font-medium bg-rose-50 p-2 rounded border border-rose-100">${lastErr}</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Did you configure your Gemini API Key in the upper right corner?</p>
-                    </div>
-                `;
-            }
-        }
-
-        function applyAgentData(data) {
-            try {
-                // Prepare a structural loading model matching the JSON parser state
-                const segmentsParsed = [];
-                const segments = data.segments || [];
-
-                segments.forEach(seg => {
-                    let std = (seg.standard || "AWG").toUpperCase();
-                    if (std.includes('MET')) std = "Metric";
-                    else std = "AWG";
-
-                    const sizeLabel = (seg.size || "").toLowerCase();
-                    const length = parseFloat(seg.length) || 100.0;
-
-                    const dataSet = std === "AWG" ? AWG_DATA : METRIC_DATA;
-                    let foundIdx = 0;
-                    const cleanPromptDigits = sizeLabel.replace(/\D/g, "");
-
-                    for (let i = 0; i < dataSet.length; i++) {
-                        const cleanWireDigits = dataSet[i].label.replace(/\D/g, "");
-                        if (cleanPromptDigits === cleanWireDigits) {
-                            foundIdx = i;
-                            break;
-                        }
-                    }
-
-                    segmentsParsed.push({
-                        standard: std,
-                        sizeIdx: foundIdx,
-                        length: length
-                    });
-                });
-
-                const loadedState = {
-                    phase: (data.phase || "dc").toLowerCase().includes('three') ? 'three' : ((data.phase || "dc").toLowerCase().includes('single') ? 'single' : 'dc'),
-                    voltage: parseFloat(data.voltage) || 12.0,
-                    current: parseFloat(data.current) || 1.0,
-                    pf: parseFloat(data.pf) || 1.0,
-                    allowableDrop: parseFloat(data.allowableDrop) || 3.0,
-                    distUnit: (data.distanceUnit || "mm").toLowerCase().includes('ft') ? 'ft' : ((data.distanceUnit || "mm").toLowerCase().includes('m') && !(data.distanceUnit || "mm").toLowerCase().includes('mm') ? 'm' : 'mm'),
-                    material: (data.material || "copper").toLowerCase().includes('alu') ? 'aluminum' : 'copper',
-                    insulation: INSULATIONS[data.insulation] ? data.insulation : 'AWM_PVC',
-                    routing: INSTALLATIONS[data.routing] ? data.routing : 'conduit',
-                    ambientTemp: parseInt(document.getElementById('ambient-temp-input').value) || 30,
-                    ambientUnit: document.getElementById('ambient-unit-select').value,
-                    segments: segmentsParsed
-                };
-
-                loadStateObject(loadedState);
-
-                // Write reasoning logs
-                document.getElementById('ai-analysis-output').innerHTML = `
-                    <div class="space-y-3 font-medium text-slate-700">
-                        <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
-                            <span class="text-[10px] font-bold bg-teal-100 text-teal-700 px-2 py-0.5 rounded">Analysis Confirmed</span>
-                            <span class="text-[10px] font-mono text-slate-400">Current Load Draw: ${data.current}A</span>
-                        </div>
-                        <p class="leading-relaxed text-xs text-slate-600">${data.explanation}</p>
-                    </div>
-                `;
-
-                switchTab('dash'); // Seamlessly auto-switch view to the primary dashboard
-            } catch (err) {
-                showAlert('Parsing Error', 'Successfully communicated with Gemini but failed to map system parameters.');
-            }
-        }
     
         // Theme Toggle Event Listener
         document.addEventListener('DOMContentLoaded', () => {
