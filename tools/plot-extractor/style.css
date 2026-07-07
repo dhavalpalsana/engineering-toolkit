@@ -75,8 +75,6 @@ main {
   background: var(--bg-tertiary);
   overflow: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 400px;
 }
 
@@ -89,6 +87,7 @@ main {
   width: fit-content;
   height: fit-content;
   flex-shrink: 0;
+  margin: auto;
 }
 
 #plot-image {
