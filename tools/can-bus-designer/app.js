@@ -2440,3 +2440,38 @@ function syncThemeIcon(theme) {
 
 // Run initializer
 init();
+
+// Register project manager hooks
+window.projectManagerConfig = {
+  toolId: "can-bus-designer",
+  getInputs: () => ({
+    version: '2.0',
+    type: 'can-bus-harness-design',
+    config: networkConfig,
+    unit: currentUnit,
+    stations: stations
+  }),
+  setInputs: (data) => {
+    if (data.type === 'can-bus-harness-design') {
+      networkConfig = { ...data.config };
+      currentUnit = data.unit || 'm';
+      stations = data.stations;
+
+      // Sync form fields
+      inputBaud.value = networkConfig.baudRate;
+      inputSamplePoint.value = networkConfig.samplePoint;
+      inputPropDelay.value = networkConfig.propDelay;
+      inputLoopDelay.value = networkConfig.loopDelay;
+      inputCanFD.checked = networkConfig.enableCanFD || false;
+      inputDataBaud.value = networkConfig.dataBaudRate || 2000;
+      inputDataSP.value = networkConfig.dataSamplePoint || 75;
+      selectUnit.value = currentUnit;
+
+      const displayVal = networkConfig.enableCanFD ? 'block' : 'none';
+      groupDataBaud.style.display = displayVal;
+      groupDataSP.style.display = displayVal;
+
+      render();
+    }
+  }
+};

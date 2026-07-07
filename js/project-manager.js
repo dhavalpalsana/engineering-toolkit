@@ -1,6 +1,6 @@
 /**
  * Global Project Manager for Engineering Toolkit
- * Handles unified Project Drawer on homepage and toolbar integrations on tool subpages.
+ * Handles unified Project Drawer on both homepage and tool subpages.
  */
 document.addEventListener("DOMContentLoaded", () => {
   const config = window.projectManagerConfig;
@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
       display: none;
     }
 
-    /* Homepage Drawer Styles */
+    /* Drawer Styles */
     .pm-drawer-overlay {
       position: fixed;
       top: 0;
@@ -355,6 +355,196 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!authBtn) return;
   const headerRight = authBtn.parentElement;
 
+  let activeProject = null;
+  let allProjects = [];
+
+  // Inject Drawer Markup globally on all pages
+  const overlay = document.createElement("div");
+  overlay.className = "pm-drawer-overlay";
+  overlay.id = "pm-drawer-overlay";
+  overlay.innerHTML = `
+    <div class="pm-drawer" id="pm-drawer">
+      <div class="pm-drawer-header">
+        <span class="pm-drawer-title">My Saved Projects</span>
+        <button class="pm-drawer-close" id="pm-drawer-close-btn">&times;</button>
+      </div>
+      <div class="pm-drawer-body">
+        <input type="text" class="pm-drawer-search" id="pm-drawer-search-input" placeholder="Search saved projects by name...">
+        <div id="pm-drawer-list" class="flex flex-col gap-6">
+          <div class="pm-empty-state">Loading saved projects...</div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const drawer = document.getElementById("pm-drawer");
+  const drawerList = document.getElementById("pm-drawer-list");
+  const searchInput = document.getElementById("pm-drawer-search-input");
+  const closeBtn = document.getElementById("pm-drawer-close-btn");
+
+  const openDrawer = () => {
+    overlay.classList.add("show");
+    setTimeout(() => drawer.classList.add("show"), 50);
+    loadProjects();
+  };
+
+  const closeDrawer = () => {
+    drawer.classList.remove("show");
+    setTimeout(() => overlay.classList.remove("show"), 300);
+  };
+
+  const loadProjects = async () => {
+    drawerList.innerHTML = `<div class="pm-empty-state">Loading saved projects...</div>`;
+    try {
+      const { data, error } = await fb.getAllProjects();
+      if (error) {
+        drawerList.innerHTML = `<div class="pm-empty-state" style="color:var(--color-error);">Error: ${error.message}</div>`;
+        return;
+      }
+      allProjects = data;
+      renderProjectsList();
+    } catch (err) {
+      drawerList.innerHTML = `<div class="pm-empty-state" style="color:var(--color-error);">Error loading projects.</div>`;
+    }
+  };
+
+  const getToolName = (toolId) => {
+    switch (toolId) {
+      case "busbar-sizing": return "Busbar Capacity Calculator";
+      case "wire-gauge": return "Cable Solver (Wire Gauge)";
+      case "can-bus-designer": return "CAN Bus Harness Designer";
+      case "fishbone-diagram": return "Ishikawa Fishbone Creator";
+      default: return toolId;
+    }
+  };
+
+  const getToolPath = (toolId) => {
+    if (isHomepage) {
+      switch (toolId) {
+        case "busbar-sizing": return "tools/busbar-sizing/index.html";
+        case "wire-gauge": return "tools/wire-gauge/index.html";
+        case "can-bus-designer": return "tools/can-bus-designer/index.html";
+        case "fishbone-diagram": return "tools/fishbone-diagram/index.html";
+        default: return `tools/${toolId}/index.html`;
+      }
+    } else {
+      switch (toolId) {
+        case "busbar-sizing": return "../busbar-sizing/index.html";
+        case "wire-gauge": return "../wire-gauge/index.html";
+        case "can-bus-designer": return "../can-bus-designer/index.html";
+        case "fishbone-diagram": return "../fishbone-diagram/index.html";
+        default: return `../${toolId}/index.html`;
+      }
+    }
+  };
+
+  const renderProjectsList = (filter = "") => {
+    const filtered = allProjects.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
+    if (filtered.length === 0) {
+      drawerList.innerHTML = `<div class="pm-empty-state">No saved projects found${filter ? " matching search" : ""}.</div>`;
+      return;
+    }
+
+    // Group projects by toolId
+    const grouped = {};
+    filtered.forEach(p => {
+      if (!grouped[p.toolId]) grouped[p.toolId] = [];
+      grouped[p.toolId].push(p);
+    });
+
+    drawerList.innerHTML = Object.keys(grouped).map(toolId => {
+      const groupItems = grouped[toolId].map(p => {
+        const dateStr = new Date(p.updatedAt).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+        return `
+          <div class="pm-item">
+            <div class="pm-item-info" data-id="${p.id}" data-tool="${p.toolId}">
+              <span class="pm-item-name">${escapeHtml(p.name)}</span>
+              <span class="pm-item-date">Updated: ${dateStr}</span>
+            </div>
+            <div class="pm-item-actions">
+              <button class="pm-item-btn pm-item-delete" data-id="${p.id}" data-name="${escapeHtml(p.name)}" title="Delete project">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <div class="pm-category-group">
+          <span class="pm-category-title">${getToolName(toolId)}</span>
+          ${groupItems}
+        </div>
+      `;
+    }).join("");
+
+    // Bind Load Click handlers
+    drawerList.querySelectorAll(".pm-item-info").forEach(el => {
+      el.addEventListener("click", () => {
+        const id = el.dataset.id;
+        const toolId = el.dataset.tool;
+
+        // If we are currently inside the target tool subpage, load locally!
+        if (config && config.toolId === toolId) {
+          const match = allProjects.find(p => p.id === id);
+          if (match) {
+            config.setInputs(match.config);
+            activeProject = { id: match.id, name: match.name };
+            localStorage.setItem(`pm_active_id_${config.toolId}`, match.id);
+            updateActiveIndicator();
+            showToast(`Loaded "${match.name}"`);
+            closeDrawer();
+          }
+        } else {
+          // Redirect to target page with query parameter
+          window.location.href = `${getToolPath(toolId)}?project=${id}`;
+        }
+      });
+    });
+
+    // Bind Delete click handlers
+    drawerList.querySelectorAll(".pm-item-delete").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const name = btn.dataset.name;
+        if (confirm(`Are you sure you want to delete "${name}"?`)) {
+          btn.disabled = true;
+          const { error } = await fb.deleteProject(id);
+          if (error) {
+            showToast("Delete failed: " + error.message, false);
+            btn.disabled = false;
+          } else {
+            allProjects = allProjects.filter(p => p.id !== id);
+            if (config && activeProject && activeProject.id === id) {
+              activeProject = null;
+              localStorage.removeItem(`pm_active_id_${config.toolId}`);
+              updateActiveIndicator();
+            }
+            showToast(`Deleted "${name}"`);
+            renderProjectsList(searchInput.value);
+          }
+        }
+      });
+    });
+  };
+
+  // Bind Shared Drawer Close Events
+  closeBtn.addEventListener("click", closeDrawer);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeDrawer();
+  });
+  searchInput.addEventListener("input", (e) => {
+    renderProjectsList(e.target.value);
+  });
+
+
   // ----------------------------------------------------
   // CASE A: HOMEPAGE PROJECT DRAWER INTEGRATION
   // ----------------------------------------------------
@@ -362,7 +552,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Inject "My Projects" folder button next to auth-btn
     const myProjectsBtn = document.createElement("button");
     myProjectsBtn.id = "pm-projects-btn";
-    // Inline classes/styles to fit homepage design (Tailwind/Custom)
     myProjectsBtn.className = "theme-toggle"; // Uses dashboard layout button styles
     myProjectsBtn.style.cssText = "display:none;align-items:center;gap:6px;width:auto;padding:0 12px;border-radius:var(--radius-md);height:40px;font-size:13px;font-weight:600;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-secondary);cursor:pointer;transition:all var(--transition-fast);margin-right:8px;";
     myProjectsBtn.innerHTML = `
@@ -371,161 +560,7 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
     headerRight.insertBefore(myProjectsBtn, authBtn);
 
-    // Inject Drawer Markup
-    const overlay = document.createElement("div");
-    overlay.className = "pm-drawer-overlay";
-    overlay.id = "pm-drawer-overlay";
-    overlay.innerHTML = `
-      <div class="pm-drawer" id="pm-drawer">
-        <div class="pm-drawer-header">
-          <span class="pm-drawer-title">My Saved Projects</span>
-          <button class="pm-drawer-close" id="pm-drawer-close-btn">&times;</button>
-        </div>
-        <div class="pm-drawer-body">
-          <input type="text" class="pm-drawer-search" id="pm-drawer-search-input" placeholder="Search saved projects by name...">
-          <div id="pm-drawer-list" class="flex flex-col gap-6">
-            <div class="pm-empty-state">Loading saved projects...</div>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    const drawer = document.getElementById("pm-drawer");
-    const drawerList = document.getElementById("pm-drawer-list");
-    const searchInput = document.getElementById("pm-drawer-search-input");
-    const closeBtn = document.getElementById("pm-drawer-close-btn");
-
-    let allProjects = [];
-
-    const openDrawer = () => {
-      overlay.classList.add("show");
-      setTimeout(() => drawer.classList.add("show"), 50);
-      loadProjects();
-    };
-
-    const closeDrawer = () => {
-      drawer.classList.remove("show");
-      setTimeout(() => overlay.classList.remove("show"), 300);
-    };
-
-    const loadProjects = async () => {
-      drawerList.innerHTML = `<div class="pm-empty-state">Loading saved projects...</div>`;
-      try {
-        const { data, error } = await fb.getAllProjects();
-        if (error) {
-          drawerList.innerHTML = `<div class="pm-empty-state" style="color:var(--color-error);">Error: ${error.message}</div>`;
-          return;
-        }
-        allProjects = data;
-        renderProjectsList();
-      } catch (err) {
-        drawerList.innerHTML = `<div class="pm-empty-state" style="color:var(--color-error);">Error loading projects.</div>`;
-      }
-    };
-
-    const getToolName = (toolId) => {
-      switch (toolId) {
-        case "busbar-sizing": return "Busbar Capacity Calculator";
-        case "wire-gauge": return "Cable Solver (Wire Gauge)";
-        default: return toolId;
-      }
-    };
-
-    const getToolPath = (toolId) => {
-      switch (toolId) {
-        case "busbar-sizing": return "tools/busbar-sizing/index.html";
-        case "wire-gauge": return "tools/wire-gauge/index.html";
-        default: return `tools/${toolId}/index.html`;
-      }
-    };
-
-    const renderProjectsList = (filter = "") => {
-      const filtered = allProjects.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
-      if (filtered.length === 0) {
-        drawerList.innerHTML = `<div class="pm-empty-state">No saved projects found${filter ? " matching search" : ""}.</div>`;
-        return;
-      }
-
-      // Group projects by toolId
-      const grouped = {};
-      filtered.forEach(p => {
-        if (!grouped[p.toolId]) grouped[p.toolId] = [];
-        grouped[p.toolId].push(p);
-      });
-
-      drawerList.innerHTML = Object.keys(grouped).map(toolId => {
-        const groupItems = grouped[toolId].map(p => {
-          const dateStr = new Date(p.updatedAt).toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit"
-          });
-          return `
-            <div class="pm-item">
-              <div class="pm-item-info" data-id="${p.id}" data-tool="${p.toolId}">
-                <span class="pm-item-name">${escapeHtml(p.name)}</span>
-                <span class="pm-item-date">Updated: ${dateStr}</span>
-              </div>
-              <div class="pm-item-actions">
-                <button class="pm-item-btn pm-item-delete" data-id="${p.id}" data-name="${escapeHtml(p.name)}" title="Delete project">
-                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                </button>
-              </div>
-            </div>
-          `;
-        }).join("");
-
-        return `
-          <div class="pm-category-group">
-            <span class="pm-category-title">${getToolName(toolId)}</span>
-            ${groupItems}
-          </div>
-        `;
-      }).join("");
-
-      // Bind Load Click handlers
-      drawerList.querySelectorAll(".pm-item-info").forEach(el => {
-        el.addEventListener("click", () => {
-          const id = el.dataset.id;
-          const toolId = el.dataset.tool;
-          // Redirect to subpage preloaded with project id query parameter!
-          window.location.href = `${getToolPath(toolId)}?project=${id}`;
-        });
-      });
-
-      // Bind Delete click handlers
-      drawerList.querySelectorAll(".pm-item-delete").forEach(btn => {
-        btn.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          const id = btn.dataset.id;
-          const name = btn.dataset.name;
-          if (confirm(`Are you sure you want to delete "${name}"?`)) {
-            btn.disabled = true;
-            const { error } = await fb.deleteProject(id);
-            if (error) {
-              showToast("Delete failed: " + error.message, false);
-              btn.disabled = false;
-            } else {
-              allProjects = allProjects.filter(p => p.id !== id);
-              showToast(`Deleted "${name}"`);
-              renderProjectsList(searchInput.value);
-            }
-          }
-        });
-      });
-    };
-
-    // Events binding
     myProjectsBtn.addEventListener("click", openDrawer);
-    closeBtn.addEventListener("click", closeDrawer);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) closeDrawer();
-    });
-    searchInput.addEventListener("input", (e) => {
-      renderProjectsList(e.target.value);
-    });
 
     // Check login state changes
     const syncBtnVisibility = (user) => {
@@ -546,7 +581,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("drawer") === "open") {
       openDrawer();
-      // Clean query parameter to avoid opening repeatedly on subsequent refreshes
+      // Clean query parameter to keep fresh page loads clean
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }
@@ -555,9 +590,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // CASE B: SUBPAGE CALCULATOR INTEGRATION
   // ----------------------------------------------------
   else {
-    let activeProject = null;
-
-    // Inject toolbar containing "Open" (redirect) and "Save"
+    // Inject toolbar containing "Open" (opens local drawer!) and "Save"
     const toolbar = document.createElement("div");
     toolbar.className = "project-actions-group";
     toolbar.style.display = "none"; // Hidden until logged in
@@ -600,17 +633,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    // Open button click redirects to homepage drawer!
-    openBtn.addEventListener("click", () => {
-      window.location.href = "../../index.html?drawer=open";
-    });
+    // Open button click opens drawer directly on this page!
+    openBtn.addEventListener("click", openDrawer);
 
     // Save current design Modal
     const openSaveModal = (prefill = "") => {
-      const overlay = document.createElement("div");
-      overlay.className = "pm-modal-overlay";
-      overlay.id = "pm-save-modal";
-      overlay.innerHTML = `
+      const overlayModal = document.createElement("div");
+      overlayModal.className = "pm-modal-overlay";
+      overlayModal.id = "pm-save-modal";
+      overlayModal.innerHTML = `
         <div class="pm-modal-content">
           <button class="pm-modal-close" id="pm-close-save-modal">&times;</button>
           <div class="pm-modal-header">
@@ -626,20 +657,20 @@ document.addEventListener("DOMContentLoaded", () => {
           </form>
         </div>
       `;
-      document.body.appendChild(overlay);
+      document.body.appendChild(overlayModal);
 
-      const closeBtn = document.getElementById("pm-close-save-modal");
+      const closeSaveBtn = document.getElementById("pm-close-save-modal");
       const form = document.getElementById("pm-save-form");
       const nameInput = document.getElementById("pm-name");
 
       const closeModal = () => {
-        overlay.classList.add("pm-fade-out");
-        setTimeout(() => overlay.remove(), 200);
+        overlayModal.classList.add("pm-fade-out");
+        setTimeout(() => overlayModal.remove(), 200);
       };
 
-      closeBtn.addEventListener("click", closeModal);
-      overlay.addEventListener("click", (e) => {
-        if (e.target === overlay) closeModal();
+      closeSaveBtn.addEventListener("click", closeModal);
+      overlayModal.addEventListener("click", (e) => {
+        if (e.target === overlayModal) closeModal();
       });
 
       form.addEventListener("submit", async (e) => {

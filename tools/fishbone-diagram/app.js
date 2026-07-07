@@ -1,4 +1,4 @@
-﻿// Default framework structures
+// Default framework structures
         const PRESETS = {
             manufacturing: {
                 effect: "High rate of surface paint defect in motor housing assembly line 3",
@@ -1521,3 +1521,25 @@ Return exactly the JSON format specified in the schema. Do not output markdown c
             
             updateUI();
         });
+
+        // Register project manager hooks
+        window.projectManagerConfig = {
+            toolId: "fishbone-diagram",
+            getInputs: () => JSON.parse(JSON.stringify(state)),
+            setInputs: (data) => {
+                if (data.effect && Array.isArray(data.categories)) {
+                    pushHistory();
+                    state.effect = data.effect;
+                    state.categories = data.categories;
+                    if (data.theme) state.theme = data.theme;
+                    if (data.shapeStyle) state.shapeStyle = data.shapeStyle;
+                    if (data.lineStyle) state.lineStyle = data.lineStyle;
+                    if (data.layout) state.layout = data.layout;
+
+                    initSliders();
+                    syncThemeUI();
+                    updateUI();
+                    fitCanvas();
+                }
+            }
+        };

@@ -53,6 +53,7 @@
     </script>
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="../../css/theme.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -107,6 +108,13 @@
             color: #14b8a6;
         }
     </style>
+    <!-- Firebase SDK compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="../../js/firebase.js"></script>
+    <script src="../../js/auth-ui.js"></script>
+    <script src="../../js/project-manager.js"></script>
 </head>
 <body class="bg-[#f8fafc] dark:bg-slate-950 text-[#0f172a] dark:text-slate-100 font-sans min-h-screen flex flex-col antialiased transition-colors duration-200">
 
@@ -153,6 +161,10 @@
                 </div>
 
                 <div class="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 hidden md:block mx-1"></div>
+
+                <button id="auth-btn" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5" title="Sign In">
+                    <i data-lucide="user" class="w-4 h-4"></i> <span id="auth-btn-text">Sign In</span>
+                </button>
 
                 <!-- Theme Toggle -->
                 <button id="theme-toggle" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 p-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center" title="Toggle Light/Dark Theme">
