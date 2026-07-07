@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
-<script>
-  (function() {
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    if (savedTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.setAttribute('data-theme', 'light');
-    }
-  })();
-</script>
+<html lang="en">
 <head>
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Engineering Toolkit - Interactive Design Calculators</title>
@@ -23,19 +23,19 @@
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://dhavalpalsana.github.io/engineering-toolkit/">
+  <meta property="og:url" content="https://eng-toolkit.web.app/">
   <meta property="og:title" content="Engineering Toolkit — Interactive Design Calculators">
   <meta property="og:description" content="A premium, curated collection of interactive calculators, design guides, and utilities for professional engineers. Electrical, mechanical, fluids, and quality tools.">
-  <meta property="og:image" content="https://dhavalpalsana.github.io/engineering-toolkit/assets/og-image.png">
+  <meta property="og:image" content="https://eng-toolkit.web.app/assets/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="https://dhavalpalsana.github.io/engineering-toolkit/">
+  <meta name="twitter:url" content="https://eng-toolkit.web.app/">
   <meta name="twitter:title" content="Engineering Toolkit — Interactive Design Calculators">
   <meta name="twitter:description" content="A premium, curated collection of interactive calculators, design guides, and utilities for professional engineers.">
-  <meta name="twitter:image" content="https://dhavalpalsana.github.io/engineering-toolkit/assets/og-image.png">
+  <meta name="twitter:image" content="https://eng-toolkit.web.app/assets/og-image.png">
   
   <!-- Stylesheets -->
   <link rel="stylesheet" href="css/style.css">

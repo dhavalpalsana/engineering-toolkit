@@ -33,6 +33,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../css/theme.css">
   <link rel="stylesheet" href="../../css/header.css">
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -216,13 +217,26 @@
       </div>
     </div>
     <div class="hdr-right">
-      <button id="auth-btn" title="Sign In">
-        <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-        <span id="auth-btn-text">Sign In</span>
+      <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+        <i data-lucide="share-2"></i> Share Link
       </button>
-      <button class="hdr-icon-btn" id="theme-toggle" aria-label="Toggle theme">
-        <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-        <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      <button onclick="exportJSON()" class="hdr-btn" title="Export design to JSON file">
+        <i data-lucide="download"></i> Export JSON
+      </button>
+      <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import design from JSON file">
+        <i data-lucide="upload"></i> Import JSON
+      </button>
+      <input id="import-file-input" type="file" accept=".json" style="display: none;" onchange="importJSON(event)" />
+      
+      <div class="hdr-divider"></div>
+      
+      <button id="auth-btn" title="Sign In">
+        <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+      </button>
+      
+      <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+        <i data-lucide="moon" class="moon-icon"></i>
+        <i data-lucide="sun" class="sun-icon"></i>
       </button>
     </div>
   </div>
@@ -1409,9 +1423,78 @@ window.projectManagerConfig = {
 };
 
 // ================================================================
+//  HEADER UTILITIES (Share, Export, Import)
+// ================================================================
+window.shareLink = function() {
+  try {
+    const configData = getInputsConfig();
+    const serialized = btoa(JSON.stringify(configData));
+    const url = new URL(window.location.href);
+    url.searchParams.set('design', serialized);
+    
+    navigator.clipboard.writeText(url.toString()).then(() => {
+      alert("Design link copied to clipboard! You can share this URL with other engineers.");
+    }).catch(() => {
+      alert("Could not write to clipboard automatically. Copy URL manually: " + url.toString());
+    });
+  } catch (err) {
+    console.error(err);
+    alert("Failed to generate share link.");
+  }
+};
+
+window.exportJSON = function() {
+  try {
+    const configData = getInputsConfig();
+    const blob = new Blob([JSON.stringify(configData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `busbar-design-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Export failed: " + err.message);
+  }
+};
+
+window.importJSON = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    try {
+      const data = JSON.parse(evt.target.result);
+      setInputsConfig(data);
+      document.dispatchEvent(new Event("input")); // Trigger auto-save if registered
+    } catch (err) {
+      alert("Invalid JSON file: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+};
+
+// ================================================================
 //  INIT — run once on load
 // ================================================================
+// Check for URL parameter design
+const urlParams = new URLSearchParams(window.location.search);
+const design = urlParams.get('design');
+if (design) {
+  try {
+    const decoded = JSON.parse(atob(design));
+    setInputsConfig(decoded);
+  } catch (err) {
+    console.error("Failed to load design from URL:", err);
+  }
+}
+
 calculate();
+if (typeof lucide !== 'undefined') {
+  lucide.createIcons();
+}
 </script>
 </body>
 </html>

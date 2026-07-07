@@ -8,7 +8,7 @@ const TOOLS_DATA = [
   {
     id: "fishbone-diagram",
     name: "Ishikawa Fishbone Diagram Creator",
-    description: "Visualize cause-and-effect relationships with interactive diagrams, templates, dynamic layouts, exports, and AI brainstorm assistance.",
+    description: "Visualize cause-and-effect relationships with interactive diagrams, templates, dynamic layouts, and SVG/PNG exports.",
     tags: ["management", "quality", "root-cause", "ishikawa", "lean", "six-sigma", "engineering"],
     icon: "fishbone",
     path: "./tools/fishbone-diagram/index.html",

@@ -1516,6 +1516,39 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     reader.readAsText(file);
   };
+
+  window.shareLink = function() {
+    try {
+      const state = getPlotExtractorState();
+      // Omit image data if it's too large (> 10KB) to prevent URI Too Long errors
+      if (state.compressedImgData && state.compressedImgData.length > 10000) {
+        const stateNoImg = { ...state };
+        delete stateNoImg.compressedImgData;
+        const serialized = btoa(JSON.stringify(stateNoImg));
+        const url = new URL(window.location.href);
+        url.searchParams.set('design', serialized);
+        
+        navigator.clipboard.writeText(url.toString()).then(() => {
+          alert("Design link copied to clipboard! (Note: The background image was omitted as it is too large for a URL; recipient will need to upload/paste their image.)");
+        }).catch(() => {
+          alert("Failed to write to clipboard automatically. Link is too long.");
+        });
+      } else {
+        const serialized = btoa(JSON.stringify(state));
+        const url = new URL(window.location.href);
+        url.searchParams.set('design', serialized);
+        
+        navigator.clipboard.writeText(url.toString()).then(() => {
+          alert("Design link copied to clipboard!");
+        }).catch(() => {
+          alert("Failed to write to clipboard.");
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate share link.");
+    }
+  };
   
   // Bind standard buttons in DOM
   const btnExport = document.getElementById("btn-export");
@@ -1557,7 +1590,13 @@ document.addEventListener("DOMContentLoaded", () => {
       canvasWrapper.style.display = "block";
       imageActions.style.display = "flex";
     } else {
-      clearImage();
+      // Keep existing image if one is already loaded, or show dropzone without clearing points
+      if (!imageLoaded) {
+        dropzone.style.display = "flex";
+        canvasWrapper.style.display = "none";
+        imageActions.style.display = "none";
+        plotImg.src = "";
+      }
     }
     
     if (state.calibrationPoints) {
@@ -1914,4 +1953,19 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  function loadURLDesign() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const design = urlParams.get('design');
+      if (design) {
+        const decoded = JSON.parse(atob(design));
+        setPlotExtractorState(decoded);
+      }
+    } catch (err) {
+      console.error("Failed to load design from URL:", err);
+    }
+  }
+
+  loadURLDesign();
 });
