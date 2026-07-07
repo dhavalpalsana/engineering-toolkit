@@ -51,6 +51,14 @@ window.fbHelper = {
       .catch(error => ({ user: null, error }));
   },
 
+  signInWithGoogle: async () => {
+    if (!isConfigured) throw new Error("Firebase is not configured.");
+    const provider = new firebase.auth.GoogleAuthProvider();
+    return await auth.signInWithPopup(provider)
+      .then(userCredential => ({ user: userCredential.user, error: null }))
+      .catch(error => ({ user: null, error }));
+  },
+
   signOut: async () => {
     if (!isConfigured) return { error: null };
     return await auth.signOut()

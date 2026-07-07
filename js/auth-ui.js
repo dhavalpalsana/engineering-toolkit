@@ -92,11 +92,23 @@ document.addEventListener("DOMContentLoaded", () => {
   modalDiv.className = "auth-modal-overlay";
   modalDiv.style.display = "none";
   modalDiv.innerHTML = `
-    <div class="auth-modal-content">
-      <button class="auth-modal-close" id="auth-modal-close-btn">&times;</button>
-      <div class="auth-modal-header">
-        <h3 id="auth-modal-title">Sign In</h3>
-        <p id="auth-modal-subtitle">Save your engineering calculations securely</p>
+      <div id="auth-google-container" style="margin-bottom:12px;">
+        <button type="button" id="auth-google-btn" class="calc-btn" style="width:100%;margin-bottom:0;background:var(--bg-interactive);border:1px solid var(--border-color);color:var(--text-primary);display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition-fast);">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="flex-shrink:0;">
+            <g transform="matrix(1, 0, 0, 1, 0, 0)">
+              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.61c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.08 3.57-5.14 3.57-8.73z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-4v3.1A12 12 0 0 0 12 24z"/>
+              <path fill="#FBBC05" d="M5.27 14.29A7.18 7.18 0 0 1 4.88 12c0-.8.13-1.58.39-2.29v-3.1h-4A12 12 0 0 0 0 12c0 3.58 1.58 6.8 4.12 9.01l1.15-3.72z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.29 0 3.2 4.09 1.28 9.01l4 3.1c.95-2.85 3.6-4.96 6.72-4.96z"/>
+            </g>
+          </svg>
+          Continue with Google
+        </button>
+        <div style="display:flex;align-items:center;margin:16px 0 12px 0;font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">
+          <span style="flex:1;height:1px;background:var(--border-color);margin-right:8px;"></span>
+          or
+          <span style="flex:1;height:1px;background:var(--border-color);margin-left:8px;"></span>
+        </div>
       </div>
       <form id="auth-modal-form">
         <div class="auth-form-group">
@@ -128,6 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const authToggleText = document.getElementById("auth-toggle-text");
   const authToggleLink = document.getElementById("auth-toggle-link");
   const authCloseBtn = document.getElementById("auth-modal-close-btn");
+  const authGoogleBtn = document.getElementById("auth-google-btn");
   
   let isSignUpMode = false;
   let currentUser = null;
@@ -211,6 +224,32 @@ document.addEventListener("DOMContentLoaded", () => {
       authSubmitBtn.textContent = isSignUpMode ? "Sign Up" : "Sign In";
     }
   });
+
+  // Google Sign-In click handler
+  if (authGoogleBtn) {
+    authGoogleBtn.addEventListener("click", async () => {
+      authErrorMsg.style.display = "none";
+      authGoogleBtn.disabled = true;
+      const originalHtml = authGoogleBtn.innerHTML;
+      authGoogleBtn.innerHTML = "Connecting...";
+
+      try {
+        const result = await fb.signInWithGoogle();
+        if (result.error) {
+          authErrorMsg.textContent = result.error.message;
+          authErrorMsg.style.display = "block";
+        } else {
+          closeAuthModal();
+        }
+      } catch (err) {
+        authErrorMsg.textContent = err.message || "A Google sign-in error occurred.";
+        authErrorMsg.style.display = "block";
+      } finally {
+        authGoogleBtn.disabled = false;
+        authGoogleBtn.innerHTML = originalHtml;
+      }
+    });
+  }
 
   // Global authentication button binder
   const updateAuthUIState = (user) => {
