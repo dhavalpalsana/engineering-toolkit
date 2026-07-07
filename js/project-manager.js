@@ -5,6 +5,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   const config = window.projectManagerConfig;
   const isHomepage = !config;
+  const fb = window.fbHelper;
 
   // Inject Styles for Drawer, Toolbar, Modal and Toast
   const style = document.createElement("style");
