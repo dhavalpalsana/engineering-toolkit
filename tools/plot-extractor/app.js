@@ -1326,4 +1326,41 @@ document.addEventListener("DOMContentLoaded", () => {
     resizeCanvas();
     renderAll();
   });
+
+  // Advanced Position Fine-Tuning
+  const btnToggleAdvanced = document.getElementById("btn-toggle-advanced");
+  const advancedTuningPanel = document.getElementById("advanced-tuning-panel");
+  const nudgeTarget = document.getElementById("nudge-target");
+  
+  btnToggleAdvanced.addEventListener("click", () => {
+    const isHidden = advancedTuningPanel.style.display === "none";
+    advancedTuningPanel.style.display = isHidden ? "block" : "none";
+    btnToggleAdvanced.style.color = isHidden ? "var(--text-primary)" : "var(--accent-primary)";
+  });
+  
+  function nudgePoint(dx, dy) {
+    if (!imageLoaded) return;
+    const target = nudgeTarget.value;
+    if (calibrationPoints[target]) {
+      calibrationPoints[target].px = Math.max(0, Math.min(imgWidth, calibrationPoints[target].px + dx));
+      calibrationPoints[target].py = Math.max(0, Math.min(imgHeight, calibrationPoints[target].py + dy));
+      
+      // Focus magnifier loupe on the nudged coordinate in real-time
+      lastMousePos = { x: calibrationPoints[target].px, y: calibrationPoints[target].py };
+      mouseOnCanvas = true;
+      hoverInfo = {
+        x: lastMousePos.x,
+        y: lastMousePos.y,
+        label: target.toUpperCase()
+      };
+      
+      triggerProjectChange();
+      renderAll();
+    }
+  }
+  
+  document.getElementById("btn-nudge-up").addEventListener("click", (e) => { e.preventDefault(); nudgePoint(0, -1); });
+  document.getElementById("btn-nudge-down").addEventListener("click", (e) => { e.preventDefault(); nudgePoint(0, 1); });
+  document.getElementById("btn-nudge-left").addEventListener("click", (e) => { e.preventDefault(); nudgePoint(-1, 0); });
+  document.getElementById("btn-nudge-right").addEventListener("click", (e) => { e.preventDefault(); nudgePoint(1, 0); });
 });

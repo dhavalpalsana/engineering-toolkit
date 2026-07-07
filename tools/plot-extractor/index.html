@@ -140,7 +140,7 @@
       <!-- Interactive Digitizing / Setup Mode -->
       <div class="control-card">
         <span class="card-title">
-          <i data-lucide="settings-2"></i> Mode &amp; Calibration
+          <i data-lucide="settings-2"></i> Calibration
         </span>
         <div class="mode-toggle-group">
           <button class="mode-btn active" id="mode-btn-calibrate" title="Calibrate axes scale settings">
@@ -155,21 +155,21 @@
         <div id="calibration-settings" class="flex flex-col gap-3">
           <div class="form-row">
             <div class="input-group">
-              <label for="cal-x1">X1 Reference Point</label>
+              <label for="cal-x1">X1 Reference Value</label>
               <input type="number" id="cal-x1" value="0" step="any" />
             </div>
             <div class="input-group">
-              <label for="cal-x2">X2 Reference Point</label>
+              <label for="cal-x2">X2 Reference Value</label>
               <input type="number" id="cal-x2" value="10" step="any" />
             </div>
           </div>
           <div class="form-row">
             <div class="input-group">
-              <label for="cal-y1">Y1 Reference Point</label>
+              <label for="cal-y1">Y1 Reference Value</label>
               <input type="number" id="cal-y1" value="0" step="any" />
             </div>
             <div class="input-group">
-              <label for="cal-y2">Y2 Reference Point</label>
+              <label for="cal-y2">Y2 Reference Value</label>
               <input type="number" id="cal-y2" value="10" step="any" />
             </div>
           </div>
@@ -188,6 +188,39 @@
                 <option value="log">Logarithmic</option>
               </select>
             </div>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+            <button id="btn-toggle-advanced" class="btn-icon" style="font-size: 11px; font-weight: 700; color: var(--accent-primary); display: flex; align-items: center; gap: 4px; padding: 4px 0;">
+              <i data-lucide="sliders" style="width:13px; height:13px;"></i> Advanced Tuning
+            </button>
+          </div>
+
+          <!-- Advanced Fine-Tuning D-Pad Panel -->
+          <div id="advanced-tuning-panel" style="display: none; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 4px;" class="flex flex-col gap-3">
+            <div class="form-row" style="align-items: center;">
+              <div class="input-group">
+                <label for="nudge-target">Select Point</label>
+                <select id="nudge-target">
+                  <option value="x1">X1 Reference</option>
+                  <option value="x2">X2 Reference</option>
+                  <option value="y1">Y1 Reference</option>
+                  <option value="y2">Y2 Reference</option>
+                </select>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 30px); grid-template-rows: repeat(2, 30px); gap: 4px; justify-content: center; align-items: center; margin-left: auto;">
+                <div></div>
+                <button class="hdr-icon-btn" id="btn-nudge-up" style="height:30px; width:30px;" title="Nudge Up 1px">▲</button>
+                <div></div>
+                <button class="hdr-icon-btn" id="btn-nudge-left" style="height:30px; width:30px;" title="Nudge Left 1px">◀</button>
+                <button class="hdr-icon-btn" id="btn-nudge-down" style="height:30px; width:30px;" title="Nudge Down 1px">▼</button>
+                <button class="hdr-icon-btn" id="btn-nudge-right" style="height:30px; width:30px;" title="Nudge Right 1px">▶</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4; border-top: 1px solid var(--border-color); padding-top: 8px;">
+            <strong>How to calibrate:</strong> Drag the red target markers (X1, X2, Y1, Y2) on the plot image to match grid gridlines or tick marks, then type the actual numbers representing those points into the boxes above.
           </div>
         </div>
       </div>
