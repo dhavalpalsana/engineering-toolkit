@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnDownloadPlot = document.getElementById("btn-download-plot");
   const zoomSlider = document.getElementById("zoom-slider");
   const zoomLabel = document.getElementById("zoom-label");
+  const btnToggleLegend = document.getElementById("btn-toggle-legend");
   
   // Application State Variables
   let currentMode = "calibrate"; // "calibrate" or "digitize"
@@ -67,6 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let imgScale = 1.0;
   let compressedImgData = null; // Stored as base64 string for saving
   let zoomFactor = 1.0;
+  let legendVisible = true;
   
   // Calibration Handles (in image pixel space)
   let calibrationPoints = {
@@ -223,6 +225,10 @@ document.addEventListener("DOMContentLoaded", () => {
     zoomFactor = 1.0;
     zoomSlider.value = 1.0;
     zoomLabel.textContent = "100%";
+    legendVisible = true;
+    if (btnToggleLegend) {
+      btnToggleLegend.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"></path><circle cx="12" cy="12" r="3"></circle></svg> Toggle Legend';
+    }
     plotImg.style.width = "";
     plotImg.style.maxWidth = "100%";
     plotImg.style.maxHeight = "80vh";
@@ -1237,7 +1243,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateCanvasLegend() {
     const legend = document.getElementById("canvas-legend");
     if (!legend) return;
-    if (!imageLoaded) {
+    if (!imageLoaded || !legendVisible) {
       legend.style.display = "none";
       return;
     }
@@ -1812,4 +1818,19 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 850);
     }
   });
+
+  // Legend Toggle Click Listener
+  if (btnToggleLegend) {
+    btnToggleLegend.addEventListener("click", () => {
+      legendVisible = !legendVisible;
+      updateCanvasLegend();
+      
+      // Update eye icon state
+      if (legendVisible) {
+        btnToggleLegend.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"></path><circle cx="12" cy="12" r="3"></circle></svg> Toggle Legend';
+      } else {
+        btnToggleLegend.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-off"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg> Toggle Legend';
+      }
+    });
+  }
 });
