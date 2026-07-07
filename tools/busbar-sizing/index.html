@@ -32,6 +32,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -70,28 +71,11 @@
     html{scroll-behavior:smooth;}
     body{font-family:var(--font-sans);background:var(--bg-primary);color:var(--text-primary);min-height:100vh;display:flex;flex-direction:column;line-height:1.6;transition:background var(--tr),color var(--tr);overflow-x:hidden;}
     body::before{content:'';position:fixed;top:-150px;right:-100px;width:500px;height:500px;border-radius:50%;filter:blur(140px);z-index:-1;pointer-events:none;background:radial-gradient(circle,var(--accent-glow),transparent 70%);}
-    ::-webkit-scrollbar{width:6px;height:6px;}
-    ::-webkit-scrollbar-track{background:var(--bg-primary);}
+    
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar{width:6px;}
+    ::-webkit-scrollbar-track{background:transparent;}
     ::-webkit-scrollbar-thumb{background:var(--border-color);border-radius:99px;}
-
-    /* ── HEADER ── */
-    header{height:68px;display:flex;align-items:center;padding:0 24px;border-bottom:1px solid var(--border-color);position:sticky;top:0;z-index:50;background:rgba(255,255,255,.90);backdrop-filter:blur(12px);transition:background var(--tr);}
-    [data-theme="dark"] header{background:rgba(15,20,34,.90);}
-    .hdr{width:100%;max-width:var(--max-width);margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;}
-    .hdr-left{display:flex;align-items:center;gap:10px;}
-    .back-btn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--r-md);color:var(--text-secondary);transition:all var(--tr);cursor:pointer;text-decoration:none;flex-shrink:0;}
-    .back-btn:hover{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
-    .back-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-    .hdr-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),#f97316);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;box-shadow:0 4px 10px var(--accent-glow);}
-    .hdr-icon svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
-    .hdr-titles h1{font-size:var(--font-size-base);font-weight:var(--font-weight-bold);letter-spacing:-.2px;}
-    .hdr-titles p{font-size:var(--font-size-xs);color:var(--text-muted);font-weight:var(--font-weight-medium);}
-    .theme-btn{width:36px;height:36px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;transition:all var(--tr);}
-    .theme-btn:hover{background:var(--bg-secondary);color:var(--text-primary);}
-    .theme-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-    .theme-btn .sun-icon{display:none;}
-    [data-theme="dark"] .theme-btn .sun-icon{display:block;}
-    [data-theme="dark"] .theme-btn .moon-icon{display:none;}
 
     /* ── MAIN ── */
     main{flex:1;width:100%;max-width:var(--max-width);margin:0 auto;padding:32px 24px 80px;}
@@ -220,7 +204,7 @@
 <header>
   <div class="hdr">
     <div class="hdr-left">
-      <a href="../../index.html" class="back-btn" title="Back to Engineering Toolkit">
+      <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </a>
       <div class="hdr-icon">
@@ -231,12 +215,12 @@
         <p>CDA Copper for Busbars · IEC 60865-1 · 7 Design Modules</p>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <button class="theme-btn" id="auth-btn" title="Sign In" style="width:auto;padding:0 12px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;">
-        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+    <div class="hdr-right">
+      <button id="auth-btn" title="Sign In">
+        <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         <span id="auth-btn-text">Sign In</span>
       </button>
-      <button class="theme-btn" id="theme-toggle" aria-label="Toggle theme">
+      <button class="hdr-icon-btn" id="theme-toggle" aria-label="Toggle theme">
         <svg class="moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
       </button>

@@ -1,0 +1,263 @@
+/**
+ * Engineering Toolkit — Shared Tool Header Styles
+ * Link this in every tool page: <link rel="stylesheet" href="../../css/header.css">
+ * Structure:
+ *   <header>
+ *     <div class="hdr">
+ *       <div class="hdr-left">
+ *         <a class="hdr-back-btn"> ... </a>
+ *         <div class="hdr-icon"> ... </div>
+ *         <div class="hdr-titles"><h1/><p/></div>
+ *       </div>
+ *       <div class="hdr-right">
+ *         <!-- tool-specific action buttons (.hdr-btn or .hdr-btn-primary) -->
+ *         <button id="auth-btn"> ... </button>
+ *         <button id="theme-toggle" class="hdr-icon-btn"> ... </button>
+ *       </div>
+ *     </div>
+ *   </header>
+ */
+
+/* ── Container ─────────────────────────────────────────────── */
+header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background var(--transition-fast);
+  flex-shrink: 0;
+}
+[data-theme="dark"] header {
+  background: rgba(15, 20, 34, 0.90);
+}
+
+/* ── Inner wrapper ─────────────────────────────────────────── */
+.hdr {
+  width: 100%;
+  max-width: var(--max-width, 1600px);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* ── Left group (back + icon + titles) ─────────────────────── */
+.hdr-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Back button */
+.hdr-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.hdr-back-btn:hover {
+  background: var(--accent-primary-glow);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.hdr-back-btn svg {
+  width: 17px;
+  height: 17px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+/* Tool icon badge */
+.hdr-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent-primary), #0891b2);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 4px 12px var(--accent-primary-glow);
+}
+.hdr-icon svg,
+.hdr-icon i[data-lucide] {
+  width: 19px;
+  height: 19px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Title + subtitle */
+.hdr-titles {
+  min-width: 0;
+}
+.hdr-titles h1 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.hdr-titles p {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Right group (action buttons) ──────────────────────────── */
+.hdr-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Generic action button */
+.hdr-btn {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  font-family: var(--font-sans);
+}
+.hdr-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+.hdr-btn svg,
+.hdr-btn i[data-lucide] {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+/* Teal accent action button (e.g. Share) */
+.hdr-btn-accent {
+  background: var(--accent-primary-glow);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.hdr-btn-accent:hover {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+/* Square icon-only button (theme toggle) */
+.hdr-icon-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.hdr-icon-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.hdr-icon-btn svg,
+.hdr-icon-btn i[data-lucide] {
+  width: 17px;
+  height: 17px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── Theme toggle dark/light icon swap ─────────────────────── */
+.hdr-icon-btn .sun-icon { display: none; }
+[data-theme="dark"] .hdr-icon-btn .sun-icon { display: block; }
+[data-theme="dark"] .hdr-icon-btn .moon-icon { display: none; }
+
+/* Alias for legacy .theme-btn usage (busbar, unit-converter) */
+.theme-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.theme-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.theme-btn svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-btn .sun-icon { display: none; }
+[data-theme="dark"] .theme-btn .sun-icon { display: block; }
+[data-theme="dark"] .theme-btn .moon-icon { display: none; }
+
+/* ── Divider between button groups ─────────────────────────── */
+.hdr-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+
+/* ── Responsive: collapse on small screens ──────────────────── */
+@media (max-width: 640px) {
+  header { padding: 0 16px; height: auto; min-height: 64px; }
+  .hdr { flex-wrap: wrap; padding: 12px 0; gap: 10px; }
+  .hdr-right { flex-wrap: wrap; }
+  .hdr-btn span { display: none; }
+  .hdr-btn { padding: 0 10px; }
+}

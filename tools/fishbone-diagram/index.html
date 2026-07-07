@@ -37,6 +37,7 @@
 
 
     <link rel="stylesheet" href="../../css/tailwind.css">
+    <link rel="stylesheet" href="../../css/header.css">
 
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@0.460.0"></script>
@@ -106,47 +107,39 @@
 </head>
 <body class="bg-[#f8fafc] dark:bg-slate-950 text-[#0f172a] dark:text-slate-100 font-sans min-h-screen flex flex-col antialiased transition-colors duration-200">
 
-    <!-- Header Section -->
-    <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 py-4 px-6 sticky top-0 z-30 shadow-sm transition-colors duration-200">
-        <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-                <a href="../../index.html" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center mr-1" title="Back to Tools Hub">
-                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    <!-- Header -->
+    <header>
+        <div class="hdr">
+            <div class="hdr-left">
+                <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+                    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
                 </a>
-                <div class="bg-teal-600 text-white p-2.5 rounded-xl shadow-md shadow-teal-100 flex items-center justify-center">
-                    <i data-lucide="network" class="w-6 h-6"></i>
+                <div class="hdr-icon">
+                    <i data-lucide="network"></i>
                 </div>
-                <div>
-                    <h1 class="text-xl font-bold text-slate-950 dark:text-white tracking-tight flex items-center gap-2">
-                        Ishikawa Fishbone Diagram Creator
-                    </h1>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Interactive Cause-and-Effect Analysis and Root Cause Brainstorming</p>
+                <div class="hdr-titles">
+                    <h1>Ishikawa Fishbone Diagram Creator</h1>
+                    <p>Interactive Cause-and-Effect Analysis &amp; Root Cause Brainstorming</p>
                 </div>
             </div>
-
-            <!-- Header Toolbar -->
-            <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                <button onclick="shareLink()" class="bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/30 dark:hover:bg-teal-900/50 text-teal-700 dark:text-teal-400 font-bold text-xs px-3.5 py-2 rounded-xl border border-teal-150 dark:border-teal-900/50 transition-all flex items-center gap-1.5" title="Copy sharing link to clipboard">
-                    <i data-lucide="share-2" class="w-3.5 h-3.5"></i> Copy Link
+            <div class="hdr-right">
+                <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+                    <i data-lucide="share-2"></i> Copy Link
                 </button>
-                <button onclick="exportJSON()" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5" title="Export diagram to JSON file">
-                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
+                <button onclick="exportJSON()" class="hdr-btn" title="Export diagram to JSON file">
+                    <i data-lucide="download"></i> Export JSON
                 </button>
-                <button onclick="document.getElementById('import-file-input').click()" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5" title="Import diagram from JSON file">
-                    <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import JSON
+                <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import diagram from JSON file">
+                    <i data-lucide="upload"></i> Import JSON
                 </button>
                 <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" />
-
-
-
-                <button id="auth-btn" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5" title="Sign In">
-                    <i data-lucide="user" class="w-4 h-4"></i> <span id="auth-btn-text">Sign In</span>
+                <div class="hdr-divider"></div>
+                <button id="auth-btn" title="Sign In">
+                    <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
                 </button>
-
-                <!-- Theme Toggle -->
-                <button id="theme-toggle" class="bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 p-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center" title="Toggle Light/Dark Theme">
-                    <i data-lucide="moon" class="w-4 h-4 dark:hidden"></i>
-                    <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+                <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+                    <i data-lucide="moon" class="moon-icon"></i>
+                    <i data-lucide="sun" class="sun-icon"></i>
                 </button>
             </div>
         </div>
