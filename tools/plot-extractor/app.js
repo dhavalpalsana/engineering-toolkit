@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
   
   const btnCopyCSV = document.getElementById("btn-copy-csv");
   const btnDownloadCSV = document.getElementById("btn-download-csv");
+  const btnDownloadCombinedCSV = document.getElementById("btn-download-combined-csv");
   const btnExportTable = document.getElementById("btn-export-table");
   
   const btnResetZoom = document.getElementById("btn-reset-zoom");
@@ -922,44 +923,39 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   function drawRegressionCurve() {
-    const data = getRegressionData();
-    const type = selectFitType.value;
-    if (!data || data.length < 2 || type === "none") return;
-    
-    const fit = fitModel(data, type);
-    if (!fit) return;
-    
-    // Find min and max pixel boundaries for mapping
-    const activeSeries = seriesList.find(s => s.id === activeSeriesId);
-    if (!activeSeries || activeSeries.points.length === 0) return;
-    
-    const minPx = activeSeries.points[0].px;
-    const maxPx = activeSeries.points[activeSeries.points.length - 1].px;
-    
-    ctx.strokeStyle = activeSeries.color;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]); // Dashed line for regression curve
-    
-    ctx.beginPath();
-    let first = true;
-    
-    // Step across the X pixel range of the points
-    for (let px = minPx; px <= maxPx; px += 2) {
-      const mathPt = toMathCoords(px, 0); // Get X math value
-      const predY = fit.predict(mathPt.x);
+    seriesList.forEach(series => {
+      const type = series.fitType || "none";
+      if (type === "none" || series.points.length < 2) return;
       
-      if (isNaN(predY) || !isFinite(predY)) continue;
+      const mathData = series.points.map(pt => toMathCoords(pt.px, pt.py));
+      const fit = fitModel(mathData, type);
+      if (!fit) return;
       
-      const pixelPt = toPixelCoords(mathPt.x, predY);
+      const minPx = series.points[0].px;
+      const maxPx = series.points[series.points.length - 1].px;
       
-      if (first) {
-        ctx.moveTo(pixelPt.px * imgScale, pixelPt.py * imgScale);
-        first = false;
-      } else {
-        ctx.lineTo(pixelPt.px * imgScale, pixelPt.py * imgScale);
+      ctx.strokeStyle = series.color;
+      ctx.lineWidth = series.id === activeSeriesId ? 2.5 : 1.5;
+      ctx.setLineDash([4, 4]); // Dashed line for regression curve
+      
+      ctx.beginPath();
+      let first = true;
+      
+      for (let px = minPx; px <= maxPx; px += 2) {
+        const mathPt = toMathCoords(px, 0);
+        const predY = fit.predict(mathPt.x);
+        if (isNaN(predY) || !isFinite(predY)) continue;
+        const pixelPt = toPixelCoords(mathPt.x, predY);
+        
+        if (first) {
+          ctx.moveTo(pixelPt.px * imgScale, pixelPt.py * imgScale);
+          first = false;
+        } else {
+          ctx.lineTo(pixelPt.px * imgScale, pixelPt.py * imgScale);
+        }
       }
-    }
-    ctx.stroke();
+      ctx.stroke();
+    });
     ctx.setLineDash([]); // Reset dashed lines
   }
   
@@ -975,7 +971,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="series-color" style="background-color: ${series.color}"></div>
             <input type="color" class="color-picker-input series-color-input" data-id="${series.id}" value="${series.color}" />
           </div>
-          <span class="series-name" id="series-name-text-${series.id}">${escapeHtml(series.name)}</span>
+          <input type="text" class="series-name-input" data-id="${series.id}" value="${escapeHtml(series.name)}" style="flex: 1; min-width: 50px; font-size: 13px; font-weight: 600; background: transparent; border: none; color: var(--text-primary); outline: none; border-bottom: 1px dashed transparent; padding: 2px 4px; box-sizing: border-box;" onfocus="this.style.borderBottomColor='var(--accent-primary)'" onblur="this.style.borderBottomColor='transparent'" />
           <div class="flex gap-1" style="align-items: center;">
             <button class="hdr-btn ${isDigitizing ? "hdr-btn-accent" : ""} series-activate-btn" data-id="${series.id}" style="height: 28px; padding: 0 8px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="Add data points to this series">
               <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
@@ -1002,6 +998,21 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     });
+
+    // Bind name inputs
+    seriesContainer.querySelectorAll(".series-name-input").forEach(input => {
+      input.addEventListener("input", (e) => {
+        const id = input.dataset.id;
+        const series = seriesList.find(s => s.id === id);
+        if (series) {
+          series.name = e.target.value;
+          triggerProjectChange();
+        }
+      });
+      input.addEventListener("click", (e) => {
+        e.stopPropagation(); // Avoid activating series when just clicking field to edit
+      });
+    });
     
     // Bind activation clicks
     seriesContainer.querySelectorAll(".series-activate-btn").forEach(btn => {
@@ -1009,6 +1020,13 @@ document.addEventListener("DOMContentLoaded", () => {
         activeSeriesId = btn.dataset.id;
         currentMode = "digitize";
         modeBtnCalibrate.classList.remove("active");
+        
+        // Sync Curve Fitting dropdown with newly selected series fit type
+        const activeSeries = seriesList.find(s => s.id === activeSeriesId);
+        if (activeSeries) {
+          selectFitType.value = activeSeries.fitType || "none";
+        }
+        
         triggerProjectChange();
         renderAll();
         updateSeriesUI();
@@ -1044,9 +1062,14 @@ document.addEventListener("DOMContentLoaded", () => {
       id,
       name: `Series ${count}`,
       color: col,
-      points: []
+      points: [],
+      fitType: "none"
     });
     activeSeriesId = id;
+    
+    // Sync Curve Fitting dropdown with newly selected series fit type
+    selectFitType.value = "none";
+    
     triggerProjectChange();
     renderAll();
     updateSeriesUI();
@@ -1066,7 +1089,14 @@ document.addEventListener("DOMContentLoaded", () => {
   updateSeriesUI();
   
   // Re-run fitting calculations on fitting parameters change
-  selectFitType.addEventListener("change", renderAll);
+  selectFitType.addEventListener("change", () => {
+    const activeSeries = seriesList.find(s => s.id === activeSeriesId);
+    if (activeSeries) {
+      activeSeries.fitType = selectFitType.value;
+      triggerProjectChange();
+    }
+    renderAll();
+  });
   selectScaleX.addEventListener("change", renderAll);
   selectScaleY.addEventListener("change", renderAll);
   inputCalX1.addEventListener("input", renderAll);
@@ -1105,11 +1135,41 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("No data points to export.");
       return;
     }
+    const activeSeriesObj = seriesList.find(s => s.id === activeSeriesId);
+    const fileName = activeSeriesObj ? activeSeriesObj.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "active-series";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `${activeSeriesId}-digitized-data.csv`);
+    link.setAttribute("download", `${fileName}-digitized-data.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+  
+  btnDownloadCombinedCSV.addEventListener("click", () => {
+    let hasPoints = false;
+    let csv = "Series Name,X Coordinate,Y Coordinate\n";
+    seriesList.forEach(series => {
+      if (series.points.length > 0) {
+        hasPoints = true;
+        series.points.forEach(pt => {
+          const math = toMathCoords(pt.px, pt.py);
+          csv += `"${series.name.replace(/"/g, '""')}",${math.x},${math.y}\n`;
+        });
+      }
+    });
+    
+    if (!hasPoints) {
+      alert("No data points in any series to export.");
+      return;
+    }
+    
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "combined-digitized-data.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
