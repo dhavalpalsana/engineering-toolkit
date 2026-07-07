@@ -67,3 +67,7 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+
+# Tailwind build tools (compiled output css/tailwind.css IS committed, these are build-only)
+tailwind.config.js
+css/tailwind-input.css

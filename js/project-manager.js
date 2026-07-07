@@ -682,18 +682,23 @@ document.addEventListener("DOMContentLoaded", () => {
         submitBtn.disabled = true;
         submitBtn.textContent = "Saving...";
 
-        const data = config.getInputs();
-        const { id, error } = await fb.saveProject(config.toolId, name, data);
-        if (error) {
-          showToast("Save failed: " + error.message, false);
+        try {
+          const data = config.getInputs();
+          const { id, error } = await fb.saveProject(config.toolId, name, data);
+          if (error) {
+            showToast("Save failed: " + error.message, false);
+          } else {
+            activeProject = { id, name };
+            localStorage.setItem(`pm_active_id_${config.toolId}`, id);
+            updateActiveIndicator();
+            showToast(`Saved "${name}"`);
+            closeModal();
+          }
+        } catch (err) {
+          showToast("Save failed: " + (err.message || "Unknown error"), false);
+        } finally {
           submitBtn.disabled = false;
           submitBtn.textContent = "Save Design";
-        } else {
-          activeProject = { id, name };
-          localStorage.setItem(`pm_active_id_${config.toolId}`, id);
-          updateActiveIndicator();
-          showToast(`Saved "${name}"`);
-          closeModal();
         }
       });
 
@@ -707,17 +712,21 @@ document.addEventListener("DOMContentLoaded", () => {
         const originalHtml = saveBtn.innerHTML;
         saveBtn.innerHTML = "Saving...";
 
-        const data = config.getInputs();
-        const { error } = await fb.saveProject(config.toolId, activeProject.name, data, activeProject.id);
-        
-        if (error) {
-          showToast("Auto-save failed: " + error.message, false);
-        } else {
-          showToast(`Auto-saved "${activeProject.name}"`);
+        try {
+          const data = config.getInputs();
+          const { error } = await fb.saveProject(config.toolId, activeProject.name, data, activeProject.id);
+          
+          if (error) {
+            showToast("Auto-save failed: " + error.message, false);
+          } else {
+            showToast(`Auto-saved "${activeProject.name}"`);
+          }
+        } catch (err) {
+          showToast("Auto-save failed: " + (err.message || "Unknown error"), false);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = originalHtml;
         }
-        
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = originalHtml;
       } else {
         openSaveModal();
       }
@@ -750,7 +759,8 @@ document.addEventListener("DOMContentLoaded", () => {
       // Sync active state from local storage last active indicator
       const lastActiveId = localStorage.getItem(`pm_active_id_${config.toolId}`);
       if (lastActiveId) {
-        fb.getProjects(config.toolId).then(projects => {
+        fb.getProjects(config.toolId).then(result => {
+          const projects = result.data || [];
           const match = projects.find(p => p.id === lastActiveId);
           if (match) {
             activeProject = { id: match.id, name: match.name };

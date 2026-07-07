@@ -25,7 +25,6 @@ if (
     auth = firebase.auth();
     db = firebase.firestore();
     isConfigured = true;
-    console.log("Firebase initialized successfully.");
   } catch (e) {
     console.error("Failed to initialize Firebase:", e);
   }
