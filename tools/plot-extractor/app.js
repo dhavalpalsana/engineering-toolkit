@@ -15,7 +15,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const ctx = canvas.getContext("2d");
   
   const modeBtnCalibrate = document.getElementById("mode-btn-calibrate");
-  const modeBtnDigitize = document.getElementById("mode-btn-digitize");
   
   const inputCalX1 = document.getElementById("cal-x1");
   const inputCalX2 = document.getElementById("cal-x2");
@@ -220,17 +219,7 @@ document.addEventListener("DOMContentLoaded", () => {
   modeBtnCalibrate.addEventListener("click", () => {
     currentMode = "calibrate";
     modeBtnCalibrate.classList.add("active");
-    modeBtnCalibrate.blur();
-    modeBtnDigitize.classList.remove("active");
-    updateHelperBanner();
-    renderAll();
-  });
-  
-  modeBtnDigitize.addEventListener("click", () => {
-    currentMode = "digitize";
-    modeBtnDigitize.classList.add("active");
-    modeBtnDigitize.blur();
-    modeBtnCalibrate.classList.remove("active");
+    updateSeriesUI();
     updateHelperBanner();
     renderAll();
   });
@@ -979,16 +968,18 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateSeriesUI() {
     seriesContainer.innerHTML = seriesList.map(series => {
       const isActive = series.id === activeSeriesId;
+      const isDigitizing = isActive && currentMode === "digitize";
       return `
-        <div class="series-item" style="border-color: ${isActive ? "var(--accent-primary)" : "var(--border-color)"}">
+        <div class="series-item" style="border-color: ${isDigitizing ? "var(--accent-primary)" : "var(--border-color)"}">
           <div class="color-picker-wrapper">
             <div class="series-color" style="background-color: ${series.color}"></div>
             <input type="color" class="color-picker-input series-color-input" data-id="${series.id}" value="${series.color}" />
           </div>
           <span class="series-name" id="series-name-text-${series.id}">${escapeHtml(series.name)}</span>
-          <div class="flex gap-1">
-            <button class="btn-icon series-activate-btn" data-id="${series.id}" title="Select Active Series" style="color: ${isActive ? "var(--accent-primary)" : "var(--text-muted)"}">
-              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <div class="flex gap-1" style="align-items: center;">
+            <button class="hdr-btn ${isDigitizing ? "hdr-btn-accent" : ""} series-activate-btn" data-id="${series.id}" style="height: 28px; padding: 0 8px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="Add data points to this series">
+              <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              <span>${isDigitizing ? "Adding" : "Add Points"}</span>
             </button>
             <button class="btn-icon danger series-delete-btn" data-id="${series.id}" title="Delete Series" ${seriesList.length === 1 ? "disabled style='opacity:0.3; pointer-events:none;'" : ""}>
               <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -1016,9 +1007,12 @@ document.addEventListener("DOMContentLoaded", () => {
     seriesContainer.querySelectorAll(".series-activate-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         activeSeriesId = btn.dataset.id;
+        currentMode = "digitize";
+        modeBtnCalibrate.classList.remove("active");
         triggerProjectChange();
         renderAll();
         updateSeriesUI();
+        updateHelperBanner();
       });
     });
     

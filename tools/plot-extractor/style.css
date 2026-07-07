@@ -240,36 +240,35 @@ main {
   box-shadow: 0 0 0 3px var(--accent-primary-glow);
 }
 
-/* Mode toggles */
-.mode-toggle-group {
-  display: flex;
-  gap: 4px;
-  background: var(--bg-tertiary);
-  padding: 4px;
-  border-radius: var(--radius-md);
-}
-
-.mode-btn {
-  flex: 1;
-  height: 32px;
-  font-size: 12px;
+/* Mode toggle styling */
+#mode-btn-calibrate {
+  height: 38px;
+  width: 100%;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  box-sizing: border-box;
 }
 
-.mode-btn.active {
+#mode-btn-calibrate:hover {
   background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+#mode-btn-calibrate.active {
+  background: var(--accent-primary-glow);
+  border-color: var(--accent-primary);
   color: var(--accent-primary);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 12px var(--accent-primary-glow);
 }
 
 /* ── Series Controls ──────────────────────────────────────── */
