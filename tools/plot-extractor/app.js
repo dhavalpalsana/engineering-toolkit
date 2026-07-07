@@ -579,39 +579,40 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
     
-    // Draw calibration points in calibrate mode
-    if (currentMode === "calibrate") {
-      ctx.lineWidth = 2;
+    // Draw calibration points unconditionally (softer style when locked)
+    {
+      const isCalMode = currentMode === "calibrate";
+      ctx.lineWidth = isCalMode ? 2 : 1.2;
       for (let key in calibrationPoints) {
         const pt = calibrationPoints[key];
         const screenX = pt.px * imgScale;
         const screenY = pt.py * imgScale;
         
-        ctx.strokeStyle = "#e11d48"; // Rose color for axes calibration
-        ctx.fillStyle = "#ffe4e6";
+        ctx.strokeStyle = isCalMode ? "#e11d48" : "rgba(225, 29, 72, 0.4)";
+        ctx.fillStyle = isCalMode ? "#ffe4e6" : "rgba(255, 228, 230, 0.2)";
         
         // Draw crosshair indicator lines
         ctx.beginPath();
-        ctx.moveTo(screenX - 12, screenY);
-        ctx.lineTo(screenX + 12, screenY);
-        ctx.moveTo(screenX, screenY - 12);
-        ctx.lineTo(screenX, screenY + 12);
+        ctx.moveTo(screenX - (isCalMode ? 12 : 8), screenY);
+        ctx.lineTo(screenX + (isCalMode ? 12 : 8), screenY);
+        ctx.moveTo(screenX, screenY - (isCalMode ? 12 : 8));
+        ctx.lineTo(screenX, screenY + (isCalMode ? 12 : 8));
         ctx.stroke();
         
         ctx.beginPath();
-        ctx.arc(screenX, screenY, 6, 0, 2 * Math.PI);
+        ctx.arc(screenX, screenY, isCalMode ? 6 : 4, 0, 2 * Math.PI);
         ctx.fill();
         ctx.stroke();
         
         // Label text background
-        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-        ctx.font = "bold 10px var(--font-sans)";
+        ctx.fillStyle = isCalMode ? "rgba(15, 23, 42, 0.85)" : "rgba(15, 23, 42, 0.45)";
+        ctx.font = isCalMode ? "bold 10px var(--font-sans)" : "normal 9px var(--font-sans)";
         const labelText = key.toUpperCase();
         const textW = ctx.measureText(labelText).width;
         
-        ctx.fillRect(screenX + 8, screenY - 18, textW + 8, 15);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(labelText, screenX + 12, screenY - 7);
+        ctx.fillRect(screenX + 6, screenY - 16, textW + 6, 13);
+        ctx.fillStyle = isCalMode ? "#ffffff" : "rgba(255, 255, 255, 0.75)";
+        ctx.fillText(labelText, screenX + 9, screenY - 6);
       }
     }
     
