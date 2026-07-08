@@ -973,4 +973,139 @@ document.addEventListener("DOMContentLoaded", () => {
               .replace(/"/g, "&quot;")
               .replace(/'/g, "&#039;");
   }
+
+  // ── Global Bug Report Modal ──────────────────────────────────────
+  window.openBugReportModal = function(e) {
+    if (e) e.preventDefault();
+
+    // Check if modal already exists
+    let overlay = document.getElementById("bug-report-modal");
+    if (overlay) {
+      overlay.style.display = "flex";
+      document.getElementById("bug-report-form").style.display = "block";
+      document.getElementById("bug-success-state").style.display = "none";
+      return;
+    }
+
+    overlay = document.createElement("div");
+    overlay.id = "bug-report-modal";
+    overlay.className = "pm-modal-overlay"; // Reuses project-manager drawer overlay animations
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(9, 13, 22, 0.7); display:flex; align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(4px);";
+    
+    // Grab active user email if signed in
+    const user = (fb && fb.isConfigured() && firebase.auth().currentUser) || null;
+    const prefillEmail = user ? user.email : "";
+
+    overlay.innerHTML = `
+      <div class="pm-modal-content" style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:16px; width:100%; max-width:440px; padding:28px; position:relative; box-shadow:var(--shadow-lg); font-family:var(--font-sans);">
+        <button class="pm-modal-close" id="close-bug-modal" style="position:absolute; top:12px; right:16px; background:none; border:none; color:var(--text-secondary); font-size:24px; cursor:pointer;">&times;</button>
+        <div style="text-align:center; margin-bottom:20px;">
+          <div style="width:44px; height:44px; background:rgba(239, 68, 68, 0.1); color:var(--color-error); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <h3 style="font-weight:700; font-size:18px; color:var(--text-primary); margin:0 0 6px 0;">Report a Bug</h3>
+          <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.4;">Help us improve this utility by describing the issue.</p>
+        </div>
+        <form id="bug-report-form">
+          <div style="margin-bottom:16px; text-align:left;">
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Issue / Problem Description</label>
+            <textarea id="bug-desc" required placeholder="Describe what went wrong, inputs used, steps to reproduce..." style="width:100%; height:110px; padding:10px 12px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-interactive); color:var(--text-primary); font-family:var(--font-sans); font-size:14px; resize:none; outline:none; box-sizing:border-box; line-height:1.4;"></textarea>
+          </div>
+          <div style="margin-bottom:20px; text-align:left;">
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Contact Email (Optional)</label>
+            <input type="email" id="bug-email" placeholder="engineering@example.com" value="${prefillEmail}" style="width:100%; padding:10px 12px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-interactive); color:var(--text-primary); font-family:var(--font-sans); font-size:14px; outline:none; box-sizing:border-box;" />
+          </div>
+          <button type="submit" style="width:100%; display:flex; align-items:center; justify-content:center; height:42px; background:var(--accent-primary); border:none; border-radius:8px; color:#fff; font-weight:600; cursor:pointer; font-size:14px; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Submit Bug Report</button>
+        </form>
+        
+        <!-- Success State -->
+        <div id="bug-success-state" style="display:none; text-align:center; padding:10px 0;">
+          <div style="width:44px; height:44px; background:rgba(16, 185, 129, 0.1); color:var(--color-success); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <h4 style="font-weight:700; font-size:16px; margin:0 0 6px 0; color:var(--text-primary);">Bug Report Logged!</h4>
+          <p style="font-size:13px; color:var(--text-secondary); margin:0 0 24px 0; line-height:1.4;">Your report has been logged in our database.</p>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <a href="#" id="bug-github-link" target="_blank" rel="noopener" style="display:flex; align-items:center; justify-content:center; text-decoration:none; height:42px; background:var(--accent-primary); color:#fff; font-weight:600; border-radius:8px; font-size:14px; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Open GitHub Issue (Optional)</a>
+            <button type="button" id="bug-done-btn" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border-color); background:transparent; cursor:pointer; color:var(--text-primary); font-weight:600; font-family:var(--font-sans); font-size:14px;">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeBtn = document.getElementById("close-bug-modal");
+    const bugForm = document.getElementById("bug-report-form");
+    const successState = document.getElementById("bug-success-state");
+    const doneBtn = document.getElementById("bug-done-btn");
+    const githubLink = document.getElementById("bug-github-link");
+
+    const close = () => {
+      overlay.style.display = "none";
+      bugForm.style.display = "block";
+      successState.style.display = "none";
+      bugForm.reset();
+    };
+
+    closeBtn.addEventListener("click", close);
+    doneBtn.addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+
+    bugForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const submitBtn = bugForm.querySelector("button[type=submit]");
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Logging...";
+
+      const desc = document.getElementById("bug-desc").value;
+      const email = document.getElementById("bug-email").value;
+      const toolId = config ? config.toolId : "homepage";
+
+      // 1. Submit to Firestore if configured
+      if (fb && fb.isConfigured()) {
+        try {
+          const userObj = firebase.auth().currentUser;
+          await firebase.firestore().collection("bug_reports").add({
+            desc,
+            email: email || (userObj ? userObj.email : null),
+            userId: userObj ? userObj.uid : null,
+            toolId,
+            createdAt: new Date().toISOString(),
+            status: "open"
+          });
+        } catch (e) {
+          console.error("Failed to log bug report to Firestore:", e);
+        }
+      } else {
+        // Local fallback
+        const existing = JSON.parse(localStorage.getItem("bug_reports") || "[]");
+        existing.push({ desc, email, toolId, date: new Date().toISOString() });
+        localStorage.setItem("bug_reports", JSON.stringify(existing));
+      }
+
+      // 2. Build the GitHub pre-filled issue URL
+      const repoUrl = "https://github.com/dhavalpalsana/engineering-toolkit/issues/new";
+      const title = encodeURIComponent(`Bug: [${toolId}] issue`);
+      const body = encodeURIComponent(
+        `### Bug Report\n\n` +
+        `**Tool:** ${toolId}\n\n` +
+        `**Description:**\n${desc}\n\n` +
+        `**Contact (Optional):** ${email || "N/A"}\n\n` +
+        `*Submitted via Engineering Toolkit Bug Reporting Portal.*`
+      );
+      githubLink.href = `${repoUrl}?title=${title}&body=${body}`;
+
+      // 3. Show success state
+      bugForm.style.display = "none";
+      successState.style.display = "block";
+      
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    });
+  };
 });
