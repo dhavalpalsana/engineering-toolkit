@@ -186,6 +186,70 @@ document.addEventListener("DOMContentLoaded", () => {
       border-color: var(--accent-primary) !important;
       color: var(--accent-primary) !important;
     }
+
+    /* ── Auth Profile Dropdown ── */
+    .auth-btn-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+    .auth-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      padding: 8px;
+      min-width: 210px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      animation: authFadeIn 0.15s ease-out;
+    }
+    .auth-dropdown-header {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      padding: 6px 8px;
+      word-break: break-all;
+      font-family: var(--font-sans);
+    }
+    .auth-dropdown-divider {
+      height: 1px;
+      background: var(--border-color);
+      margin: 4px 0;
+    }
+    .auth-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: none;
+      border: none;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      transition: all var(--transition-fast);
+      font-family: var(--font-sans);
+    }
+    .auth-dropdown-item:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    .auth-dropdown-item.danger {
+      color: #ef4444;
+    }
+    .auth-dropdown-item.danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ff6b6b;
+    }
   `;
   document.head.appendChild(style);
 
@@ -431,20 +495,48 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Wrap auth buttons dynamically to anchor the dropdown menu
+  const wrapAuthButtons = () => {
+    const authBtns = document.querySelectorAll("#auth-btn");
+    authBtns.forEach(btn => {
+      if (btn.parentElement && !btn.parentElement.classList.contains("auth-btn-wrapper")) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "auth-btn-wrapper";
+        btn.parentNode.insertBefore(wrapper, btn);
+        wrapper.appendChild(btn);
+      }
+    });
+  };
+
+  // Close all open dropdown menus
+  const closeDropdowns = () => {
+    document.querySelectorAll(".auth-dropdown").forEach(d => d.remove());
+  };
+
+  // Close dropdown when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#auth-btn") && !e.target.closest(".auth-dropdown")) {
+      closeDropdowns();
+    }
+  });
+
   // Global authentication button binder
   const updateAuthUIState = (user) => {
     currentUser = user;
+    wrapAuthButtons();
+    
     const authBtns = document.querySelectorAll("#auth-btn");
     const authTexts = document.querySelectorAll("#auth-btn-text");
 
     if (user) {
       const emailShort = user.email.split("@")[0];
-      authTexts.forEach(el => el.textContent = `${emailShort} (Sign Out)`);
+      authTexts.forEach(el => el.textContent = `${emailShort}`);
       authBtns.forEach(btn => {
-        btn.title = `Signed in as ${user.email}. Click to sign out.`;
+        btn.title = `Signed in as ${user.email}. Click to manage account.`;
         btn.classList.add("signed-in");
       });
     } else {
+      closeDropdowns();
       authTexts.forEach(el => el.textContent = "Sign In");
       authBtns.forEach(btn => {
         btn.title = "Sign In";
@@ -459,9 +551,63 @@ document.addEventListener("DOMContentLoaded", () => {
     if (authBtn) {
       e.preventDefault();
       if (currentUser) {
-        if (confirm("Are you sure you want to sign out?")) {
-          const { error } = await fb.signOut();
-          if (error) alert("Sign out error: " + error.message);
+        // Toggle dropdown menu
+        const wrapper = authBtn.parentElement;
+        if (!wrapper || !wrapper.classList.contains("auth-btn-wrapper")) return;
+        
+        let dropdown = wrapper.querySelector(".auth-dropdown");
+        if (dropdown) {
+          dropdown.remove();
+        } else {
+          closeDropdowns(); // Close any other open dropdowns
+          dropdown = document.createElement("div");
+          dropdown.className = "auth-dropdown";
+          dropdown.innerHTML = `
+            <div class="auth-dropdown-header">Signed in as<br><strong>${currentUser.email}</strong></div>
+            <div class="auth-dropdown-divider"></div>
+            <button class="auth-dropdown-item" id="auth-dropdown-signout">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              Sign Out
+            </button>
+            <button class="auth-dropdown-item danger" id="auth-dropdown-delete">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+              Delete Account & Data
+            </button>
+          `;
+          wrapper.appendChild(dropdown);
+
+          // Handle Sign Out click
+          dropdown.querySelector("#auth-dropdown-signout").addEventListener("click", async (ev) => {
+            ev.stopPropagation();
+            dropdown.remove();
+            if (confirm("Are you sure you want to sign out?")) {
+              const { error } = await fb.signOut();
+              if (error) alert("Sign out error: " + error.message);
+            }
+          });
+
+          // Handle Delete Account click
+          dropdown.querySelector("#auth-dropdown-delete").addEventListener("click", async (ev) => {
+            ev.stopPropagation();
+            dropdown.remove();
+            const message = "⚠️ WARNING: Deleting your account will permanently delete all your saved engineering projects in the cloud database.\n\nThis action cannot be undone.\n\nType 'DELETE' to confirm deletion of your account and all associated projects:";
+            const confirmation = prompt(message);
+            if (confirmation === "DELETE") {
+              if (window.showToast) window.showToast("Deleting account and data...");
+              const { error } = await fb.deleteAccount();
+              if (error) {
+                if (error.code === "auth/requires-recent-login") {
+                  alert("For security reasons, deleting your account requires a recent login. Please sign out, sign in again, and retry account deletion.");
+                } else {
+                  alert("Delete failed: " + error.message);
+                }
+              } else {
+                if (window.showToast) window.showToast("Account deleted successfully.");
+              }
+            } else if (confirmation !== null) {
+              alert("Confirmation typed incorrectly. Account deletion cancelled.");
+            }
+          });
         }
       } else {
         openAuthModal();

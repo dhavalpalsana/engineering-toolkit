@@ -72,6 +72,24 @@ window.fbHelper = {
       .catch(error => ({ error }));
   },
 
+  deleteAccount: async () => {
+    if (!isConfigured) throw new Error("Firebase is not configured.");
+    const user = auth.currentUser;
+    if (!user) throw new Error("No authenticated user found.");
+    try {
+      const snapshot = await db.collection("projects").where("userId", "==", user.uid).get();
+      const batch = db.batch();
+      snapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      await user.delete();
+      return { error: null };
+    } catch (error) {
+      return { error };
+    }
+  },
+
   getUser: async () => {
     if (!isConfigured) return null;
     return new Promise((resolve) => {
