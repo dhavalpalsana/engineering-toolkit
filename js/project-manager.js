@@ -1253,4 +1253,123 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBtn.textContent = originalText;
     });
   };
+
+  // ── Safe Update / Redeploy Progress Safeguard ──────────────────────────
+  window.promptUpdate = function(updateAction) {
+    const user = (fb && fb.isConfigured() && firebase.auth().currentUser) || null;
+    
+    if (user) {
+      if (window.showToast) window.showToast("Updating website and reloading...");
+      setTimeout(() => {
+        if (typeof updateAction === "function") {
+          updateAction();
+        } else {
+          window.location.reload();
+        }
+      }, 1000);
+      return;
+    }
+    
+    let overlay = document.getElementById("update-warning-modal");
+    if (overlay) {
+      overlay.style.display = "flex";
+      return;
+    }
+    
+    overlay = document.createElement("div");
+    overlay.id = "update-warning-modal";
+    overlay.className = "pm-modal-overlay";
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(9, 13, 22, 0.7); display:flex; align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(4px);";
+    
+    overlay.innerHTML = `
+      <div class="pm-modal-card" style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:12px; width:90%; max-width:440px; padding:24px; box-shadow:var(--shadow-lg); font-family:var(--font-sans); color:var(--text-primary); text-align:left; animation:pm-modal-fade 0.2s ease-out;">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+          <div style="background:rgba(239, 68, 68, 0.1); color:#ef4444; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+          <h3 style="margin:0; font-size:18px; font-weight:700;">Unsaved Progress Warning</h3>
+        </div>
+        
+        <p style="margin:0 0 20px 0; font-size:14px; line-height:1.5; color:var(--text-secondary);">
+          A website update is available. Because you are <strong>not signed in</strong>, updating now will reload the page and clear your current work session.
+        </p>
+        
+        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
+          <button id="update-warning-signin" style="width:100%; padding:11px; border-radius:8px; background:var(--accent-teal); color:var(--bg-primary); border:none; font-weight:600; cursor:pointer; font-size:13px; transition:opacity 0.2s;">
+            🔑 Sign In (Autosaves your progress)
+          </button>
+          <button id="update-warning-export" style="width:100%; padding:11px; border-radius:8px; background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-color); font-weight:600; cursor:pointer; font-size:13px; transition:opacity 0.2s;">
+            📥 Export Work (Download JSON file)
+          </button>
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; gap:16px; border-top:1px solid var(--border-color); padding-top:16px; align-items:center;">
+          <button id="update-warning-cancel" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:13px; font-weight:600;">Cancel</button>
+          <button id="update-warning-reload" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:13px; font-weight:600;">Update Anyway</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    document.getElementById("update-warning-cancel").onclick = () => {
+      overlay.style.display = "none";
+    };
+    
+    document.getElementById("update-warning-reload").onclick = () => {
+      overlay.style.display = "none";
+      if (typeof updateAction === "function") {
+        updateAction();
+      } else {
+        window.location.reload();
+      }
+    };
+    
+    document.getElementById("update-warning-signin").onclick = () => {
+      overlay.style.display = "none";
+      const loginBtn = document.getElementById("auth-btn");
+      if (loginBtn) loginBtn.click();
+    };
+    
+    document.getElementById("update-warning-export").onclick = () => {
+      const exportBtn = document.querySelector(".hdr-right button[onclick*='exportJSON']");
+      if (exportBtn) {
+        exportBtn.click();
+      } else if (typeof window.exportJSON === "function") {
+        window.exportJSON();
+      } else {
+        if (window.showToast) window.showToast("Export JSON function not found on this page.", false);
+      }
+    };
+  };
+
+  // ── Daily Update Checker ───────────────────────────────────────────────
+  const APP_LOAD_TIME = Date.now();
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+  function checkDeployment() {
+    const now = Date.now();
+    const lastCheck = parseInt(localStorage.getItem("last_deploy_check") || "0");
+    
+    if (now - lastCheck < ONE_DAY_MS) {
+      return;
+    }
+    
+    localStorage.setItem("last_deploy_check", now.toString());
+
+    fetch("/version.json?cb=" + now)
+      .then(res => res.json())
+      .then(data => {
+        const deployTime = parseInt(data.version);
+        if (deployTime > APP_LOAD_TIME) {
+          window.promptUpdate();
+        }
+      })
+      .catch(err => console.warn("Could not check for updates:", err));
+  }
+
+  // Initial check throttled to once a day on load
+  checkDeployment();
+  // Check once a day for open tabs
+  setInterval(checkDeployment, ONE_DAY_MS);
 });
