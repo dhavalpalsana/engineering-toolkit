@@ -454,6 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
       toastDiv.classList.remove("show");
     }, 3000);
   };
+  window.showToast = showToast;
 
   // Find header auth-btn to anchor control injections
   const authBtn = document.getElementById("auth-btn");
@@ -978,6 +979,15 @@ document.addEventListener("DOMContentLoaded", () => {
   window.openBugReportModal = function(e) {
     if (e) e.preventDefault();
 
+    // Verify user is signed in before allowing bug reports
+    const user = (fb && fb.isConfigured() && firebase.auth().currentUser) || null;
+    if (!user) {
+      if (window.showToast) window.showToast("Please sign in to report bugs.", false);
+      const loginBtn = document.getElementById("auth-btn");
+      if (loginBtn) loginBtn.click();
+      return;
+    }
+
     // Check if modal already exists
     let overlay = document.getElementById("bug-report-modal");
     if (overlay) {
@@ -992,9 +1002,8 @@ document.addEventListener("DOMContentLoaded", () => {
     overlay.className = "pm-modal-overlay"; // Reuses project-manager drawer overlay animations
     overlay.style.cssText = "position:fixed; inset:0; background:rgba(9, 13, 22, 0.7); display:flex; align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(4px);";
     
-    // Grab active user email if signed in
-    const user = (fb && fb.isConfigured() && firebase.auth().currentUser) || null;
-    const prefillEmail = user ? user.email : "";
+    // Grab active user email
+    const prefillEmail = user.email || "";
 
     overlay.innerHTML = `
       <div class="pm-modal-content" style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:16px; width:100%; max-width:440px; padding:28px; position:relative; box-shadow:var(--shadow-lg); font-family:var(--font-sans);">

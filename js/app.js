@@ -168,6 +168,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Modal Functionality
   const openModal = () => {
+    // Verify user is signed in before allowing suggestions
+    const user = (window.fbHelper && window.fbHelper.isConfigured() && firebase.auth().currentUser) || null;
+    if (!user) {
+      if (window.showToast) window.showToast("Please sign in to suggest tools.", false);
+      const loginBtn = document.getElementById("auth-btn");
+      if (loginBtn) loginBtn.click();
+      return;
+    }
+
     requestForm.style.display = "block";
     suggestSuccessView.style.display = "none";
     requestModal.classList.add("active");
@@ -176,6 +185,15 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const openModalWithTool = (toolName) => {
+    // Verify user is signed in before allowing suggestions
+    const user = (window.fbHelper && window.fbHelper.isConfigured() && firebase.auth().currentUser) || null;
+    if (!user) {
+      if (window.showToast) window.showToast("Please sign in to suggest tools.", false);
+      const loginBtn = document.getElementById("auth-btn");
+      if (loginBtn) loginBtn.click();
+      return;
+    }
+
     requestForm.style.display = "block";
     suggestSuccessView.style.display = "none";
     requestModal.classList.add("active");
