@@ -1117,4 +1117,140 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBtn.textContent = originalText;
     });
   };
+
+  // ── Global Feature Suggestion Modal ────────────────────────────────
+  window.openFeatureSuggestionModal = function(e, prefillTitle = "") {
+    if (e) e.preventDefault();
+
+    // Verify user is signed in before allowing suggestions
+    const user = (fb && fb.isConfigured() && firebase.auth().currentUser) || null;
+    if (!user) {
+      if (window.showToast) window.showToast("Please sign in to suggest features.", false);
+      const loginBtn = document.getElementById("auth-btn");
+      if (loginBtn) loginBtn.click();
+      return;
+    }
+
+    // Check if modal already exists
+    let overlay = document.getElementById("feature-suggest-modal");
+    if (overlay) {
+      overlay.style.display = "flex";
+      document.getElementById("feature-suggest-form").style.display = "block";
+      document.getElementById("feature-success-state").style.display = "none";
+      if (prefillTitle) {
+        document.getElementById("feature-title").value = prefillTitle;
+      }
+      return;
+    }
+
+    overlay = document.createElement("div");
+    overlay.id = "feature-suggest-modal";
+    overlay.className = "pm-modal-overlay";
+    overlay.style.cssText = "position:fixed; inset:0; background:rgba(9, 13, 22, 0.7); display:flex; align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(4px);";
+
+    overlay.innerHTML = `
+      <div class="pm-modal-content" style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:16px; width:100%; max-width:440px; padding:28px; position:relative; box-shadow:var(--shadow-lg); font-family:var(--font-sans);">
+        <button class="pm-modal-close" id="close-feature-modal" style="position:absolute; top:12px; right:16px; background:none; border:none; color:var(--text-secondary); font-size:24px; cursor:pointer;">&times;</button>
+        <div style="text-align:center; margin-bottom:20px;">
+          <div style="width:44px; height:44px; background:rgba(13, 148, 136, 0.1); color:var(--accent-primary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+          </div>
+          <h3 style="font-weight:700; font-size:18px; color:var(--text-primary); margin:0 0 6px 0;">Suggest a Feature</h3>
+          <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.4;">Submit your ideas and improvements directly to the developer.</p>
+        </div>
+        <form id="feature-suggest-form">
+          <div style="margin-bottom:16px; text-align:left;">
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Feature Title</label>
+            <input type="text" id="feature-title" required placeholder="e.g. Add PDF exporter / new solver module" value="${prefillTitle}" style="width:100%; padding:10px 12px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-interactive); color:var(--text-primary); font-family:var(--font-sans); font-size:14px; outline:none; box-sizing:border-box;" />
+          </div>
+          <div style="margin-bottom:20px; text-align:left;">
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Description & Context</label>
+            <textarea id="feature-desc" required placeholder="Describe how this feature should behave and why it's useful..." style="width:100%; height:110px; padding:10px 12px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-interactive); color:var(--text-primary); font-family:var(--font-sans); font-size:14px; resize:none; outline:none; box-sizing:border-box; line-height:1.4;"></textarea>
+          </div>
+          <button type="submit" style="width:100%; display:flex; align-items:center; justify-content:center; height:42px; background:var(--accent-primary); border:none; border-radius:8px; color:#fff; font-weight:600; cursor:pointer; font-size:14px; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Submit Suggestion</button>
+        </form>
+        
+        <!-- Success State -->
+        <div id="feature-success-state" style="display:none; text-align:center; padding:10px 0;">
+          <div style="width:44px; height:44px; background:rgba(16, 185, 129, 0.1); color:var(--color-success); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <h4 style="font-weight:700; font-size:16px; margin:0 0 6px 0; color:var(--text-primary);">Suggestion Received!</h4>
+          <p style="font-size:13px; color:var(--text-secondary); margin:0 0 24px 0; line-height:1.4;">Thank you! Your idea has been saved to the roadmap backlog.</p>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <a href="#" id="feature-github-link" target="_blank" rel="noopener" style="display:flex; align-items:center; justify-content:center; text-decoration:none; height:42px; background:var(--accent-primary); color:#fff; font-weight:600; border-radius:8px; font-size:14px; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Open GitHub Issue (Optional)</a>
+            <button type="button" id="feature-done-btn" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border-color); background:transparent; cursor:pointer; color:var(--text-primary); font-weight:600; font-family:var(--font-sans); font-size:14px;">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeBtn = document.getElementById("close-feature-modal");
+    const featureForm = document.getElementById("feature-suggest-form");
+    const successState = document.getElementById("feature-success-state");
+    const doneBtn = document.getElementById("feature-done-btn");
+    const githubLink = document.getElementById("feature-github-link");
+
+    const close = () => {
+      overlay.style.display = "none";
+      featureForm.style.display = "block";
+      successState.style.display = "none";
+      featureForm.reset();
+    };
+
+    closeBtn.addEventListener("click", close);
+    doneBtn.addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+
+    featureForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const submitBtn = featureForm.querySelector("button[type=submit]");
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Logging...";
+
+      const titleVal = document.getElementById("feature-title").value;
+      const descVal = document.getElementById("feature-desc").value;
+      const toolId = config ? config.toolId : "homepage";
+
+      // 1. Submit to Firestore
+      if (window.fbHelper && window.fbHelper.isConfigured()) {
+        try {
+          const userObj = firebase.auth().currentUser;
+          await window.fbHelper.suggestFeature(titleVal, descVal, toolId, userObj ? userObj.email : null);
+        } catch (e) {
+          console.error("Failed to log feature suggestion to Firestore:", e);
+        }
+      } else {
+        // Local fallback
+        const existing = JSON.parse(localStorage.getItem("feature_suggestions") || "[]");
+        existing.push({ title: titleVal, desc: descVal, toolId, date: new Date().toISOString() });
+        localStorage.setItem("feature_suggestions", JSON.stringify(existing));
+      }
+
+      // 2. Build the GitHub pre-filled issue URL
+      const repoUrl = "https://github.com/dhavalpalsana/engineering-toolkit/issues/new";
+      const gitTitle = encodeURIComponent(`Feature Request: [${toolId}] ${titleVal}`);
+      const gitBody = encodeURIComponent(
+        `### Feature Request / Suggestion\n\n` +
+        `**Tool / Context:** ${toolId}\n\n` +
+        `**Title:** ${titleVal}\n\n` +
+        `**Description:**\n${descVal}\n\n` +
+        `*Submitted via Engineering Toolkit Feature Suggestion Portal.*`
+      );
+      githubLink.href = `${repoUrl}?title=${gitTitle}&body=${gitBody}`;
+
+      // 3. Show success state
+      featureForm.style.display = "none";
+      successState.style.display = "block";
+      
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    });
+  };
 });

@@ -6,14 +6,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const activeCountEl = document.getElementById("active-count");
   const totalCountEl = document.getElementById("total-count");
 
-  // Modal Selection
-  const requestModal = document.getElementById("request-modal");
-  const requestForm = document.getElementById("request-form");
+  // Local suggest-btn on homepage header
   const suggestBtn = document.getElementById("suggest-btn");
-  const modalCloseBtn = document.getElementById("modal-close");
-  const suggestSuccessView = document.getElementById("suggest-success-view");
-  const githubIssueLink = document.getElementById("github-issue-link");
-  const btnSuccessDone = document.getElementById("btn-success-done");
 
   // Initial Theme Sync
   const initTheme = () => {
@@ -65,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
       toolsGrid.appendChild(emptyState);
 
       // Bind suggest button inside empty state
-      document.getElementById("suggest-from-empty").addEventListener("click", openModal);
+      document.getElementById("suggest-from-empty").addEventListener("click", (e) => window.openFeatureSuggestionModal(e, searchInput.value));
       return;
     }
 
@@ -105,19 +99,19 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      const handleActivate = () => {
+      const handleActivate = (e) => {
         if (isActive) {
           window.location.href = tool.path;
         } else {
-          openModalWithTool(tool.name);
+          window.openFeatureSuggestionModal(e, `Propose: ${tool.name}`);
         }
       };
 
-      card.addEventListener("click", handleActivate);
+      card.addEventListener("click", (e) => handleActivate(e));
       card.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          handleActivate();
+          handleActivate(e);
         }
       });
 
@@ -166,104 +160,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Modal Functionality
-  const openModal = () => {
-    // Verify user is signed in before allowing suggestions
-    const user = (window.fbHelper && window.fbHelper.isConfigured() && firebase.auth().currentUser) || null;
-    if (!user) {
-      if (window.showToast) window.showToast("Please sign in to suggest tools.", false);
-      const loginBtn = document.getElementById("auth-btn");
-      if (loginBtn) loginBtn.click();
-      return;
-    }
-
-    requestForm.style.display = "block";
-    suggestSuccessView.style.display = "none";
-    requestModal.classList.add("active");
-    document.getElementById("tool-name-input").value = "";
-    document.getElementById("tool-name-input").focus();
-  };
-
-  const openModalWithTool = (toolName) => {
-    // Verify user is signed in before allowing suggestions
-    const user = (window.fbHelper && window.fbHelper.isConfigured() && firebase.auth().currentUser) || null;
-    if (!user) {
-      if (window.showToast) window.showToast("Please sign in to suggest tools.", false);
-      const loginBtn = document.getElementById("auth-btn");
-      if (loginBtn) loginBtn.click();
-      return;
-    }
-
-    requestForm.style.display = "block";
-    suggestSuccessView.style.display = "none";
-    requestModal.classList.add("active");
-    document.getElementById("tool-name-input").value = toolName;
-    document.getElementById("tool-description-input").focus();
-  };
-
-  const closeModal = () => {
-    requestModal.classList.remove("active");
-  };
-
-  // Bind main suggestion buttons
-  suggestBtn.addEventListener("click", openModal);
-  modalCloseBtn.addEventListener("click", closeModal);
-  btnSuccessDone.addEventListener("click", closeModal);
-  requestModal.addEventListener("click", (e) => {
-    if (e.target === requestModal) {
-      closeModal();
-    }
-  });
-
-  // Escape key closes modal
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && requestModal.classList.contains("active")) {
-      closeModal();
-    }
-  });
-
-  // Handle Request Submission
-  requestForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const submitBtn = requestForm.querySelector("button[type=submit]");
-    const originalText = submitBtn.textContent;
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Submitting...";
-
-    const toolName = document.getElementById("tool-name-input").value;
-    const toolDesc = document.getElementById("tool-description-input").value;
-    const contactEmail = document.getElementById("contact-email").value;
-
-    // 1. Save to Database (Firestore with Local Fallback)
-    if (window.fbHelper && typeof window.fbHelper.suggestTool === "function") {
-      await window.fbHelper.suggestTool(toolName, toolDesc, contactEmail);
-    } else {
-      // Local fallback if firebase helper is not loaded
-      const existing = JSON.parse(localStorage.getItem("tool_suggestions") || "[]");
-      existing.push({ toolName, toolDesc, contactEmail, date: new Date().toISOString() });
-      localStorage.setItem("tool_suggestions", JSON.stringify(existing));
-    }
-
-    // 2. Build the GitHub pre-filled issue URL
-    const repoUrl = "https://github.com/dhavalpalsana/engineering-toolkit/issues/new";
-    const title = encodeURIComponent(`Tool Suggestion: ${toolName}`);
-    const body = encodeURIComponent(
-      `### Tool Request\n\n` +
-      `**Name:** ${toolName}\n\n` +
-      `**Description & Requirements:**\n${toolDesc}\n\n` +
-      `**Contact / Context (Optional):** ${contactEmail || "N/A"}\n\n` +
-      `*Submitted via Engineering Toolkit Suggestion Portal.*`
-    );
-    githubIssueLink.href = `${repoUrl}?title=${title}&body=${body}`;
-
-    // 3. Reset form and show success screen
-    requestForm.reset();
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalText;
-    
-    requestForm.style.display = "none";
-    suggestSuccessView.style.display = "block";
-  });
+  // Bind header Suggest Feature button
+  if (suggestBtn) {
+    suggestBtn.addEventListener("click", (e) => window.openFeatureSuggestionModal(e));
+  }
 
   // Initial Run
   initStats();
