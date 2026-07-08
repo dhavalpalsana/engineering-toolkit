@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visual Timezone & Julian Date Converter — Engineering Toolkit</title>
+  
+  <!-- SEO & Social Meta Tags -->
+  <meta name="description" content="Premium visual timezone planner and Julian Date converter. Sync world times with day/night timelines, calculate Julian Days and Modified Julian Dates in real-time.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eng-toolkit.web.app/tools/timezone-converter/">
+  <meta property="og:title" content="Visual Timezone & Julian Date Converter — Engineering Toolkit">
+  <meta property="og:description" content="Visual timezone planner with scrolling day/night timelines, linking UTC, local zones, and precise Julian / Modified Julian date conversions.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Visual Timezone & Julian Date Converter — Engineering Toolkit">
+
+  <!-- Typography & Styles -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Standard Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <!-- Standard Back Button -->
+        <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        
+        <!-- Tool Icon -->
+        <div class="hdr-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        
+        <!-- Titles -->
+        <div class="hdr-titles">
+          <h1>Visual Timezone & Julian Date Converter</h1>
+          <p>Sync world clocks via day/night scrolling timelines and calculate astronomical Julian Days</p>
+        </div>
+      </div>
+      
+      <div class="hdr-right">
+        <!-- Standardized Action Buttons -->
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <i data-lucide="share-2"></i> Share Link
+        </button>
+        <button onclick="exportJSON()" class="hdr-btn" title="Export setup to JSON file">
+          <i data-lucide="download"></i> Export JSON
+        </button>
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import setup from JSON file">
+          <i data-lucide="upload"></i> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" style="display:none;" />
+        
+        <div class="hdr-divider"></div>
+        
+        <!-- Auth Button -->
+        <button id="auth-btn" title="Sign In">
+          <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+        </button>
+        
+        <!-- Theme Toggle -->
+        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+          <i data-lucide="moon" class="moon-icon"></i>
+          <i data-lucide="sun" class="sun-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid Content -->
+  <main class="container page-content">
+    <div class="timezone-layout">
+      
+      <!-- Left Column: Controls & Calculators -->
+      <section class="controls-column">
+        
+        <!-- Target Calendar Selector -->
+        <article class="tool-card">
+          <div class="card-header">
+            <h2>Calendar Reference Date</h2>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="date-select">Reference Date</label>
+              <input type="date" id="date-select" class="form-input" />
+            </div>
+            <div class="form-group flex-1">
+              <label for="time-select">UTC Time Reference</label>
+              <input type="time" id="time-select" class="form-input" step="1" />
+            </div>
+          </div>
+          <button id="current-time-btn" class="action-btn w-full margin-top-12">
+            <i data-lucide="compass"></i> Sync to Current Time
+          </button>
+        </article>
+
+        <!-- Julian Date Calculator Card -->
+        <article class="tool-card">
+          <div class="card-header">
+            <h2>Julian Date Converter</h2>
+          </div>
+          <div class="form-group">
+            <label for="julian-date-input">Julian Date (JD)</label>
+            <input type="number" step="0.000001" id="julian-date-input" class="form-input font-mono" placeholder="e.g. 2461230.5" />
+          </div>
+          <div class="form-group margin-top-12">
+            <label for="mjd-input">Modified Julian Date (MJD)</label>
+            <input type="number" step="0.000001" id="mjd-input" class="form-input font-mono" placeholder="e.g. 61230.0" />
+          </div>
+          <p class="tool-tip margin-top-12">
+            Julian date is counted continuously from noon on January 1, 4713 BC. MJD shifts this count to midnight and offsets it by 2,400,000.5 days.
+          </p>
+        </article>
+
+        <!-- Timezone Addition Card -->
+        <article class="tool-card">
+          <div class="card-header">
+            <h2>Add Timezone Row</h2>
+          </div>
+          <div class="form-group">
+            <label for="timezone-search">Search Timezone or Offset</label>
+            <select id="timezone-search" class="form-select">
+              <option value="">-- Choose a timezone --</option>
+              <!-- Populate dynamically in JS -->
+            </select>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- Right Column: Visual Timelines -->
+      <section class="timeline-column">
+        <article class="tool-card timeline-card">
+          <div class="card-header border-bottom">
+            <div class="header-titles">
+              <h2>Interactive Timeline Planner</h2>
+              <p>Drag any slider horizontally to sync all timezones. Yellow represents day, blue represents night.</p>
+            </div>
+            <button id="reset-setup-btn" class="clear-btn">
+              <i data-lucide="rotate-ccw"></i> Reset Layout
+            </button>
+          </div>
+
+          <div class="timelines-dashboard-wrapper">
+            <!-- Timeline hours header (shows 00 to 24 headers) -->
+            <div class="timeline-header-hours">
+              <div class="timezone-info-spacer">Timezone</div>
+              <div class="hours-ruler">
+                <span>00h</span>
+                <span>03h</span>
+                <span>06h</span>
+                <span>09h</span>
+                <span>12h</span>
+                <span>15h</span>
+                <span>18h</span>
+                <span>21h</span>
+                <span>24h</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Timelines Container -->
+            <div id="timelines-container" class="timelines-container">
+              <!-- Timeline rows injected by JS -->
+            </div>
+          </div>
+        </article>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- JS Scripts -->
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/project-manager.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

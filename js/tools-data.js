@@ -69,6 +69,15 @@ const TOOLS_DATA = [
     status: "active"
   },
   {
+    id: "timezone-converter",
+    name: "Visual Timezone & Julian Date Converter",
+    description: "Interactive timezone planner with scrolling day/night visual timelines, linking UTC, local zones, and precise Julian / Modified Julian date conversions.",
+    tags: ["general", "time", "timezone", "utc", "julian-date", "planner", "astronomy"],
+    icon: "clock",
+    path: "./tools/timezone-converter/index.html",
+    status: "active"
+  },
+  {
     id: "bolt-torque",
     name: "Bolt Torque & Tension Calculator",
     description: "Determine target bolt torque, preload tension, and friction coefficient adjustments for mechanical design.",
