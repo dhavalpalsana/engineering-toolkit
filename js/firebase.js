@@ -295,5 +295,37 @@ window.fbHelper = {
     } catch (e) {
       return { data: [], error: e };
     }
+  },
+
+  suggestTool: async (toolName, toolDesc, contactEmail) => {
+    if (!isConfigured) {
+      // Local fallback
+      const existing = JSON.parse(localStorage.getItem("tool_suggestions") || "[]");
+      existing.push({ toolName, toolDesc, contactEmail, date: new Date().toISOString() });
+      localStorage.setItem("tool_suggestions", JSON.stringify(existing));
+      return { success: true, local: true };
+    }
+
+    try {
+      const user = auth.currentUser;
+      const docData = {
+        toolName,
+        toolDesc,
+        contactEmail: contactEmail || (user ? user.email : null),
+        userId: user ? user.uid : null,
+        createdAt: new Date().toISOString(),
+        status: "pending"
+      };
+
+      await db.collection("tool_suggestions").add(docData);
+      return { success: true, local: false };
+    } catch (e) {
+      console.error("Failed to save tool suggestion to Firestore:", e);
+      // Fallback
+      const existing = JSON.parse(localStorage.getItem("tool_suggestions") || "[]");
+      existing.push({ toolName, toolDesc, contactEmail, date: new Date().toISOString(), error: e.message });
+      localStorage.setItem("tool_suggestions", JSON.stringify(existing));
+      return { success: true, local: true, error: e };
+    }
   }
 };

@@ -11,6 +11,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const requestForm = document.getElementById("request-form");
   const suggestBtn = document.getElementById("suggest-btn");
   const modalCloseBtn = document.getElementById("modal-close");
+  const suggestSuccessView = document.getElementById("suggest-success-view");
+  const githubIssueLink = document.getElementById("github-issue-link");
+  const btnSuccessDone = document.getElementById("btn-success-done");
 
   // Initial Theme Sync
   const initTheme = () => {
@@ -165,12 +168,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Modal Functionality
   const openModal = () => {
+    requestForm.style.display = "block";
+    suggestSuccessView.style.display = "none";
     requestModal.classList.add("active");
     document.getElementById("tool-name-input").value = "";
     document.getElementById("tool-name-input").focus();
   };
 
   const openModalWithTool = (toolName) => {
+    requestForm.style.display = "block";
+    suggestSuccessView.style.display = "none";
     requestModal.classList.add("active");
     document.getElementById("tool-name-input").value = toolName;
     document.getElementById("tool-description-input").focus();
@@ -183,6 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Bind main suggestion buttons
   suggestBtn.addEventListener("click", openModal);
   modalCloseBtn.addEventListener("click", closeModal);
+  btnSuccessDone.addEventListener("click", closeModal);
   requestModal.addEventListener("click", (e) => {
     if (e.target === requestModal) {
       closeModal();
@@ -197,18 +205,28 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Handle Request Submission
-  requestForm.addEventListener("submit", (e) => {
+  requestForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const submitBtn = requestForm.querySelector("button[type=submit]");
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting...";
+
     const toolName = document.getElementById("tool-name-input").value;
     const toolDesc = document.getElementById("tool-description-input").value;
     const contactEmail = document.getElementById("contact-email").value;
 
-    // Store in local storage for local reference
-    const existing = JSON.parse(localStorage.getItem("tool_suggestions") || "[]");
-    existing.push({ toolName, toolDesc, contactEmail, date: new Date().toISOString() });
-    localStorage.setItem("tool_suggestions", JSON.stringify(existing));
+    // 1. Save to Database (Firestore with Local Fallback)
+    if (window.fbHelper && typeof window.fbHelper.suggestTool === "function") {
+      await window.fbHelper.suggestTool(toolName, toolDesc, contactEmail);
+    } else {
+      // Local fallback if firebase helper is not loaded
+      const existing = JSON.parse(localStorage.getItem("tool_suggestions") || "[]");
+      existing.push({ toolName, toolDesc, contactEmail, date: new Date().toISOString() });
+      localStorage.setItem("tool_suggestions", JSON.stringify(existing));
+    }
 
-    // Construct the GitHub pre-filled issue URL
+    // 2. Build the GitHub pre-filled issue URL
     const repoUrl = "https://github.com/dhavalpalsana/engineering-toolkit/issues/new";
     const title = encodeURIComponent(`Tool Suggestion: ${toolName}`);
     const body = encodeURIComponent(
@@ -218,15 +236,15 @@ document.addEventListener("DOMContentLoaded", () => {
       `**Contact / Context (Optional):** ${contactEmail || "N/A"}\n\n` +
       `*Submitted via Engineering Toolkit Suggestion Portal.*`
     );
-    
-    const githubIssueUrl = `${repoUrl}?title=${title}&body=${body}`;
-    
-    // Open in a new tab
-    window.open(githubIssueUrl, "_blank");
-    
-    // Reset and close
+    githubIssueLink.href = `${repoUrl}?title=${title}&body=${body}`;
+
+    // 3. Reset form and show success screen
     requestForm.reset();
-    closeModal();
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+    
+    requestForm.style.display = "none";
+    suggestSuccessView.style.display = "block";
   });
 
   // Initial Run
