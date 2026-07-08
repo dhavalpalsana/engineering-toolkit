@@ -88,12 +88,9 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
         <h3 class="tool-card-title">${tool.name}</h3>
         <p class="tool-card-desc">${tool.description}</p>
-        <div class="tool-card-tags">
-          ${tool.tags.map(tag => `<span class="tool-tag">#${tag}</span>`).join("")}
-        </div>
         <div class="tool-card-footer">
           ${isActive 
-            ? `<span class="launch-btn">Launch Calculator ${registryIcons.arrowRight}</span>` 
+            ? `<span class="launch-btn">Open Tool ${registryIcons.arrowRight}</span>` 
             : `<span class="coming-soon-text">Under Development</span>`
           }
         </div>

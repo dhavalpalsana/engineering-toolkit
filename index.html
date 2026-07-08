@@ -55,7 +55,7 @@
       </a>
       
       <div class="nav-actions">
-        <button id="auth-btn" class="theme-toggle" title="Sign In" style="display:flex;align-items:center;gap:6px;width:auto;padding:0 12px;border-radius:var(--radius-md);height:40px;font-size:13px;font-weight:600;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-secondary);cursor:pointer;transition:all var(--transition-fast);">
+        <button id="auth-btn" title="Sign In">
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
           <span id="auth-btn-text">Sign In</span>
         </button>
@@ -105,10 +105,6 @@
           <span>Total Catalog:</span>
           <span id="total-count" class="accent">0</span>
         </div>
-        <div class="stat-badge">
-          <span>Standard:</span>
-          <span class="accent">NEC, ASTM, ASME</span>
-        </div>
       </div>
     </section>
 
@@ -146,14 +142,5 @@
   <script src="js/tools-data.js"></script>
   <script src="js/registry.js"></script>
   <script src="js/app.js"></script>
-  <script>
-    // Bind additional suggest button in footer
-    document.getElementById("open-suggest-footer").addEventListener("click", (e) => {
-      e.preventDefault();
-      document.getElementById("request-modal").classList.add("active");
-      document.getElementById("tool-name-input").value = "";
-      document.getElementById("tool-name-input").focus();
-    });
-  </script>
 </body>
 </html>
