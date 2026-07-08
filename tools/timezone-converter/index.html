@@ -114,21 +114,32 @@
           </button>
         </article>
 
-        <!-- Julian Date Calculator Card -->
+        <!-- Julian & Ordinal Date Calculator Card -->
         <article class="tool-card">
           <div class="card-header">
-            <h2>Julian Date Converter</h2>
+            <h2>Julian & Ordinal Date Converter</h2>
           </div>
           <div class="form-group">
-            <label for="julian-date-input">Julian Date (JD)</label>
+            <label for="julian-date-input">Astronomical Julian Date (JD)</label>
             <input type="number" step="0.000001" id="julian-date-input" class="form-input font-mono" placeholder="e.g. 2461230.5" />
           </div>
           <div class="form-group margin-top-12">
             <label for="mjd-input">Modified Julian Date (MJD)</label>
             <input type="number" step="0.000001" id="mjd-input" class="form-input font-mono" placeholder="e.g. 61230.0" />
           </div>
+          <div class="form-row margin-top-12">
+            <div class="form-group flex-1">
+              <label for="yyddd-input">Ordinal Date (YYDDD)</label>
+              <input type="text" id="yyddd-input" class="form-input font-mono" placeholder="e.g. 26189" maxlength="5" />
+            </div>
+            <div class="form-group flex-1">
+              <label for="yyyyddd-input">Ordinal Date (YYYYDDD)</label>
+              <input type="text" id="yyyyddd-input" class="form-input font-mono" placeholder="e.g. 2026189" maxlength="7" />
+            </div>
+          </div>
           <p class="tool-tip margin-top-12">
-            Julian date is counted continuously from noon on January 1, 4713 BC. MJD shifts this count to midnight and offsets it by 2,400,000.5 days.
+            <strong>Astronomical JD</strong> counts days since 4713 BC. <br>
+            <strong>Ordinal Date (YYDDD / YYYYDDD)</strong> is the standard manufacturing and supply chain date code representing the year followed by the day of the year (1–366).
           </p>
         </article>
 

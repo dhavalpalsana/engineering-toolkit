@@ -30,6 +30,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const timezoneSearch = document.getElementById("timezone-search");
   const timelinesContainer = document.getElementById("timelines-container");
   const resetSetupBtn = document.getElementById("reset-setup-btn");
+  const yydddInput = document.getElementById("yyddd-input");
+  const yyyydddInput = document.getElementById("yyyyddd-input");
 
   // Initialize Lucide Icons
   if (typeof lucide !== "undefined") {
@@ -126,6 +128,43 @@ document.addEventListener("DOMContentLoaded", () => {
     return julianToDate(mjd + 2400000.5);
   };
 
+  const dateToOrdinal = (date) => {
+    const y = date.getUTCFullYear();
+    const start = Date.UTC(y, 0, 0);
+    const diff = date.getTime() - start;
+    const oneDay = 1000 * 60 * 60 * 24;
+    const ddd = Math.floor(diff / oneDay);
+    
+    const yy = String(y).slice(-2);
+    const dddStr = String(ddd).padStart(3, "0");
+    
+    return {
+      yyddd: yy + dddStr,
+      yyyyddd: String(y) + dddStr
+    };
+  };
+
+  const ordinalToDate = (str) => {
+    const clean = str.trim().replace(/\D/g, ""); // digits only
+    let y, ddd;
+    if (clean.length === 5) {
+      const yy = parseInt(clean.slice(0, 2));
+      ddd = parseInt(clean.slice(2));
+      y = yy > 80 ? 1900 + yy : 2000 + yy;
+    } else if (clean.length === 7) {
+      y = parseInt(clean.slice(0, 4));
+      ddd = parseInt(clean.slice(4));
+    } else {
+      return null;
+    }
+    
+    if (isNaN(y) || isNaN(ddd) || ddd < 1 || ddd > 366) return null;
+    
+    const date = new Date(Date.UTC(y, 0, 1));
+    date.setUTCDate(ddd);
+    return date;
+  };
+
   // ── Time offsets and Calculations ────────────────────────────
   const getTimezoneOffsetMinutes = (date, timezone) => {
     if (timezone === "Local Time") {
@@ -188,6 +227,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // 2. Julian date inputs
     julianDateInput.value = dateToJulian(anchorDate).toFixed(6);
     mjdInput.value = dateToMJD(anchorDate).toFixed(6);
+
+    const ord = dateToOrdinal(anchorDate);
+    if (yydddInput) yydddInput.value = ord.yyddd;
+    if (yyyydddInput) yyyydddInput.value = ord.yyyyddd;
 
     // 3. Slider thumbs positions & Time labels
     selectedTimezones.forEach(tz => {
@@ -357,6 +400,36 @@ document.addEventListener("DOMContentLoaded", () => {
     updateAllInputs();
     document.dispatchEvent(new Event("change", { bubbles: true }));
   });
+
+  // Ordinal Date (YYDDD) input listener
+  if (yydddInput) {
+    yydddInput.addEventListener("input", () => {
+      const val = yydddInput.value;
+      if (val.length === 5) {
+        const parsed = ordinalToDate(val);
+        if (parsed) {
+          anchorDate = parsed;
+          updateAllInputs();
+          document.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+    });
+  }
+
+  // Ordinal Date (YYYYDDD) input listener
+  if (yyyydddInput) {
+    yyyydddInput.addEventListener("input", () => {
+      const val = yyyydddInput.value;
+      if (val.length === 7) {
+        const parsed = ordinalToDate(val);
+        if (parsed) {
+          anchorDate = parsed;
+          updateAllInputs();
+          document.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+    });
+  }
 
   // Sync to Current Time
   currentTimeBtn.addEventListener("click", () => {
