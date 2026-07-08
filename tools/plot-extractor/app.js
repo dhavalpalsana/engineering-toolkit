@@ -1705,14 +1705,45 @@ document.addEventListener("DOMContentLoaded", () => {
     setZoom(parseFloat(e.target.value));
   });
   
-  // Wheel zoom via Ctrl + Scroll Wheel
+  // Wheel zoom via Ctrl + Scroll Wheel (zooms toward cursor focus)
   canvas.addEventListener("wheel", (e) => {
     if (!imageLoaded) return;
     if (e.ctrlKey) {
       e.preventDefault();
+      
+      const container = document.getElementById("canvas-container-root");
+      const wrapper = document.getElementById("plot-canvas-wrapper");
+      if (!container || !wrapper) return;
+
       const direction = e.deltaY < 0 ? 1 : -1;
       const nextZoom = Math.max(0.5, Math.min(3.0, zoomFactor + direction * 0.1));
+      if (Math.abs(nextZoom - zoomFactor) < 0.01) return;
+
+      // 1. Calculate positions before zoom
+      const scrollLeftBefore = container.scrollLeft;
+      const scrollTopBefore = container.scrollTop;
+      
+      const containerRect = container.getBoundingClientRect();
+      const mouseXInContainer = e.clientX - containerRect.left;
+      const mouseYInContainer = e.clientY - containerRect.top;
+
+      const wrapperLeftBefore = wrapper.offsetLeft;
+      const wrapperTopBefore = wrapper.offsetTop;
+
+      const contentX = mouseXInContainer + scrollLeftBefore - wrapperLeftBefore;
+      const contentY = mouseYInContainer + scrollTopBefore - wrapperTopBefore;
+
+      const ratio = nextZoom / zoomFactor;
+
+      // 2. Apply zoom
       setZoom(nextZoom);
+
+      // 3. Align scroll position to anchor the point under the cursor
+      const wrapperLeftAfter = wrapper.offsetLeft;
+      const wrapperTopAfter = wrapper.offsetTop;
+
+      container.scrollLeft = (contentX * ratio) - mouseXInContainer + wrapperLeftAfter;
+      container.scrollTop = (contentY * ratio) - mouseYInContainer + wrapperTopAfter;
     }
   }, { passive: false });
   
