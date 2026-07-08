@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode & 2D Code Scanner — Engineering Toolkit</title>
+  
+  <!-- SEO & Social Meta Tags -->
+  <meta name="description" content="Free client-side 1D/2D code scanner. Scan QR codes, Barcodes, DataMatrix, and Aztec using your camera, drag-and-drop file upload, or clipboard paste.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eng-toolkit.web.app/tools/code-scanner/">
+  <meta property="og:title" content="Barcode & 2D Code Scanner — Engineering Toolkit">
+  <meta property="og:description" content="Scan QR, Barcode, DataMatrix, and Aztec directly in your browser. Live camera, file upload, or clipboard paste support.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Barcode & 2D Code Scanner — Engineering Toolkit">
+
+  <!-- Typography & CSS Core -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Standard Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <!-- Standard Back Button -->
+        <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        
+        <!-- Tool Icon -->
+        <div class="hdr-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7V5a2 2 0 0 1 2-2h2m10 0h2a2 2 0 0 1 2 2v2m0 10v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M12 8v8M8 8v8M16 8v8M18 8v8M6 8v8"/>
+          </svg>
+        </div>
+        
+        <!-- Titles -->
+        <div class="hdr-titles">
+          <h1>Barcode & 2D Code Scanner</h1>
+          <p>Scan and decode QR codes, DataMatrix, Aztec, and 1D barcodes</p>
+        </div>
+      </div>
+      
+      <div class="hdr-right">
+        <!-- Standardized Action Buttons -->
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <i data-lucide="share-2"></i> Share Link
+        </button>
+        <button onclick="exportJSON()" class="hdr-btn" title="Export scan history to JSON file">
+          <i data-lucide="download"></i> Export JSON
+        </button>
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import scan history from JSON file">
+          <i data-lucide="upload"></i> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" style="display:none;" />
+        
+        <div class="hdr-divider"></div>
+        
+        <!-- Auth Button -->
+        <button id="auth-btn" title="Sign In">
+          <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+        </button>
+        
+        <!-- Theme Toggle -->
+        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+          <i data-lucide="moon" class="moon-icon"></i>
+          <i data-lucide="sun" class="sun-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container page-content">
+    <div class="scanner-grid">
+      
+      <!-- Left Column: Scanning Inputs -->
+      <section class="scanner-card main-scan-card">
+        <div class="tabs-row">
+          <button class="tab-btn active" data-tab="camera-tab">
+            <i data-lucide="camera"></i> Live Camera
+          </button>
+          <button class="tab-btn" data-tab="file-tab">
+            <i data-lucide="image"></i> File / Paste
+          </button>
+        </div>
+
+        <div class="tab-content" id="camera-tab">
+          <div class="controls-wrapper">
+            <div class="select-group">
+              <label for="camera-select">Select Camera Device</label>
+              <div class="select-container">
+                <select id="camera-select" class="form-select">
+                  <option value="">Detecting cameras...</option>
+                </select>
+              </div>
+            </div>
+            <button id="toggle-camera-btn" class="action-btn">
+              <i data-lucide="play"></i> Start Scanner
+            </button>
+          </div>
+
+          <div class="viewfinder-container">
+            <div id="reader" style="width:100%; max-width:540px; margin:0 auto; overflow:hidden;"></div>
+            <div id="viewfinder-placeholder" class="viewfinder-placeholder">
+              <div class="placeholder-icon">
+                <i data-lucide="camera-off"></i>
+              </div>
+              <p>Camera is currently off. Select a device and start scanning.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-content hidden" id="file-tab">
+          <div id="drop-zone" class="drop-zone">
+            <div class="drop-zone-content">
+              <div class="upload-icon-box">
+                <i data-lucide="upload-cloud"></i>
+              </div>
+              <h3>Drag & drop code image here</h3>
+              <p>Supports QR, Barcode, DataMatrix, and Aztec</p>
+              <span class="or-divider">— or —</span>
+              <button class="action-btn outline-btn" onclick="document.getElementById('file-input').click()">
+                Browse Files
+              </button>
+              <input type="file" id="file-input" accept="image/*" style="display:none;" />
+              <p class="paste-tip">Tip: You can also copy an image and paste it here with <kbd>Ctrl+V</kbd></p>
+            </div>
+            <div id="image-preview-container" class="image-preview-container hidden">
+              <img id="image-preview" src="#" alt="Preview of uploaded code file" />
+              <div class="preview-overlay">
+                <button id="clear-image-btn" class="icon-btn danger-btn" title="Remove image">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div id="file-status" class="status-banner info hidden">
+            <span class="status-dot"></span>
+            <span id="file-status-text">Ready to decode.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Decoding Output & History -->
+      <section class="scanner-column-right">
+        
+        <!-- Output Panel -->
+        <article class="scanner-card output-card">
+          <div class="card-header">
+            <h2>Scan Result</h2>
+            <span id="output-badge" class="badge secondary hidden">QR_CODE</span>
+          </div>
+          
+          <div class="output-wrapper">
+            <div class="output-field">
+              <textarea id="output-text" readonly placeholder="Result data will appear here after scanning..."></textarea>
+            </div>
+            
+            <div class="action-row">
+              <button id="copy-btn" class="action-btn secondary-btn" disabled>
+                <i data-lucide="copy"></i> Copy Data
+              </button>
+              <a href="#" id="open-link-btn" class="action-btn link-btn disabled" target="_blank" rel="noopener">
+                <i data-lucide="external-link"></i> Open Link
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Session History -->
+        <article class="scanner-card history-card">
+          <div class="card-header">
+            <h2>Scan History</h2>
+            <button id="clear-history-btn" class="clear-btn" disabled>
+              <i data-lucide="trash-2"></i> Clear
+            </button>
+          </div>
+          
+          <div class="history-list-wrapper">
+            <div id="history-empty" class="history-empty">
+              <i data-lucide="history"></i>
+              <p>No codes scanned in this session yet.</p>
+            </div>
+            <ul id="history-list" class="history-list">
+              <!-- History items injected here -->
+            </ul>
+          </div>
+        </article>
+
+      </section>
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/project-manager.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

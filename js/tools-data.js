@@ -60,6 +60,15 @@ const TOOLS_DATA = [
     status: "active"
   },
   {
+    id: "code-scanner",
+    name: "Barcode & 2D Code Scanner",
+    description: "Scan and decode 1D/2D codes (QR, Barcode, DataMatrix, Aztec) from a live camera feed, local image files, or directly pasted from your clipboard.",
+    tags: ["general", "barcode", "qr", "scanner", "utility", "datamatrix"],
+    icon: "scan",
+    path: "./tools/code-scanner/index.html",
+    status: "active"
+  },
+  {
     id: "bolt-torque",
     name: "Bolt Torque & Tension Calculator",
     description: "Determine target bolt torque, preload tension, and friction coefficient adjustments for mechanical design.",
