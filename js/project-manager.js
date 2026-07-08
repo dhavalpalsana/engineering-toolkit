@@ -1255,18 +1255,23 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ── Safe Update / Redeploy Progress Safeguard ──────────────────────────
-  window.promptUpdate = function(updateAction) {
+  window.promptUpdate = function(actionOrTime) {
     const user = (fb && fb.isConfigured() && firebase.auth().currentUser) || null;
     
+    const triggerReload = () => {
+      if (typeof actionOrTime === "function") {
+        actionOrTime();
+      } else if (actionOrTime) {
+        // Hard refresh via query parameter cache-busting
+        window.location.href = window.location.pathname + "?v=" + actionOrTime + window.location.hash;
+      } else {
+        window.location.reload();
+      }
+    };
+
     if (user) {
       if (window.showToast) window.showToast("Updating website and reloading...");
-      setTimeout(() => {
-        if (typeof updateAction === "function") {
-          updateAction();
-        } else {
-          window.location.reload();
-        }
-      }, 1000);
+      setTimeout(triggerReload, 1000);
       return;
     }
     
@@ -1318,11 +1323,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     document.getElementById("update-warning-reload").onclick = () => {
       overlay.style.display = "none";
-      if (typeof updateAction === "function") {
-        updateAction();
-      } else {
-        window.location.reload();
-      }
+      triggerReload();
     };
     
     document.getElementById("update-warning-signin").onclick = () => {
@@ -1362,7 +1363,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .then(data => {
         const deployTime = parseInt(data.version);
         if (deployTime > APP_LOAD_TIME) {
-          window.promptUpdate();
+          window.promptUpdate(deployTime);
         }
       })
       .catch(err => console.warn("Could not check for updates:", err));
