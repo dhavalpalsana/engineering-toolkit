@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Select DOM Elements
   const dropzone = document.getElementById("image-dropzone");
   const fileInput = document.getElementById("file-upload-input");
+  const btnLoadExample = document.getElementById("btn-load-example");
   const canvasContainer = document.getElementById("canvas-container-root");
   const canvasWrapper = document.getElementById("plot-canvas-wrapper");
   const plotImg = document.getElementById("plot-image");
@@ -113,6 +114,13 @@ document.addEventListener("DOMContentLoaded", () => {
   lucide.createIcons();
   
   // ── Drag & Drop, Select Image Handlers ───────────────────────
+  if (btnLoadExample) {
+    btnLoadExample.addEventListener("click", (e) => {
+      e.stopPropagation();
+      loadImage("assets/plot-placeholder.jpg");
+    });
+  }
+  
   dropzone.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", (e) => {
     const file = e.target.files[0];

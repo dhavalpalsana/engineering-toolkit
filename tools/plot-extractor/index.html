@@ -136,11 +136,15 @@
 
       <!-- Dropzone when no image is loaded -->
       <div class="canvas-container" id="canvas-container-root">
-        <div class="dropzone" id="image-dropzone">
-          <i data-lucide="upload-cloud"></i>
-          <h3>Upload Plot Image</h3>
-          <p>Drag &amp; drop, browse files, or simply paste an image link or clipboard screenshot (Ctrl+V)</p>
-          <input type="file" id="file-upload-input" accept="image/*" style="display: none;" />
+        <div class="dropzone" id="image-dropzone" style="position: relative; overflow: hidden;">
+          <img src="assets/plot-placeholder.jpg" alt="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.06; pointer-events: none; z-index: 1;" />
+          <div style="position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
+            <i data-lucide="upload-cloud"></i>
+            <h3>Upload Plot Image</h3>
+            <p>Drag &amp; drop, browse files, or simply paste an image link or clipboard screenshot (Ctrl+V)</p>
+            <button type="button" id="btn-load-example" class="action-btn secondary" style="margin-top: 18px; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px;">💡 Try Example Plot</button>
+            <input type="file" id="file-upload-input" accept="image/*" style="display: none;" />
+          </div>
         </div>
         
         <!-- Canvas wrapper visible after load -->
