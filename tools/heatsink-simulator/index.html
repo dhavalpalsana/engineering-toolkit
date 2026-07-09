@@ -18,7 +18,7 @@
   <title>3D Heat Sink Simulator — Engineering Toolkit</title>
   
   <!-- SEO & Social Meta Tags -->
-  <meta name="description" content="Design and simulate parametric plate-fin heat sinks in interactive 3D. Optimize thermal interface materials (TIM), chip positions, air ducting, and fan curves.">
+  <meta name="description" content="Design and simulate parametric plate-fin heat sinks in interactive 3D. Optimize thermal interface materials (TIM), heat source positions, air ducting, and fan curves.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://eng-toolkit.web.app/tools/heatsink-simulator/">
   <meta property="og:title" content="3D Heat Sink Simulator — Engineering Toolkit">
@@ -54,7 +54,7 @@
         <!-- Titles -->
         <div class="hdr-titles">
           <h1>3D Heat Sink Simulator</h1>
-          <p>Design finned assemblies, optimize chip locations, TIM, and forced air cooling</p>
+          <p>Design finned assemblies, optimize heat source locations, TIM, and forced air cooling</p>
         </div>
       </div>
       
@@ -100,10 +100,13 @@
             <i data-lucide="box"></i> Geometry & Material
           </button>
           <button class="tab-btn" data-tab="sources-tab">
-            <i data-lucide="cpu"></i> Chip & TIM Stack
+            <i data-lucide="cpu"></i> Heat Source & TIM Stack
           </button>
           <button class="tab-btn" data-tab="cooling-tab">
             <i data-lucide="wind"></i> Cooling & Airflow
+          </button>
+          <button class="tab-btn" data-tab="cad-tab">
+            <i data-lucide="file-up"></i> CAD Import
           </button>
         </div>
 
@@ -113,33 +116,39 @@
             <h2>Heatsink Dimensions</h2>
             <div class="form-row">
               <div class="form-group flex-1">
-                <label for="base-width">Base Width (W - mm)</label>
+                <label for="base-width">Base Width <span>(W - mm)</span></label>
                 <input type="number" id="base-width" class="form-input" min="20" max="300" value="80" step="1" />
               </div>
               <div class="form-group flex-1">
-                <label for="base-length">Base Length (L - mm)</label>
+                <label for="base-length">Base Length <span>(L - mm)</span></label>
                 <input type="number" id="base-length" class="form-input" min="20" max="300" value="80" step="1" />
               </div>
             </div>
             <div class="form-group margin-top-12">
-              <label for="base-height">Base Thickness (t - mm)</label>
+              <label for="base-height">Base Thickness <span>(t - mm)</span></label>
               <input type="number" id="base-height" class="form-input" min="2" max="30" value="6" step="0.5" />
             </div>
 
             <h2 class="margin-top-20">Fin Geometry (Plate Fins)</h2>
             <div class="form-row">
               <div class="form-group flex-1">
-                <label for="fin-height">Fin Height (mm)</label>
+                <label for="fin-height">Fin Height <span>(mm)</span></label>
                 <input type="number" id="fin-height" class="form-input" min="5" max="100" value="25" step="1" />
               </div>
               <div class="form-group flex-1">
-                <label for="fin-thickness">Fin Thickness (mm)</label>
+                <label for="fin-thickness">Fin Thickness <span>(mm)</span></label>
                 <input type="number" id="fin-thickness" class="form-input" min="0.5" max="5" value="1.5" step="0.1" />
               </div>
             </div>
-            <div class="form-group margin-top-12">
-              <label for="fin-count">Number of Fins</label>
-              <input type="number" id="fin-count" class="form-input" min="2" max="50" value="16" step="1" />
+            <div class="form-row margin-top-12">
+              <div class="form-group flex-1">
+                <label for="fin-count">Number of Fins</label>
+                <input type="number" id="fin-count" class="form-input" min="2" max="50" value="16" step="1" />
+              </div>
+              <div class="form-group flex-1">
+                <label for="fin-spacing">Fin Spacing <span>(s - mm)</span></label>
+                <input type="number" id="fin-spacing" class="form-input" readonly style="background: var(--bg-tertiary); cursor: not-allowed;" />
+              </div>
             </div>
 
             <h2 class="margin-top-20">Material Properties</h2>
@@ -158,33 +167,33 @@
           </article>
         </div>
 
-        <!-- Tab 2: Chip & TIM Stack -->
+        <!-- Tab 2: Heat Source & TIM Stack -->
         <div class="tab-content hidden" id="sources-tab">
           <article class="config-card">
             <div class="card-header-actions">
-              <h2>Heat Sources (Silicon Chips)</h2>
-              <button id="add-chip-btn" class="action-btn secondary-btn small-btn">
-                <i data-lucide="plus"></i> Add Chip
+              <h2>Heat Sources</h2>
+              <button id="add-source-btn" class="action-btn secondary-btn small-btn">
+                <i data-lucide="plus"></i> Add Heat Source
               </button>
             </div>
             
-            <div id="chips-list-container" class="chips-list-container">
-              <!-- Dynamically populated chip configurations -->
+            <div id="sources-list-container" class="chips-list-container">
+              <!-- Dynamically populated heat sources configurations -->
             </div>
 
             <h2 class="margin-top-20">Thermal Interface Material (TIM)</h2>
             <div class="form-row">
               <div class="form-group flex-1">
-                <label for="tim-thickness">TIM Thickness (&mu;m)</label>
-                <input type="number" id="tim-thickness" class="form-input" min="10" max="500" value="50" step="5" />
+                <label for="tim-thickness">TIM Thickness <span>(&mu;m)</span></label>
+                <input type="number" id="tim-thickness" class="form-input" min="10" max="500" value="100" step="5" />
               </div>
               <div class="form-group flex-1">
-                <label for="tim-k">TIM Conductivity (W/m·K)</label>
-                <input type="number" id="tim-k" class="form-input" min="0.1" max="20" value="3.5" step="0.1" />
+                <label for="tim-k">TIM Conductivity <span>(W/m·K)</span></label>
+                <input type="number" id="tim-k" class="form-input" min="0.1" max="20" value="5.0" step="0.1" />
               </div>
             </div>
             <p class="tool-tip margin-top-12">
-              TIM bridges micro-gaps between the silicon chip and heatsink base. Silicon chips generate heat which is conducted through the TIM layer.
+              TIM bridges micro-gaps between the heat source and heatsink base. Heat sources generate heat which is conducted through the TIM layer.
             </p>
           </article>
         </div>
@@ -201,7 +210,7 @@
               </select>
             </div>
             <div class="form-group margin-top-12">
-              <label for="ambient-temp">Ambient Temperature (&deg;C)</label>
+              <label for="ambient-temp">Ambient Temperature <span>(&deg;C)</span></label>
               <input type="number" id="ambient-temp" class="form-input" min="-20" max="100" value="25" step="1" />
             </div>
 
@@ -209,16 +218,16 @@
             <div id="forced-cooling-controls" class="margin-top-20">
               <h2>Forced Air Intake</h2>
               <div class="form-group">
-                <label for="fan-airflow">Fan Intake Airflow (CFM)</label>
+                <label for="fan-airflow">Fan Intake Airflow <span>(CFM)</span></label>
                 <input type="number" id="fan-airflow" class="form-input" min="1" max="200" value="32" step="1" />
               </div>
               <div class="form-row margin-top-12">
                 <div class="form-group flex-1">
-                  <label for="duct-bypass-side">Side Duct Clearance (mm)</label>
+                  <label for="duct-bypass-side">Side Duct Clearance <span>(mm)</span></label>
                   <input type="number" id="duct-bypass-side" class="form-input" min="0" max="20" value="2" step="0.5" />
                 </div>
                 <div class="form-group flex-1">
-                  <label for="duct-bypass-top">Top Duct Clearance (mm)</label>
+                  <label for="duct-bypass-top">Top Duct Clearance <span>(mm)</span></label>
                   <input type="number" id="duct-bypass-top" class="form-input" min="0" max="20" value="1" step="0.5" />
                 </div>
               </div>
@@ -229,9 +238,19 @@
 
             <!-- Natural convection controls -->
             <div id="natural-cooling-controls" class="margin-top-20 hidden">
-              <h2>Radiative Properties</h2>
+              <h2>Orientation relative to Gravity</h2>
               <div class="form-group">
-                <label for="surface-emissivity">Surface Emissivity (&epsilon;)</label>
+                <label for="assembly-orientation">Assembly Orientation</label>
+                <select id="assembly-orientation" class="form-select">
+                  <option value="upward">Fins Pointing Upward (Horizontal)</option>
+                  <option value="downward">Fins Pointing Downward (Upside Down)</option>
+                  <option value="vertical">Fins Vertical (Chimney Mode)</option>
+                </select>
+              </div>
+
+              <h2 class="margin-top-16">Radiative Properties</h2>
+              <div class="form-group">
+                <label for="surface-emissivity">Surface Emissivity <span>(&epsilon;)</span></label>
                 <input type="number" id="surface-emissivity" class="form-input" min="0.0" max="1.0" value="0.85" step="0.05" />
               </div>
               <p class="tool-tip margin-top-12">
@@ -239,6 +258,39 @@
               </p>
             </div>
           </article>
+        </div>
+
+        <!-- Tab 4: CAD Import (Optional) -->
+        <div class="tab-content hidden" id="cad-tab">
+          <article class="config-card">
+            <h2>Custom CAD Assembly Import</h2>
+            <p class="tool-tip">
+              Upload a 3D assembly (STEP) to simulate custom heatsinks. Assign roles (Heatsink, Heat Source, Duct, etc.) and materials by clicking parts in the 3D viewport or using the manager list below.
+            </p>
+            <div class="form-group margin-top-12">
+              <label for="cad-file-input">Select 3D File <span>(.step, .stp)</span></label>
+              <input type="file" id="cad-file-input" class="form-input" accept=".step,.stp" />
+            </div>
+            
+            <div id="cad-active-controls" class="margin-top-16 hidden">
+              <button id="cad-clear-btn" class="action-btn secondary-btn small-btn" style="width: 100%;">
+                <i data-lucide="x"></i> Clear CAD Mode (Back to Parametric)
+              </button>
+            </div>
+          </article>
+
+          <article class="config-card margin-top-16" id="cad-parts-card">
+            <h2>CAD Parts Manager</h2>
+            <div id="cad-parts-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <p class="text-muted" style="font-size: 12px; text-align: center; padding: 12px;">No CAD parts loaded. Upload a file above to begin.</p>
+            </div>
+          </article>
+        </div>
+        <!-- Run Simulation Button -->
+        <div class="form-group margin-top-20">
+          <button id="run-sim-btn" class="action-btn" style="width: 100%; height: 42px; font-size: 14px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); border: none; color: #fff; box-shadow: 0 4px 10px rgba(13,148,136,0.2);">
+            <i data-lucide="play"></i> Run Simulation
+          </button>
         </div>
 
       </section>
@@ -250,12 +302,17 @@
         <article class="config-card viewport-card">
           <div class="card-header-actions">
             <h2>3D Model Assembly & Heat Gradient</h2>
-            <div class="legend-scale">
-              <span class="legend-color-box temp-cold"></span>
-              <span id="legend-min">25&deg;C</span>
-              <span class="legend-gradient"></span>
-              <span id="legend-max">75&deg;C</span>
-              <span class="legend-color-box temp-hot"></span>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <div class="legend-scale">
+                <span class="legend-color-box temp-cold"></span>
+                <span id="legend-min">25&deg;C</span>
+                <span class="legend-gradient"></span>
+                <span id="legend-max">75&deg;C</span>
+                <span class="legend-color-box temp-hot"></span>
+              </div>
+              <button id="reset-view-btn" class="action-btn secondary-btn small-btn" title="Reset Camera View" style="height: 24px; padding: 0 8px; font-size: 10px; display: inline-flex; align-items: center; gap: 4px;">
+                <i data-lucide="refresh-cw" style="width: 10px; height: 10px;"></i> Reset View
+              </button>
             </div>
           </div>
 
@@ -295,6 +352,13 @@
             </div>
           </div>
 
+          <div class="margin-top-16" id="sources-temp-section" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+            <h3 style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px; margin-bottom: 8px;">Individual Heat Source Temperatures (Tj)</h3>
+            <div id="sources-temp-list" style="display: flex; flex-direction: column; gap: 6px;">
+              <!-- Dynamically populated list rows -->
+            </div>
+          </div>
+
           <div class="chart-section margin-top-20">
             <h3>System Flow & Fan Impedance Match</h3>
             <div class="chart-wrapper">
@@ -311,6 +375,7 @@
   <!-- JS Dependencies -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.12/dist/occt-import-js.js"></script>
   <script src="https://unpkg.com/lucide@0.460.0"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>

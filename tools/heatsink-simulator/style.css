@@ -101,6 +101,7 @@ body::before {
 /* Tabs */
 .tabs-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 12px;
@@ -159,6 +160,12 @@ body::before {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.form-group label span {
+  text-transform: none;
+  font-weight: 500;
+  opacity: 0.85;
 }
 
 .form-input, .form-select {
@@ -454,4 +461,8 @@ body::before {
   height: 28px;
   padding: 0 8px;
   font-size: 11px;
+}
+
+.hidden {
+  display: none !important;
 }

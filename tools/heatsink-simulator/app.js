@@ -23,8 +23,8 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
 
   let tim = {
-    thickness: 50, // micrometers
-    k: 3.5         // W/mK
+    thickness: 100, // micrometers (0.1mm)
+    k: 5.0          // W/mK
   };
 
   let environment = {
@@ -33,13 +33,17 @@ document.addEventListener("DOMContentLoaded", () => {
     fanAirflow: 32,  // CFM (Max Flow)
     bypassSide: 2,   // mm
     bypassTop: 1,    // mm
-    emissivity: 0.85
+    emissivity: 0.85,
+    orientation: "upward"
   };
 
   // 3D Rendering variables
   let scene, camera, renderer, controls;
-  let heatsinkGroup, chipsGroup, ductMesh;
+  let heatsinkGroup, chipsGroup, ductMesh, helpersGroup, cadAssemblyGroup;
   const canvasContainer = document.getElementById("canvas-container");
+  
+  let cadMode = false;
+  let cadParts = [];
   
   // Solver Grid dimensions
   const Nx = 15;
@@ -53,12 +57,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const finHeightInput = document.getElementById("fin-height");
   const finThicknessInput = document.getElementById("fin-thickness");
   const finCountInput = document.getElementById("fin-count");
+  const finSpacingInput = document.getElementById("fin-spacing");
   const materialSelect = document.getElementById("material-select");
   const customKGroup = document.getElementById("custom-k-group");
   const customKInput = document.getElementById("custom-k");
 
-  const addChipBtn = document.getElementById("add-chip-btn");
-  const chipsListContainer = document.getElementById("chips-list-container");
+  const addChipBtn = document.getElementById("add-source-btn");
+  const chipsListContainer = document.getElementById("sources-list-container");
   const timThicknessInput = document.getElementById("tim-thickness");
   const timKInput = document.getElementById("tim-k");
 
@@ -69,10 +74,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const bypassSideInput = document.getElementById("duct-bypass-side");
   const bypassTopInput = document.getElementById("duct-bypass-top");
   const naturalCoolingControls = document.getElementById("natural-cooling-controls");
+  const assemblyOrientation = document.getElementById("assembly-orientation");
   const surfaceEmissivityInput = document.getElementById("surface-emissivity");
 
   const simSpinner = document.getElementById("sim-spinner");
   const statusBadge = document.getElementById("status-badge");
+
+  const cadFileInput = document.getElementById("cad-file-input");
+  const cadPartsList = document.getElementById("cad-parts-list");
+  const cadActiveControls = document.getElementById("cad-active-controls");
+  const cadClearBtn = document.getElementById("cad-clear-btn");
   const resTJunction = document.getElementById("res-t-junction");
   const resTBase = document.getElementById("res-t-base");
   const resHCoeff = document.getElementById("res-h-coeff");
@@ -102,6 +113,52 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  const syncFinLimits = () => {
+    const W = parseFloat(baseWidthInput.value) || 80;
+    const tf = parseFloat(finThicknessInput.value) || 1.5;
+    
+    // Max fins calculation allowing min 0.5mm clear space
+    const Nmax = Math.max(2, Math.floor((W - tf) / (tf + 0.5)) + 1);
+    finCountInput.max = Nmax;
+
+    let N = parseInt(finCountInput.value) || 16;
+    if (N > Nmax) {
+      N = Nmax;
+      finCountInput.value = Nmax;
+    }
+    
+    // Resulting clear spacing
+    const s_f = (W - N * tf) / (N - 1 || 1);
+    finSpacingInput.value = s_f.toFixed(2);
+  };
+
+  const updateCADGeometry = () => {
+    if (cadMode) return;
+    syncFinLimits();
+    heatsink.width = parseFloat(baseWidthInput.value) || 80;
+    heatsink.length = parseFloat(baseLengthInput.value) || 80;
+    heatsink.thickness = parseFloat(baseHeightInput.value) || 6;
+    heatsink.finHeight = parseFloat(finHeightInput.value) || 25;
+    heatsink.finThickness = parseFloat(finThicknessInput.value) || 1.5;
+    heatsink.finCount = parseInt(finCountInput.value) || 16;
+    heatsink.customK = parseFloat(customKInput.value) || 200;
+
+    environment.bypassSide = parseFloat(bypassSideInput.value) || 2;
+    environment.bypassTop = parseFloat(bypassTopInput.value) || 1;
+    environment.mode = convectionMode.value;
+    environment.orientation = assemblyOrientation.value;
+
+    // Set grid temperatures to ambient for standard CAD representation
+    for (let i = 0; i < Nx; i++) {
+      for (let j = 0; j < Ny; j++) {
+        gridT[i][j] = environment.ambientTemp;
+      }
+    }
+
+    // Update 3D model meshes
+    update3DModel(environment.ambientTemp, environment.ambientTemp);
+  };
+
   // ── Material Custom Selector toggle ─────────────────────────
   materialSelect.addEventListener("change", () => {
     if (materialSelect.value === "custom") {
@@ -110,10 +167,10 @@ document.addEventListener("DOMContentLoaded", () => {
       customKGroup.classList.add("hidden");
     }
     heatsink.material = materialSelect.value;
-    runSimulation();
+    document.dispatchEvent(new Event("change", { bubbles: true }));
   });
 
-  // ── Chip Elements Dynamic Management ────────────────────────
+  // ── Heat Source Elements Dynamic Management ──────────────────
   const renderChipsUI = () => {
     chipsListContainer.innerHTML = "";
     chips.forEach((chip, index) => {
@@ -121,28 +178,28 @@ document.addEventListener("DOMContentLoaded", () => {
       row.className = "chip-item-row";
       row.innerHTML = `
         <div class="chip-header">
-          <span class="chip-title">Chip #${index + 1}</span>
+          <span class="chip-title">Heat Source #${index + 1}</span>
           ${chips.length > 1 ? `
-            <button class="delete-chip-btn" data-id="${chip.id}" title="Remove Chip">
+            <button class="delete-chip-btn" data-id="${chip.id}" title="Remove Heat Source">
               <i data-lucide="trash-2"></i>
             </button>
           ` : ""}
         </div>
         <div class="chip-inputs">
           <div class="form-group">
-            <label>Power (W)</label>
+            <label>Power <span>(W)</span></label>
             <input type="number" class="form-input chip-power" data-id="${chip.id}" value="${chip.power}" min="1" max="500" />
           </div>
           <div class="form-group">
-            <label>Size (W x L - mm)</label>
+            <label>Size <span>(W x L - mm)</span></label>
             <input type="number" class="form-input chip-size" data-id="${chip.id}" value="${chip.width}" min="5" max="100" />
           </div>
           <div class="form-group margin-top-6">
-            <label>Offset X (mm)</label>
+            <label>Offset X <span>(mm)</span></label>
             <input type="number" class="form-input chip-x" data-id="${chip.id}" value="${chip.x}" min="-100" max="100" />
           </div>
           <div class="form-group margin-top-6">
-            <label>Offset Y (mm)</label>
+            <label>Offset Y <span>(mm)</span></label>
             <input type="number" class="form-input chip-y" data-id="${chip.id}" value="${chip.y}" min="-100" max="100" />
           </div>
         </div>
@@ -154,7 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
         delBtn.addEventListener("click", () => {
           chips = chips.filter(c => c.id !== chip.id);
           renderChipsUI();
-          runSimulation();
+          updateCADGeometry();
           document.dispatchEvent(new Event("change", { bubbles: true }));
         });
       }
@@ -168,7 +225,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const id = e.target.getAttribute("data-id");
         const match = chips.find(c => c.id === id);
         if (match) match.power = parseFloat(e.target.value) || 0;
-        runSimulation();
         document.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
@@ -182,7 +238,7 @@ document.addEventListener("DOMContentLoaded", () => {
           match.width = val;
           match.length = val; // square chip for simplicity
         }
-        runSimulation();
+        updateCADGeometry();
         document.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
@@ -192,7 +248,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const id = e.target.getAttribute("data-id");
         const match = chips.find(c => c.id === id);
         if (match) match.x = parseFloat(e.target.value) || 0;
-        runSimulation();
+        updateCADGeometry();
         document.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
@@ -202,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const id = e.target.getAttribute("data-id");
         const match = chips.find(c => c.id === id);
         if (match) match.y = parseFloat(e.target.value) || 0;
-        runSimulation();
+        updateCADGeometry();
         document.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
@@ -214,7 +270,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const newId = `chip-${Date.now()}`;
     chips.push({ id: newId, power: 30, width: 20, length: 20, x: 0, y: 0 });
     renderChipsUI();
-    runSimulation();
+    updateCADGeometry();
     document.dispatchEvent(new Event("change", { bubbles: true }));
   });
 
@@ -228,7 +284,12 @@ document.addEventListener("DOMContentLoaded", () => {
       forcedCoolingControls.classList.remove("hidden");
     }
     environment.mode = convectionMode.value;
-    runSimulation();
+    updateCADGeometry();
+  });
+
+  assemblyOrientation.addEventListener("change", () => {
+    environment.orientation = assemblyOrientation.value;
+    updateCADGeometry();
   });
 
   // ── Three.js Viewport Setup ───────────────────────────────────
@@ -237,7 +298,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const height = canvasContainer.clientHeight;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x090d16);
+    scene.background = new THREE.Color(0xffffff);
 
     camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     camera.position.set(100, 100, 150);
@@ -249,7 +310,6 @@ document.addEventListener("DOMContentLoaded", () => {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI / 2; // don't go under floor
 
     // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
@@ -264,6 +324,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
     chipsGroup = new THREE.Group();
     scene.add(chipsGroup);
+
+    helpersGroup = new THREE.Group();
+    scene.add(helpersGroup);
+
+    cadAssemblyGroup = new THREE.Group();
+    scene.add(cadAssemblyGroup);
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    canvasContainer.addEventListener("click", (e) => {
+      if (!cadMode || cadParts.length === 0) return;
+      
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(cadAssemblyGroup.children, true);
+      
+      if (intersects.length > 0) {
+        const hitMesh = intersects[0].object;
+        const hitPart = cadParts.find(p => p.mesh === hitMesh);
+        if (hitPart) {
+          highlightCADPart(hitPart.id);
+        }
+      }
+    });
 
     window.addEventListener("resize", onWindowResize);
     animate();
@@ -308,13 +396,19 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // Build / update 3D Meshes in Scene
-  const update3DModel = (minT, maxT) => {
-    // Clear groups
+  const update3DModel = (minT, maxT, individualTemps) => {
+    // Clear groups & reset rotation orientations
+    heatsinkGroup.rotation.set(0, 0, 0);
+    chipsGroup.rotation.set(0, 0, 0);
+
     while (heatsinkGroup.children.length > 0) {
       heatsinkGroup.remove(heatsinkGroup.children[0]);
     }
     while (chipsGroup.children.length > 0) {
       chipsGroup.remove(chipsGroup.children[0]);
+    }
+    while (helpersGroup.children.length > 0) {
+      helpersGroup.remove(helpersGroup.children[0]);
     }
     if (ductMesh) {
       scene.remove(ductMesh);
@@ -396,19 +490,43 @@ document.addEventListener("DOMContentLoaded", () => {
       heatsinkGroup.add(finMesh);
     }
 
-    // 3. Build Silicon Chips and TIM transparent layers
+    // 3. Build Silicon Chips (Heat Sources) and TIM transparent layers
     chips.forEach(chip => {
       const cW = chip.width * scale;
       const cL = chip.length * scale;
       const cX = chip.x * scale;
       const cY = -chip.y * scale; // invert Y for standard Cartesian 3D map
 
-      // Chip (silicon colored, translucent red glow)
+      // Calculate junction temperature of this heat source
+      const leftX = Math.max(0, Math.min(Nx - 1, Math.floor(((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx)));
+      const rightX = Math.max(0, Math.min(Nx - 1, Math.ceil(((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx)));
+      const topY = Math.max(0, Math.min(Ny - 1, Math.floor(((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny)));
+      const bottomY = Math.max(0, Math.min(Ny - 1, Math.ceil(((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny)));
+
+      let sumBaseT = 0;
+      let cCount = 0;
+      for (let i = 0; i < Nx; i++) {
+        for (let j = 0; j < Ny; j++) {
+          if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
+            sumBaseT += gridT[i][j];
+            cCount++;
+          }
+        }
+      }
+      const avgBaseT = cCount > 0 ? sumBaseT / cCount : minT;
+      const chipAreaM2 = (chip.width * chip.length) / 1e6;
+      const R_tim = (tim.thickness / 1e6) / (tim.k * chipAreaM2);
+      const tJunc = avgBaseT + chip.power * R_tim;
+
+      // Color dynamically if simulated (minT !== maxT), else show CAD location reference red
+      const sourceColor = (minT === maxT) ? new THREE.Color(0xef4444) : getTemperatureColor(tJunc, minT, maxT);
+
+      // Chip / Heat Source (colored dynamically)
       const chipGeo = new THREE.BoxBufferGeometry(cW, 2, cL);
       const chipMat = new THREE.MeshLambertMaterial({
-        color: 0xef4444,
+        color: sourceColor,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.95
       });
       const chipMesh = new THREE.Mesh(chipGeo, chipMat);
       // Place directly under base
@@ -436,13 +554,89 @@ document.addEventListener("DOMContentLoaded", () => {
       const ductGeo = new THREE.BoxBufferGeometry(dW, dH, dL);
       const ductMat = new THREE.MeshLambertMaterial({
         color: 0x3b82f6,
-        wireframe: true,
         transparent: true,
-        opacity: 0.15
+        opacity: 0.12
       });
-      ductMesh = new THREE.Mesh(ductGeo, ductMat);
+      const duct = new THREE.Mesh(ductGeo, ductMat);
+
+      // Sharp outer outline wireframe edge helper
+      const edges = new THREE.EdgesGeometry(ductGeo);
+      const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x60a5fa, linewidth: 2 }));
+
+      ductMesh = new THREE.Group();
+      ductMesh.add(duct);
+      ductMesh.add(line);
       ductMesh.position.set(0, dH / 2 - (environment.bypassTop * scale)/2, 0);
       scene.add(ductMesh);
+    }
+
+    // Apply global assembly rotations to heatsink and heat sources groups
+    if (environment.orientation === "downward") {
+      heatsinkGroup.rotation.z = Math.PI;
+      chipsGroup.rotation.z = Math.PI;
+    } else if (environment.orientation === "vertical") {
+      heatsinkGroup.rotation.x = Math.PI / 2;
+      chipsGroup.rotation.x = Math.PI / 2;
+    }
+
+    // 5. Add Airflow & Gravity indicators to helpersGroup (placed in constant world space)
+    const gravDir = new THREE.Vector3(0, -1, 0);
+    const gravOrigin = new THREE.Vector3(-W/2 - 15 * scale, 0, 0);
+    const gravArrow = new THREE.ArrowHelper(gravDir, gravOrigin, 10 * scale, 0xec4899, 2.5 * scale, 1.5 * scale);
+    helpersGroup.add(gravArrow);
+
+    if (environment.mode === "forced") {
+      // Airflow entrance/exit plane helpers
+      const dW = W + (environment.bypassSide * 2) * scale;
+      const dH = t + Hf + environment.bypassTop * scale;
+      const dL = L + 40 * scale;
+
+      const intakeGeo = new THREE.PlaneGeometry(dW, dH);
+      const intakeMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true, transparent: true, opacity: 0.15 });
+      const intakeMesh = new THREE.Mesh(intakeGeo, intakeMat);
+      intakeMesh.position.set(0, dH / 2 - (environment.bypassTop * scale)/2, -L/2 - 20 * scale);
+      helpersGroup.add(intakeMesh);
+
+      const outletGeo = new THREE.PlaneGeometry(dW, dH);
+      const outletMat = new THREE.MeshBasicMaterial({ color: 0xf97316, wireframe: true, transparent: true, opacity: 0.15 });
+      const outletMesh = new THREE.Mesh(outletGeo, outletMat);
+      outletMesh.position.set(0, dH / 2 - (environment.bypassTop * scale)/2, L/2 + 20 * scale);
+      helpersGroup.add(outletMesh);
+
+      // Flow direction arrows (Cyan inlet, Orange outlet)
+      const arrowDir = new THREE.Vector3(0, 0, 1);
+      const arrowLength = 12 * scale;
+      const arrowHeadLength = 3 * scale;
+      const arrowHeadWidth = 2.0 * scale;
+
+      [-W/3, 0, W/3].forEach(x => {
+        // Cold intake arrows
+        const inOrigin = new THREE.Vector3(x, t + Hf/2, -L/2 - 20 * scale);
+        const inArrow = new THREE.ArrowHelper(arrowDir, inOrigin, arrowLength, 0x06b6d4, arrowHeadLength, arrowHeadWidth);
+        helpersGroup.add(inArrow);
+
+        // Hot exhaust arrows
+        const outOrigin = new THREE.Vector3(x, t + Hf/2, L/2 + 8 * scale);
+        const outArrow = new THREE.ArrowHelper(arrowDir, outOrigin, arrowLength, 0xf97316, arrowHeadLength, arrowHeadWidth);
+        helpersGroup.add(outArrow);
+      });
+    } else {
+      // Natural convection - upward draft thermal arrows (Warm orange-red pointing up +Y)
+      const arrowDir = new THREE.Vector3(0, 1, 0);
+      const arrowLength = 10 * scale;
+      const arrowHeadLength = 2.5 * scale;
+      const arrowHeadWidth = 1.5 * scale;
+
+      [-W/3, 0, W/3].forEach(x => {
+        // Rising air arrows above the base/fins
+        const origin1 = new THREE.Vector3(x, t + Hf + 4 * scale, -L/4);
+        const arrow1 = new THREE.ArrowHelper(arrowDir, origin1, arrowLength, 0xef4444, arrowHeadLength, arrowHeadWidth);
+        helpersGroup.add(arrow1);
+
+        const origin2 = new THREE.Vector3(x, t + Hf + 4 * scale, L/4);
+        const arrow2 = new THREE.ArrowHelper(arrowDir, origin2, arrowLength, 0xef4444, arrowHeadLength, arrowHeadWidth);
+        helpersGroup.add(arrow2);
+      });
     }
   };
 
@@ -454,6 +648,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Throttled in standard browser frame timeout to permit CSS loading state to render
     setTimeout(() => {
       try {
+        if (cadMode) {
+          runVoxelSimulation();
+          return;
+        }
+        syncFinLimits();
         // 1. Fetch input values
         heatsink.width = parseFloat(baseWidthInput.value) || 80;
         heatsink.length = parseFloat(baseLengthInput.value) || 80;
@@ -463,8 +662,8 @@ document.addEventListener("DOMContentLoaded", () => {
         heatsink.finCount = parseInt(finCountInput.value) || 16;
         heatsink.customK = parseFloat(customKInput.value) || 200;
 
-        tim.thickness = parseFloat(timThicknessInput.value) || 50;
-        tim.k = parseFloat(timKInput.value) || 3.5;
+        tim.thickness = parseFloat(timThicknessInput.value) || 100;
+        tim.k = parseFloat(timKInput.value) || 5.0;
 
         environment.ambientTemp = parseFloat(ambientTempInput.value) || 25;
         environment.fanAirflow = parseFloat(fanAirflowInput.value) || 32;
@@ -543,10 +742,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
           h = (Nu * 0.026) / (Dh / 1000);
         } else {
-          // Natural Convection (Vertical channels free convection)
-          // Convective coefficient + Radiative coefficient based on emissivity
+          // Natural Convection (Free convection based on orientation)
           const dT_est = 25.0; // estimated delta temperature
-          const h_conv = 1.42 * Math.pow(dT_est / (heatsink.finHeight / 1000), 0.25);
+          
+          let C_orientation = 1.42; // default vertical chimney
+          let L_char = heatsink.finHeight / 1000;
+
+          if (environment.orientation === "upward") {
+            C_orientation = 1.32;
+            const AreaM2 = (heatsink.width * heatsink.length) / 1e6;
+            const PerimM = (2 * (heatsink.width + heatsink.length)) / 1000;
+            L_char = Math.max(0.01, AreaM2 / PerimM);
+          } else if (environment.orientation === "downward") {
+            C_orientation = 0.59;
+            const AreaM2 = (heatsink.width * heatsink.length) / 1e6;
+            const PerimM = (2 * (heatsink.width + heatsink.length)) / 1000;
+            L_char = Math.max(0.01, AreaM2 / PerimM);
+          }
+
+          const h_conv = C_orientation * Math.pow(dT_est / L_char, 0.25);
           
           const sigma = 5.67e-8; // Stefan-Boltzmann
           const T_avg_k = environment.ambientTemp + 273.15 + dT_est / 2;
@@ -667,37 +881,64 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
-        // Silicon Junction Temp matching chip contact and TIM thermal resistance
-        // R_tim = thickness / (k_tim * Area)
-        // T_junction = T_base + Q * R_tim
-        let maxJunctionTemp = maxBaseTemp;
-        chips.forEach(chip => {
-          // Average base temperature under this chip
-          const leftX = Math.floor(((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
-          const rightX = Math.ceil(((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
-          const topY = Math.floor(((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
-          const bottomY = Math.ceil(((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
+      // Junction Temp matching chip contact and TIM thermal resistance
+      // R_tim = thickness / (k_tim * Area)
+      // T_junction = T_base + Q * R_tim
+      let maxJunctionTemp = maxBaseTemp;
+      const individualTemps = [];
 
-          let sumBaseT = 0;
-          let cCount = 0;
-          for (let i = 0; i < Nx; i++) {
-            for (let j = 0; j < Ny; j++) {
-              if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
-                sumBaseT += gridT[i][j];
-                cCount++;
-              }
+      chips.forEach(chip => {
+        // Average base temperature under this chip
+        const leftX = Math.floor(((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
+        const rightX = Math.ceil(((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
+        const topY = Math.floor(((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
+        const bottomY = Math.ceil(((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
+
+        let sumBaseT = 0;
+        let cCount = 0;
+        for (let i = 0; i < Nx; i++) {
+          for (let j = 0; j < Ny; j++) {
+            if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
+              sumBaseT += gridT[i][j];
+              cCount++;
             }
           }
-          const avgBaseT = cCount > 0 ? sumBaseT / cCount : maxBaseTemp;
-          
-          // TIM contact resistance
-          const chipAreaM2 = (chip.width * chip.length) / 1e6;
-          const R_tim = (tim.thickness / 1e6) / (tim.k * chipAreaM2);
-          
-          // Chip spreading/conduction
-          const tJunc = avgBaseT + chip.power * R_tim;
-          if (tJunc > maxJunctionTemp) maxJunctionTemp = tJunc;
+        }
+        const avgBaseT = cCount > 0 ? sumBaseT / cCount : maxBaseTemp;
+        
+        // TIM contact resistance
+        const chipAreaM2 = (chip.width * chip.length) / 1e6;
+        const R_tim = (tim.thickness / 1e6) / (tim.k * chipAreaM2);
+        
+        // Chip spreading/conduction
+        const tJunc = avgBaseT + chip.power * R_tim;
+        if (tJunc > maxJunctionTemp) maxJunctionTemp = tJunc;
+
+        individualTemps.push({ power: chip.power, tJunc });
+      });
+
+      // Update individual heat source temps in DOM
+      const sourcesTempList = document.getElementById("sources-temp-list");
+      if (sourcesTempList) {
+        sourcesTempList.innerHTML = "";
+        individualTemps.forEach((item, idx) => {
+          const row = document.createElement("div");
+          row.style.display = "flex";
+          row.style.justify = "space-between";
+          row.style.fontSize = "13px";
+          row.style.fontFamily = "var(--font-mono)";
+          row.style.color = "var(--text-primary)";
+          row.style.background = "var(--bg-tertiary)";
+          row.style.padding = "6px 12px";
+          row.style.borderRadius = "var(--radius-sm)";
+          row.style.marginTop = "4px";
+          row.innerHTML = `
+            <span>Heat Source #${idx + 1} (${item.power}W)</span>
+            <strong>${item.tJunc.toFixed(1)} °C</strong>
+          `;
+          sourcesTempList.appendChild(row);
         });
+      }
 
         const maxTheta = totalPower > 0 ? (maxJunctionTemp - environment.ambientTemp) / totalPower : 0;
 
@@ -721,10 +962,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Update 3D colors legends
         document.getElementById("legend-min").textContent = `${Math.round(environment.ambientTemp)}°C`;
-        document.getElementById("legend-max").textContent = `${Math.round(maxBaseTemp)}°C`;
+        document.getElementById("legend-max").textContent = `${Math.round(maxJunctionTemp)}°C`;
 
         // Redraw 3D scene and Fan curve chart
-        update3DModel(environment.ambientTemp, maxBaseTemp);
+        update3DModel(environment.ambientTemp, maxJunctionTemp, individualTemps);
         drawFanCurve(sysFlow, sysPress);
       } catch (err) {
         console.error("Solver execution error:", err);
@@ -737,9 +978,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── HTML5 Canvas Fan Curve Plotter ────────────────────────────
   const drawFanCurve = (operatingFlow, operatingPress) => {
+    const rect = fanCurveChart.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Set actual canvas resolution multiplied by device pixel ratio
+    fanCurveChart.width = rect.width * dpr;
+    fanCurveChart.height = rect.height * dpr;
+
     const ctx = fanCurveChart.getContext("2d");
-    const width = fanCurveChart.width;
-    const height = fanCurveChart.height;
+    ctx.scale(dpr, dpr);
+
+    const width = rect.width;
+    const height = rect.height;
 
     // Clear
     ctx.clearRect(0, 0, width, height);
@@ -823,15 +1073,38 @@ document.addEventListener("DOMContentLoaded", () => {
   [
     baseWidthInput, baseLengthInput, baseHeightInput,
     finHeightInput, finThicknessInput, finCountInput,
-    customKInput, timThicknessInput, timKInput,
-    ambientTempInput, fanAirflowInput, bypassSideInput, bypassTopInput,
-    surfaceEmissivityInput
+    bypassSideInput, bypassTopInput
   ].forEach(input => {
     input.addEventListener("input", () => {
-      runSimulation();
+      updateCADGeometry();
       document.dispatchEvent(new Event("change", { bubbles: true }));
     });
   });
+
+  [
+    customKInput, timThicknessInput, timKInput,
+    ambientTempInput, fanAirflowInput, surfaceEmissivityInput
+  ].forEach(input => {
+    input.addEventListener("input", () => {
+      document.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  });
+
+  const runSimBtn = document.getElementById("run-sim-btn");
+  if (runSimBtn) {
+    runSimBtn.addEventListener("click", () => {
+      runSimulation();
+    });
+  }
+
+  const resetViewBtn = document.getElementById("reset-view-btn");
+  if (resetViewBtn) {
+    resetViewBtn.addEventListener("click", () => {
+      camera.position.set(100, 100, 150);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    });
+  }
 
   // ── Import / Export Logic ────────────────────────────────────
   window.exportJSON = function() {
@@ -892,6 +1165,7 @@ document.addEventListener("DOMContentLoaded", () => {
             naturalCoolingControls.classList.add("hidden");
             forcedCoolingControls.classList.remove("hidden");
           }
+          assemblyOrientation.value = environment.orientation || "upward";
           ambientTempInput.value = environment.ambientTemp;
           fanAirflowInput.value = environment.fanAirflow;
           bypassSideInput.value = environment.bypassSide;
@@ -978,6 +1252,7 @@ document.addEventListener("DOMContentLoaded", () => {
           naturalCoolingControls.classList.add("hidden");
           forcedCoolingControls.classList.remove("hidden");
         }
+        assemblyOrientation.value = environment.orientation || "upward";
         ambientTempInput.value = environment.ambientTemp;
         fanAirflowInput.value = environment.fanAirflow;
         bypassSideInput.value = environment.bypassSide;
@@ -987,6 +1262,532 @@ document.addEventListener("DOMContentLoaded", () => {
         renderChipsUI();
         runSimulation();
       }
+    }
+  };
+
+  // ── CAD File Import & Interaction Logic ──────────────────────
+  const getRoleColor = (role) => {
+    switch (role) {
+      case "heatsink": return "#0d9488";
+      case "source": return "#ef4444";
+      case "tim": return "#f59e0b";
+      case "duct": return "#3b82f6";
+      default: return "#64748b";
+    }
+  };
+
+  const highlightCADPart = (partId) => {
+    document.querySelectorAll(".chip-item-row").forEach(row => {
+      row.style.background = "var(--bg-secondary)";
+    });
+    const activeRow = document.getElementById(`part-row-${partId}`);
+    if (activeRow) {
+      activeRow.style.background = "var(--accent-primary-glow)";
+      activeRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    
+    cadParts.forEach(part => {
+      if (part.id === partId) {
+        part.mesh.material = new THREE.MeshLambertMaterial({
+          color: 0xeab308,
+          transparent: true,
+          opacity: 1.0
+        });
+      } else {
+        part.mesh.material = new THREE.MeshLambertMaterial({
+          color: part.role === "ignore" ? 0x64748b : 0x94a3b8,
+          transparent: true,
+          opacity: part.role === "ignore" ? 0.3 : 0.7
+        });
+      }
+    });
+  };
+
+  const renderCADPartsList = () => {
+    cadPartsList.innerHTML = "";
+    if (cadParts.length === 0) {
+      cadPartsList.innerHTML = `<p class="text-muted" style="font-size: 12px; text-align: center; padding: 12px;">No CAD parts loaded. Upload a file above to begin.</p>`;
+      return;
+    }
+    
+    cadParts.forEach(part => {
+      const row = document.createElement("div");
+      row.className = "chip-item-row";
+      row.id = `part-row-${part.id}`;
+      row.style.borderLeft = `4px solid ${getRoleColor(part.role)}`;
+      row.style.background = "var(--bg-secondary)";
+      row.style.padding = "10px";
+      row.style.borderRadius = "var(--radius-md)";
+      row.style.marginBottom = "8px";
+      row.style.cursor = "pointer";
+      
+      row.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">${part.name}</span>
+          <button class="action-btn delete-part-btn" data-id="${part.id}" title="Delete Part" style="background: none; border: none; padding: 4px; display: inline-flex; align-items: center; color: var(--text-critical); cursor: pointer;">
+            <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i>
+          </button>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+          <div class="form-group">
+            <label style="font-size: 11px;">Role</label>
+            <select class="form-select part-role-select" data-id="${part.id}" style="padding: 4px; font-size: 11px;">
+              <option value="heatsink" ${part.role === "heatsink" ? "selected" : ""}>Heatsink</option>
+              <option value="source" ${part.role === "source" ? "selected" : ""}>Heat Source</option>
+              <option value="tim" ${part.role === "tim" ? "selected" : ""}>TIM Layer</option>
+              <option value="duct" ${part.role === "duct" ? "selected" : ""}>Duct Boundary</option>
+              <option value="ignore" ${part.role === "ignore" ? "selected" : ""}>Ignore</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label style="font-size: 11px;">Material</label>
+            <select class="form-select part-mat-select" data-id="${part.id}" style="padding: 4px; font-size: 11px;">
+              <option value="aluminum" ${part.material === "aluminum" ? "selected" : ""}>Aluminum</option>
+              <option value="copper" ${part.material === "copper" ? "selected" : ""}>Copper</option>
+              <option value="custom" ${part.material === "custom" ? "selected" : ""}>Custom</option>
+            </select>
+          </div>
+        </div>
+        <div class="part-detail-group-${part.id}" style="margin-top: 8px;"></div>
+      `;
+      
+      cadPartsList.appendChild(row);
+      
+      const detailGrp = row.querySelector(`.part-detail-group-${part.id}`);
+      const updateDetails = () => {
+        detailGrp.innerHTML = "";
+        if (part.role === "source") {
+          detailGrp.innerHTML = `
+            <div class="form-group">
+              <label style="font-size: 11px;">Heat Dissipation (W)</label>
+              <input type="number" class="form-input part-power-input" data-id="${part.id}" value="${part.power}" min="0.1" step="0.5" style="padding: 4px; font-size: 11px;" />
+            </div>
+          `;
+          detailGrp.querySelector(".part-power-input").addEventListener("change", (e) => {
+            part.power = parseFloat(e.target.value) || 0;
+          });
+        }
+        if (part.material === "custom") {
+          detailGrp.innerHTML += `
+            <div class="form-group" style="margin-top: 4px;">
+              <label style="font-size: 11px;">Conductivity (W/m·K)</label>
+              <input type="number" class="form-input part-k-input" data-id="${part.id}" value="${part.customK}" min="1" step="5" style="padding: 4px; font-size: 11px;" />
+            </div>
+          `;
+          detailGrp.querySelector(".part-k-input").addEventListener("change", (e) => {
+            part.customK = parseFloat(e.target.value) || 200;
+          });
+        }
+      };
+      
+      updateDetails();
+      
+      row.querySelector(".part-role-select").addEventListener("change", (e) => {
+        part.role = e.target.value;
+        row.style.borderLeft = `4px solid ${getRoleColor(part.role)}`;
+        updateDetails();
+        highlightCADPart(part.id);
+      });
+      
+      row.querySelector(".part-mat-select").addEventListener("change", (e) => {
+        part.material = e.target.value;
+        updateDetails();
+      });
+
+      row.addEventListener("click", (e) => {
+        if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT" || e.target.tagName === "OPTION" || e.target.closest(".delete-part-btn")) {
+          return;
+        }
+        highlightCADPart(part.id);
+      });
+
+      row.querySelector(".delete-part-btn").addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        cadAssemblyGroup.remove(part.mesh);
+        cadParts = cadParts.filter(p => p.id !== part.id);
+        renderCADPartsList();
+        if (window.showToast) window.showToast(`Deleted part: ${part.name}`);
+      });
+    });
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  };
+
+  const setupCADAssembly = (partsList) => {
+    cadMode = true;
+    cadParts = partsList.map((part, idx) => {
+      return {
+        id: `cad-part-${idx}`,
+        name: part.name || `Part #${idx + 1}`,
+        mesh: part.mesh,
+        role: idx === 0 ? "heatsink" : "ignore",
+        material: "aluminum",
+        customK: 200,
+        power: 30
+      };
+    });
+    
+    while (heatsinkGroup.children.length > 0) heatsinkGroup.remove(heatsinkGroup.children[0]);
+    while (chipsGroup.children.length > 0) chipsGroup.remove(chipsGroup.children[0]);
+    while (helpersGroup.children.length > 0) helpersGroup.remove(helpersGroup.children[0]);
+    if (ductMesh) scene.remove(ductMesh);
+    
+    while (cadAssemblyGroup.children.length > 0) cadAssemblyGroup.remove(cadAssemblyGroup.children[0]);
+    
+    const globalBox = new THREE.Box3();
+    cadParts.forEach(part => {
+      part.mesh.geometry.computeBoundingBox();
+      const box = part.mesh.geometry.boundingBox.clone();
+      globalBox.union(box);
+    });
+    
+    const center = new THREE.Vector3();
+    globalBox.getCenter(center);
+    const size = new THREE.Vector3();
+    globalBox.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
+    const scale = 50.0 / maxDim;
+    
+    cadParts.forEach(part => {
+      part.mesh.position.sub(center);
+      part.mesh.scale.set(scale, scale, scale);
+      part.mesh.position.multiplyScalar(scale);
+      
+      part.mesh.material = new THREE.MeshLambertMaterial({
+        color: 0x94a3b8,
+        transparent: true,
+        opacity: 0.8
+      });
+      cadAssemblyGroup.add(part.mesh);
+    });
+    
+    cadActiveControls.classList.remove("hidden");
+    simSpinner.classList.add("hidden");
+    renderCADPartsList();
+    
+    if (window.showToast) window.showToast("CAD File loaded! Assign roles in Parts Manager.");
+  };
+
+  const loadCADFile = (file) => {
+    const extension = file.name.split(".").pop().toLowerCase();
+    if (extension !== "step" && extension !== "stp") {
+      alert("Please select a valid STEP file (.step, .stp).");
+      return;
+    }
+    
+    const reader = new FileReader();
+    simSpinner.classList.remove("hidden");
+    
+    reader.onload = function(evt) {
+      try {
+        const buffer = evt.target.result;
+        if (typeof occtimportjs === "undefined") {
+          throw new Error("STEP decoder library is not fully loaded. Check internet connection.");
+        }
+        occtimportjs().then(occt => {
+          const fileContent = new Uint8Array(buffer);
+          const result = occt.ReadStepFile(fileContent);
+          if (!result || !result.success) {
+            throw new Error("Unable to parse STEP B-Rep geometry.");
+          }
+          const partsList = [];
+          result.meshes.forEach((m, idx) => {
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(m.attributes.position.array);
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            if (m.attributes.normal) {
+              const normals = new Float32Array(m.attributes.normal.array);
+              geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+            } else {
+              geometry.computeVertexNormals();
+            }
+            if (m.index) {
+              const indices = new Uint32Array(m.index.array);
+              geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+            }
+            const material = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
+            const mesh = new THREE.Mesh(geometry, material);
+            partsList.push({ name: m.name || `Part ${idx + 1}`, mesh: mesh });
+          });
+          setupCADAssembly(partsList);
+        }).catch(err => {
+          alert("STEP Import Error: " + err.message);
+          simSpinner.classList.add("hidden");
+        });
+      } catch (err) {
+        alert("CAD Loading Error: " + err.message);
+        simSpinner.classList.add("hidden");
+      }
+    };
+    
+    reader.readAsArrayBuffer(file);
+  };
+
+  cadFileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    loadCADFile(file);
+  });
+
+  cadClearBtn.addEventListener("click", () => {
+    cadMode = false;
+    cadParts = [];
+    cadActiveControls.classList.add("hidden");
+    cadFileInput.value = "";
+    
+    while (cadAssemblyGroup.children.length > 0) cadAssemblyGroup.remove(cadAssemblyGroup.children[0]);
+    
+    updateCADGeometry();
+    cadPartsList.innerHTML = `<p class="text-muted" style="font-size: 12px; text-align: center; padding: 12px;">No CAD parts loaded. Upload a file above to begin.</p>`;
+  });
+
+  const runVoxelSimulation = () => {
+    try {
+      const Vx = 20;
+      const Vy = 20;
+      const Vz = 10;
+      const ambient = parseFloat(ambientTempInput.value) || 25;
+      
+      const bbox = new THREE.Box3().setFromObject(cadAssemblyGroup);
+      const minPt = bbox.min;
+      const maxPt = bbox.max;
+      const size = bbox.getSize(new THREE.Vector3());
+      
+      const dx = size.x / Vx;
+      const dy = size.y / Vy;
+      const dz = size.z / Vz;
+      
+      const grid = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill(ambient)));
+      const gridK = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill(0.026)));
+      const gridQ = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill(0)));
+      const gridType = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill("air")));
+      
+      cadParts.forEach(part => {
+        if (part.role === "ignore") return;
+        part.mesh.geometry.computeBoundingBox();
+        part._worldBBox = new THREE.Box3().setFromObject(part.mesh);
+        let kVal = 200;
+        if (part.material === "aluminum") kVal = 200;
+        else if (part.material === "copper") kVal = 400;
+        else kVal = parseFloat(part.customK) || 200;
+        part._k = kVal;
+      });
+      
+      for (let i = 0; i < Vx; i++) {
+        const px = minPt.x + (i + 0.5) * dx;
+        for (let j = 0; j < Vy; j++) {
+          const py = minPt.y + (j + 0.5) * dy;
+          for (let k = 0; k < Vz; k++) {
+            const pz = minPt.z + (k + 0.5) * dz;
+            const pt = new THREE.Vector3(px, py, pz);
+            
+            for (let pIdx = 0; pIdx < cadParts.length; pIdx++) {
+              const part = cadParts[pIdx];
+              if (part.role === "ignore") continue;
+              if (part._worldBBox.containsPoint(pt)) {
+                gridK[i][j][k] = part._k;
+                gridType[i][j][k] = part.role;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      cadParts.forEach(part => {
+        if (part.role !== "source") return;
+        let nodeCount = 0;
+        for (let i = 0; i < Vx; i++) {
+          const px = minPt.x + (i + 0.5) * dx;
+          for (let j = 0; j < Vy; j++) {
+            const py = minPt.y + (j + 0.5) * dy;
+            for (let k = 0; k < Vz; k++) {
+              const pz = minPt.z + (k + 0.5) * dz;
+              if (gridType[i][j][k] === "source" && part._worldBBox.containsPoint(new THREE.Vector3(px, py, pz))) {
+                nodeCount++;
+              }
+            }
+          }
+        }
+        if (nodeCount > 0) {
+          const qVal = part.power / nodeCount;
+          for (let i = 0; i < Vx; i++) {
+            const px = minPt.x + (i + 0.5) * dx;
+            for (let j = 0; j < Vy; j++) {
+              const py = minPt.y + (j + 0.5) * dy;
+              for (let k = 0; k < Vz; k++) {
+                const pz = minPt.z + (k + 0.5) * dz;
+                if (gridType[i][j][k] === "source" && part._worldBBox.containsPoint(new THREE.Vector3(px, py, pz))) {
+                  gridQ[i][j][k] = qVal;
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      const hVal = environment.mode === "forced" ? 30.0 : 8.0;
+      const maxIter = 100;
+      
+      for (let iter = 0; iter < maxIter; iter++) {
+        const nextGrid = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill(ambient)));
+        
+        for (let i = 0; i < Vx; i++) {
+          for (let j = 0; j < Vy; j++) {
+            for (let k = 0; k < Vz; k++) {
+              const type = gridType[i][j][k];
+              if (type === "air" || type === "duct") {
+                nextGrid[i][j][k] = ambient;
+                continue;
+              }
+              
+              let condSum = 0;
+              let tSum = 0;
+              
+              const neighbors = [
+                { ni: i - 1, nj: j, nk: k, area: dy * dz, dist: dx },
+                { ni: i + 1, nj: j, nk: k, area: dy * dz, dist: dx },
+                { ni: i, nj: j - 1, nk: k, area: dx * dz, dist: dy },
+                { ni: i, nj: j + 1, nk: k, area: dx * dz, dist: dy },
+                { ni: i, nj: j, nk: k - 1, area: dx * dy, dist: dz },
+                { ni: i, nj: j, nk: k + 1, area: dx * dy, dist: dz }
+              ];
+              
+              neighbors.forEach(n => {
+                if (n.ni >= 0 && n.ni < Vx && n.nj >= 0 && n.nj < Vy && n.nk >= 0 && n.nk < Vz) {
+                  const kNode = gridK[i][j][k];
+                  const kNeigh = gridK[n.ni][n.nj][n.nk];
+                  const kAvg = 2 * kNode * kNeigh / (kNode + kNeigh || 1);
+                  const cond = (kAvg * n.area) / n.dist;
+                  condSum += cond;
+                  tSum += cond * grid[n.ni][n.nj][n.nk];
+                } else {
+                  const condAir = hVal * n.area;
+                  condSum += condAir;
+                  tSum += condAir * ambient;
+                }
+              });
+              
+              nextGrid[i][j][k] = (tSum + gridQ[i][j][k]) / (condSum || 1);
+            }
+          }
+        }
+        
+        for (let i = 0; i < Vx; i++) {
+          for (let j = 0; j < Vy; j++) {
+            for (let k = 0; k < Vz; k++) {
+              grid[i][j][k] = nextGrid[i][j][k];
+            }
+          }
+        }
+      }
+      
+      let minT = 999;
+      let maxT = -999;
+      for (let i = 0; i < Vx; i++) {
+        for (let j = 0; j < Vy; j++) {
+          for (let k = 0; k < Vz; k++) {
+            if (gridType[i][j][k] !== "air" && gridType[i][j][k] !== "ignore") {
+              const T = grid[i][j][k];
+              if (T < minT) minT = T;
+              if (T > maxT) maxT = T;
+            }
+          }
+        }
+      }
+      if (minT > maxT) { minT = ambient; maxT = ambient + 1; }
+      
+      const totalP = cadParts.reduce((acc, p) => p.role === "source" ? acc + p.power : acc, 0);
+      document.getElementById("res-t-max").textContent = `${maxT.toFixed(1)} °C`;
+      document.getElementById("res-t-base").textContent = `${minT.toFixed(1)} °C`;
+      document.getElementById("res-h-coeff").textContent = `${hVal.toFixed(1)} W/m²K`;
+      document.getElementById("res-theta").textContent = `${totalP > 0 ? ((maxT - ambient) / totalP).toFixed(2) : 0} K/W`;
+      
+      if (maxT > 105) {
+        statusBadge.className = "badge critical-badge";
+        statusBadge.textContent = "Critical";
+      } else if (maxT > 85) {
+        statusBadge.className = "badge warning-badge";
+        statusBadge.textContent = "Warning";
+      } else {
+        statusBadge.className = "badge active-badge";
+        statusBadge.textContent = "Normal";
+      }
+      
+      document.getElementById("legend-min").textContent = `${Math.round(ambient)}°C`;
+      document.getElementById("legend-max").textContent = `${Math.round(maxT)}°C`;
+      
+      const indTemps = [];
+      cadParts.forEach(part => {
+        if (part.role === "ignore") return;
+        const geom = part.mesh.geometry;
+        const count = geom.attributes.position.count;
+        const colors = new Float32Array(count * 3);
+        const pos = geom.attributes.position;
+        const meshMatrix = part.mesh.matrixWorld;
+        
+        let sumT = 0;
+        let vCount = 0;
+        
+        for (let idx = 0; idx < count; idx++) {
+          const localPt = new THREE.Vector3(pos.getX(idx), pos.getY(idx), pos.getZ(idx));
+          const worldPt = localPt.clone().applyMatrix4(meshMatrix);
+          
+          const i = Math.max(0, Math.min(Vx - 1, Math.floor(((worldPt.x - minPt.x) / size.x) * Vx)));
+          const j = Math.max(0, Math.min(Vy - 1, Math.floor(((worldPt.y - minPt.y) / size.y) * Vy)));
+          const k = Math.max(0, Math.min(Vz - 1, Math.floor(((worldPt.z - minPt.z) / size.z) * Vz)));
+          
+          const temp = grid[i][j][k];
+          sumT += temp;
+          vCount++;
+          
+          const color = getTemperatureColor(temp, ambient, maxT);
+          colors[idx * 3] = color.r;
+          colors[idx * 3 + 1] = color.g;
+          colors[idx * 3 + 2] = color.b;
+        }
+        
+        geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        part.mesh.material = new THREE.MeshLambertMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.95
+        });
+        geom.attributes.color.needsUpdate = true;
+        
+        if (part.role === "source") {
+          indTemps.push({ power: part.power, tJunc: vCount > 0 ? sumT / vCount : maxT });
+        }
+      });
+      
+      const sourcesTempList = document.getElementById("sources-temp-list");
+      if (sourcesTempList) {
+        sourcesTempList.innerHTML = "";
+        indTemps.forEach((item, idx) => {
+          const row = document.createElement("div");
+          row.style.display = "flex";
+          row.style.justify = "space-between";
+          row.style.fontSize = "13px";
+          row.style.fontFamily = "var(--font-mono)";
+          row.style.color = "var(--text-primary)";
+          row.style.background = "var(--bg-tertiary)";
+          row.style.padding = "6px 12px";
+          row.style.borderRadius = "var(--radius-sm)";
+          row.style.marginTop = "4px";
+          row.innerHTML = `
+            <span>Heat Source #${idx + 1} (${item.power}W)</span>
+            <strong>${item.tJunc.toFixed(1)} °C</strong>
+          `;
+          sourcesTempList.appendChild(row);
+        });
+      }
+      
+      if (window.showToast) window.showToast("Volumetric 3D Finite Difference Simulation complete!");
+    } catch (err) {
+      console.error("Voxel simulation solver error:", err);
+      alert("Simulation failed: " + err.message);
+    } finally {
+      simSpinner.classList.add("hidden");
     }
   };
 
