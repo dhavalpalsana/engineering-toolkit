@@ -32,6 +32,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const resetSetupBtn = document.getElementById("reset-setup-btn");
   const yydddInput = document.getElementById("yyddd-input");
   const yyyydddInput = document.getElementById("yyyyddd-input");
+  const jdnInput = document.getElementById("jdn-input");
+  const cyydddInput = document.getElementById("cyyddd-input");
+  const ampmToggle = document.getElementById("ampm-toggle");
 
   // Initialize Lucide Icons
   if (typeof lucide !== "undefined") {
@@ -137,10 +140,12 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const yy = String(y).slice(-2);
     const dddStr = String(ddd).padStart(3, "0");
+    const C = Math.floor(y / 100) - 19;
     
     return {
       yyddd: yy + dddStr,
-      yyyyddd: String(y) + dddStr
+      yyyyddd: String(y) + dddStr,
+      cyyddd: String(C) + yy + dddStr
     };
   };
 
@@ -151,6 +156,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const yy = parseInt(clean.slice(0, 2));
       ddd = parseInt(clean.slice(2));
       y = yy > 80 ? 1900 + yy : 2000 + yy;
+    } else if (clean.length === 6) {
+      const C = parseInt(clean[0]);
+      const yy = parseInt(clean.slice(1, 3));
+      ddd = parseInt(clean.slice(3));
+      y = (19 + C) * 100 + yy;
     } else if (clean.length === 7) {
       y = parseInt(clean.slice(0, 4));
       ddd = parseInt(clean.slice(4));
@@ -225,11 +235,14 @@ document.addEventListener("DOMContentLoaded", () => {
     timeSelect.value = `${hh}:${min}:${ss}`;
 
     // 2. Julian date inputs
-    julianDateInput.value = dateToJulian(anchorDate).toFixed(6);
+    const jd = dateToJulian(anchorDate);
+    julianDateInput.value = jd.toFixed(6);
+    if (jdnInput) jdnInput.value = Math.floor(jd);
     mjdInput.value = dateToMJD(anchorDate).toFixed(6);
 
     const ord = dateToOrdinal(anchorDate);
     if (yydddInput) yydddInput.value = ord.yyddd;
+    if (cyydddInput) cyydddInput.value = ord.cyyddd;
     if (yyyydddInput) yyyydddInput.value = ord.yyyyddd;
 
     // 3. Slider thumbs positions & Time labels
@@ -250,9 +263,16 @@ document.addEventListener("DOMContentLoaded", () => {
       // Update text representation
       const textLabel = document.getElementById(`time-label-${tz}`);
       if (textLabel) {
-        const displayHr = String(hr).padStart(2, "0");
-        const displayMn = String(mn).padStart(2, "0");
-        textLabel.textContent = `${displayHr}:${displayMn}`;
+        if (ampmToggle && ampmToggle.checked) {
+          const displayHr = hr % 12 === 0 ? 12 : hr % 12;
+          const displayMn = String(mn).padStart(2, "0");
+          const ampm = hr >= 12 ? "PM" : "AM";
+          textLabel.textContent = `${displayHr}:${displayMn} ${ampm}`;
+        } else {
+          const displayHr = String(hr).padStart(2, "0");
+          const displayMn = String(mn).padStart(2, "0");
+          textLabel.textContent = `${displayHr}:${displayMn}`;
+        }
       }
 
       // Update offset metadata labels
@@ -431,6 +451,70 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // ERP Julian Date (CYYDDD) input listener
+  if (cyydddInput) {
+    cyydddInput.addEventListener("input", () => {
+      const val = cyydddInput.value;
+      if (val.length === 6) {
+        const parsed = ordinalToDate(val);
+        if (parsed) {
+          anchorDate = parsed;
+          updateAllInputs();
+          document.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+    });
+  }
+
+  // Julian Day Number (JDN) input listener
+  if (jdnInput) {
+    jdnInput.addEventListener("change", () => {
+      const val = parseInt(jdnInput.value);
+      if (isNaN(val)) return;
+      anchorDate = julianToDate(val);
+      updateAllInputs();
+      document.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  const updateRulerHours = () => {
+    const ruler = document.querySelector(".hours-ruler");
+    if (!ruler) return;
+    if (ampmToggle && ampmToggle.checked) {
+      ruler.innerHTML = `
+        <span>12 AM</span>
+        <span>3 AM</span>
+        <span>6 AM</span>
+        <span>9 AM</span>
+        <span>12 PM</span>
+        <span>3 PM</span>
+        <span>6 PM</span>
+        <span>9 PM</span>
+        <span>12 AM</span>
+      `;
+    } else {
+      ruler.innerHTML = `
+        <span>00h</span>
+        <span>03h</span>
+        <span>06h</span>
+        <span>09h</span>
+        <span>12h</span>
+        <span>15h</span>
+        <span>18h</span>
+        <span>21h</span>
+        <span>24h</span>
+      `;
+    }
+  };
+
+  if (ampmToggle) {
+    ampmToggle.addEventListener("change", () => {
+      updateRulerHours();
+      updateAllInputs();
+      document.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
   // Sync to Current Time
   currentTimeBtn.addEventListener("click", () => {
     anchorDate = new Date();
@@ -450,11 +534,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ── Import / Export JSON ─────────────────────────────────────
   window.exportJSON = function() {
     const data = {
       selectedTimezones: selectedTimezones,
-      currentTimestamp: anchorDate.getTime()
+      currentTimestamp: anchorDate.getTime(),
+      ampmMode: ampmToggle ? ampmToggle.checked : false
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -480,7 +564,11 @@ document.addEventListener("DOMContentLoaded", () => {
           if (data.currentTimestamp) {
             anchorDate = new Date(data.currentTimestamp);
           }
+          if (ampmToggle) {
+            ampmToggle.checked = !!data.ampmMode;
+          }
           renderTimelines();
+          updateRulerHours();
           updateAllInputs();
           document.dispatchEvent(new Event("change", { bubbles: true }));
           if (window.showToast) window.showToast("Setup imported successfully!");
@@ -499,7 +587,8 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const state = {
         selectedTimezones: selectedTimezones,
-        currentTimestamp: anchorDate.getTime()
+        currentTimestamp: anchorDate.getTime(),
+        ampmMode: ampmToggle ? ampmToggle.checked : false
       };
       const serialized = btoa(JSON.stringify(state));
       const url = new URL(window.location.href);
@@ -520,7 +609,8 @@ document.addEventListener("DOMContentLoaded", () => {
     getInputs: () => {
       return {
         selectedTimezones: selectedTimezones,
-        currentTimestamp: anchorDate.getTime()
+        currentTimestamp: anchorDate.getTime(),
+        ampmMode: ampmToggle ? ampmToggle.checked : false
       };
     },
     setInputs: (data) => {
@@ -530,7 +620,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (data && data.currentTimestamp) {
         anchorDate = new Date(data.currentTimestamp);
       }
+      if (ampmToggle && data) {
+        ampmToggle.checked = !!data.ampmMode;
+      }
       renderTimelines();
+      updateRulerHours();
       updateAllInputs();
     }
   };
@@ -538,5 +632,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Run Initializations
   populateTimezoneSearch();
   renderTimelines();
+  updateRulerHours();
   updateAllInputs();
 });

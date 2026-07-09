@@ -119,27 +119,44 @@
           <div class="card-header">
             <h2>Julian & Ordinal Date Converter</h2>
           </div>
-          <div class="form-group">
-            <label for="julian-date-input">Astronomical Julian Date (JD)</label>
+          
+          <!-- Section 1: Astronomical Formats -->
+          <div class="date-section-header">Astronomical Formats (Space & Science)</div>
+          <div class="form-group margin-top-6">
+            <label for="julian-date-input">Julian Date (JD)</label>
             <input type="number" step="0.000001" id="julian-date-input" class="form-input font-mono" placeholder="e.g. 2461230.5" />
-          </div>
-          <div class="form-group margin-top-12">
-            <label for="mjd-input">Modified Julian Date (MJD)</label>
-            <input type="number" step="0.000001" id="mjd-input" class="form-input font-mono" placeholder="e.g. 61230.0" />
           </div>
           <div class="form-row margin-top-12">
             <div class="form-group flex-1">
-              <label for="yyddd-input">Ordinal Date (YYDDD)</label>
+              <label for="jdn-input">Julian Day Number (JDN)</label>
+              <input type="number" step="1" id="jdn-input" class="form-input font-mono" placeholder="e.g. 2461230" />
+            </div>
+            <div class="form-group flex-1">
+              <label for="mjd-input">Modified Julian Date (MJD)</label>
+              <input type="number" step="0.000001" id="mjd-input" class="form-input font-mono" placeholder="e.g. 61230.0" />
+            </div>
+          </div>
+          
+          <!-- Section 2: Calendar Formats -->
+          <div class="date-section-header margin-top-16">Calendar Formats (Logistics & Software)</div>
+          <div class="form-row margin-top-6">
+            <div class="form-group flex-1">
+              <label for="yyddd-input">Ordinal (YYDDD)</label>
               <input type="text" id="yyddd-input" class="form-input font-mono" placeholder="e.g. 26189" maxlength="5" />
             </div>
             <div class="form-group flex-1">
-              <label for="yyyyddd-input">Ordinal Date (YYYYDDD)</label>
-              <input type="text" id="yyyyddd-input" class="form-input font-mono" placeholder="e.g. 2026189" maxlength="7" />
+              <label for="cyyddd-input">ERP Julian (CYYDDD)</label>
+              <input type="text" id="cyyddd-input" class="form-input font-mono" placeholder="e.g. 126189" maxlength="6" />
             </div>
           </div>
+          <div class="form-group margin-top-12">
+            <label for="yyyyddd-input">Long Ordinal (YYYYDDD)</label>
+            <input type="text" id="yyyyddd-input" class="form-input font-mono" placeholder="e.g. 2026189" maxlength="7" />
+          </div>
+          
           <p class="tool-tip margin-top-12">
-            <strong>Astronomical JD</strong> counts days since 4713 BC. <br>
-            <strong>Ordinal Date (YYDDD / YYYYDDD)</strong> is the standard manufacturing and supply chain date code representing the year followed by the day of the year (1–366).
+            <strong>Astronomical:</strong> JD counts days since 4713 BC. JDN is the integer day count. MJD offsets it by 2,400,000.5. <br>
+            <strong>Calendar:</strong> Ordinals represent the year followed by the sequential day of the year (1–366). CYYDDD uses century digit C (0 for 19xx, 1 for 20xx).
           </p>
         </article>
 
@@ -167,9 +184,15 @@
               <h2>Interactive Timeline Planner</h2>
               <p>Drag any slider horizontally to sync all timezones. Yellow represents day, blue represents night.</p>
             </div>
-            <button id="reset-setup-btn" class="clear-btn">
-              <i data-lucide="rotate-ccw"></i> Reset Layout
-            </button>
+            <div class="header-actions">
+              <label class="toggle-control">
+                <input type="checkbox" id="ampm-toggle" />
+                <span>AM/PM Mode</span>
+              </label>
+              <button id="reset-setup-btn" class="clear-btn">
+                <i data-lucide="rotate-ccw"></i> Reset Layout
+              </button>
+            </div>
           </div>
 
           <div class="timelines-dashboard-wrapper">

@@ -322,7 +322,7 @@ body::before {
 
 /* Color palettes for segments */
 .track-night {
-  background: linear-gradient(to bottom, #111827, #1f2937); /* Very dark gray/slate */
+  background: linear-gradient(to bottom, #0d1e3d, #1a325a); /* Premium dark midnight blue */
   box-shadow: inset 0 1px 2px rgba(0,0,0,0.4);
 }
 
@@ -428,4 +428,49 @@ body::before {
 .clear-btn:hover {
   color: var(--text-primary);
   background: var(--bg-tertiary);
+}
+
+.date-section-header {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 4px;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.date-section-header.margin-top-16 {
+  margin-top: 16px;
+}
+
+.margin-top-6 {
+  margin-top: 6px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.toggle-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-control input {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-primary);
 }
