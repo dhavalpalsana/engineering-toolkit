@@ -46,28 +46,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const renderCards = (filteredTools) => {
     toolsGrid.innerHTML = "";
 
-    if (filteredTools.length === 0) {
-      // Empty State Layout
-      const emptyState = document.createElement("div");
-      emptyState.className = "empty-state";
-      emptyState.innerHTML = `
-        ${getIconSvg("search")}
-        <h3 class="empty-state-title">No tools found</h3>
-        <p class="empty-state-desc">We couldn't find any tools matching your search query. Try another term or suggest a new tool!</p>
-        <button class="suggest-btn" id="suggest-from-empty">Suggest a Tool</button>
-      `;
-      toolsGrid.appendChild(emptyState);
-
-      // Bind suggest button inside empty state
-      document.getElementById("suggest-from-empty").addEventListener("click", (e) => window.openFeatureSuggestionModal(e, searchInput.value));
-      return;
+    // Show a clean notice if no actual tools matched a search query
+    const query = searchInput.value.toLowerCase().trim();
+    if (filteredTools.length === 0 && query) {
+      const notice = document.createElement("div");
+      notice.className = "search-no-results";
+      notice.style.gridColumn = "1 / -1";
+      notice.style.textAlign = "center";
+      notice.style.padding = "24px 12px 12px 12px";
+      notice.style.color = "var(--text-muted)";
+      notice.style.fontSize = "var(--font-size-sm)";
+      notice.innerHTML = `<p>No tools matched "<strong>${escapeHtml(query)}</strong>". You can submit a proposal below:</p>`;
+      toolsGrid.appendChild(notice);
     }
 
+    // Render regular tools
     filteredTools.forEach(tool => {
       const card = document.createElement("div");
       card.className = "tool-card";
 
-      // Accessibility: make card keyboard-navigable
       const isActive = tool.status === "active";
       const badgeClass = isActive ? "active" : "upcoming";
       const badgeText = isActive ? "Active" : "Coming Soon";
@@ -115,45 +112,49 @@ document.addEventListener("DOMContentLoaded", () => {
       toolsGrid.appendChild(card);
     });
 
-    // Append 'Suggest a Tool' card if the user is actively searching
-    const query = searchInput.value.toLowerCase().trim();
-    if (query) {
-      const suggestCard = document.createElement("div");
-      suggestCard.className = "tool-card suggest-tool-card";
-      suggestCard.setAttribute("role", "button");
-      suggestCard.setAttribute("tabindex", "0");
-      suggestCard.setAttribute("aria-label", "Suggest a new tool");
-      
-      suggestCard.innerHTML = `
-        <div class="tool-card-header">
-          <div class="tool-icon-box" style="background: var(--accent-primary-glow); color: var(--accent-primary);">
-            ${getIconSvg("lightbulb")}
-          </div>
-          <span class="tool-badge active" style="background: var(--accent-primary-glow); color: var(--accent-primary);">New Request</span>
+    // Unconditionally append 'Suggest a Tool' card at the end
+    const suggestCard = document.createElement("div");
+    suggestCard.className = "tool-card suggest-tool-card";
+    suggestCard.setAttribute("role", "button");
+    suggestCard.setAttribute("tabindex", "0");
+    suggestCard.setAttribute("aria-label", "Suggest a new tool");
+    
+    suggestCard.innerHTML = `
+      <div class="tool-card-header">
+        <div class="tool-icon-box" style="background: var(--accent-primary-glow); color: var(--accent-primary);">
+          ${getIconSvg("lightbulb")}
         </div>
-        <h3 class="tool-card-title">Suggest a Tool</h3>
-        <p class="tool-card-desc">Can't find the specific engineering tool or calculator you need? Submit a proposal to our development team.</p>
-        <div class="tool-card-footer">
-          <span class="launch-btn" style="color: var(--accent-primary);">Submit Proposal ${registryIcons.arrowRight}</span>
-        </div>
-      `;
+        <span class="tool-badge active" style="background: var(--accent-primary-glow); color: var(--accent-primary);">New Request</span>
+      </div>
+      <h3 class="tool-card-title">Suggest a Tool</h3>
+      <p class="tool-card-desc">Can't find the specific engineering tool or calculator you need? Submit a proposal to our development team.</p>
+      <div class="tool-card-footer">
+        <span class="launch-btn" style="color: var(--accent-primary);">Submit Proposal ${registryIcons.arrowRight}</span>
+      </div>
+    `;
 
-      const handleSuggest = (e) => {
-        if (window.openFeatureSuggestionModal) {
-          window.openFeatureSuggestionModal(e, `Search: ${searchInput.value}`);
-        }
-      };
+    const handleSuggest = (e) => {
+      if (window.openFeatureSuggestionModal) {
+        window.openFeatureSuggestionModal(e, searchInput.value ? `Search: ${searchInput.value}` : "New Tool Suggestion");
+      }
+    };
 
-      suggestCard.addEventListener("click", handleSuggest);
-      suggestCard.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleSuggest(e);
-        }
-      });
+    suggestCard.addEventListener("click", handleSuggest);
+    suggestCard.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleSuggest(e);
+      }
+    });
 
-      toolsGrid.appendChild(suggestCard);
-    }
+    toolsGrid.appendChild(suggestCard);
+  };
+
+  const escapeHtml = (str) => {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   };
 
   // Search Logic
