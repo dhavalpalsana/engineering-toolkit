@@ -109,3 +109,55 @@ For tools supporting import/export, buttons in the `.hdr-right` toolbar must use
     setInputs: (data) => { ... } // sets state object
   };
   ```
+
+---
+
+## 5. Page Layout Containment, Typography & Themes
+To maintain styling parity with the rest of the project and ensure pages do not stretch to the full width of wide monitors:
+
+### CSS Base & Typography
+In the tool's local stylesheet (e.g. `style.css`), always style the `body` tag using project-wide design tokens for typography and background theme synchronization:
+```css
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.6;
+  overflow-x: hidden;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  position: relative;
+}
+
+/* Premium background decorative glow */
+body::before {
+  content: '';
+  position: fixed;
+  top: -150px;
+  right: -100px;
+  width: 500px;
+  height: 500px;
+  border-radius: var(--radius-full);
+  filter: blur(140px);
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--accent-primary-glow), transparent 70%);
+  opacity: 0.8;
+}
+```
+
+### Layout Container Widths
+Always wrap the page content (e.g., `<main class="container page-content">`) in a `.container` class selector. Define `.container` explicitly in the tool's local style.css to constrain width and center the content:
+```css
+.container {
+  width: 100%;
+  max-width: var(--max-width, 1600px);
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+```

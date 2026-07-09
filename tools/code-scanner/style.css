@@ -28,6 +28,14 @@ body::before {
   opacity: 0.8;
 }
 
+.container {
+  width: 100%;
+  max-width: var(--max-width, 1600px);
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
 .page-content {
   padding-top: 40px;
   padding-bottom: 60px;
