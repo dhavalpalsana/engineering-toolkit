@@ -114,6 +114,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
       toolsGrid.appendChild(card);
     });
+
+    // Append 'Suggest a Tool' card if the user is actively searching
+    const query = searchInput.value.toLowerCase().trim();
+    if (query) {
+      const suggestCard = document.createElement("div");
+      suggestCard.className = "tool-card suggest-tool-card";
+      suggestCard.setAttribute("role", "button");
+      suggestCard.setAttribute("tabindex", "0");
+      suggestCard.setAttribute("aria-label", "Suggest a new tool");
+      
+      suggestCard.innerHTML = `
+        <div class="tool-card-header">
+          <div class="tool-icon-box" style="background: var(--accent-primary-glow); color: var(--accent-primary);">
+            ${getIconSvg("lightbulb")}
+          </div>
+          <span class="tool-badge active" style="background: var(--accent-primary-glow); color: var(--accent-primary);">New Request</span>
+        </div>
+        <h3 class="tool-card-title">Suggest a Tool</h3>
+        <p class="tool-card-desc">Can't find the specific engineering tool or calculator you need? Submit a proposal to our development team.</p>
+        <div class="tool-card-footer">
+          <span class="launch-btn" style="color: var(--accent-primary);">Submit Proposal ${registryIcons.arrowRight}</span>
+        </div>
+      `;
+
+      const handleSuggest = (e) => {
+        if (window.openFeatureSuggestionModal) {
+          window.openFeatureSuggestionModal(e, `Search: ${searchInput.value}`);
+        }
+      };
+
+      suggestCard.addEventListener("click", handleSuggest);
+      suggestCard.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleSuggest(e);
+        }
+      });
+
+      toolsGrid.appendChild(suggestCard);
+    }
   };
 
   // Search Logic
