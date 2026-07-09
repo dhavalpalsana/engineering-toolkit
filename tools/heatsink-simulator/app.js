@@ -329,7 +329,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const tf = heatsink.finThickness * scale;
 
     // 1. Build heatsink base box with grid segments for vertex coloring
-    const baseGeo = new THREE.BoxGeometry(W, t, L, Nx - 1, 1, Ny - 1);
+    const baseGeo = new THREE.BoxBufferGeometry(W, t, L, Nx - 1, 1, Ny - 1);
     
     // Apply vertex colors based on local FDM temperature arrays
     const colors = [];
@@ -365,7 +365,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const finX = startX + i * spacing;
       
       // Fin box geometry. Segment along length so we get linear heat map gradients
-      const finGeo = new THREE.BoxGeometry(tf, Hf, L, 1, 4, Ny - 1);
+      const finGeo = new THREE.BoxBufferGeometry(tf, Hf, L, 1, 4, Ny - 1);
       
       const finColors = [];
       const finPos = finGeo.attributes.position;
@@ -404,7 +404,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const cY = -chip.y * scale; // invert Y for standard Cartesian 3D map
 
       // Chip (silicon colored, translucent red glow)
-      const chipGeo = new THREE.BoxGeometry(cW, 2, cL);
+      const chipGeo = new THREE.BoxBufferGeometry(cW, 2, cL);
       const chipMat = new THREE.MeshLambertMaterial({
         color: 0xef4444,
         transparent: true,
@@ -416,7 +416,7 @@ document.addEventListener("DOMContentLoaded", () => {
       chipsGroup.add(chipMesh);
 
       // TIM (grey interface material)
-      const timGeo = new THREE.BoxGeometry(cW, 0.4, cL);
+      const timGeo = new THREE.BoxBufferGeometry(cW, 0.4, cL);
       const timMat = new THREE.MeshLambertMaterial({
         color: 0x94a3b8,
         transparent: true,
@@ -433,7 +433,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const dH = t + Hf + environment.bypassTop * scale;
       const dL = L + 40 * scale; // extend beyond heatsink to show tunnel
 
-      const ductGeo = new THREE.BoxGeometry(dW, dH, dL);
+      const ductGeo = new THREE.BoxBufferGeometry(dW, dH, dL);
       const ductMat = new THREE.MeshLambertMaterial({
         color: 0x3b82f6,
         wireframe: true,
