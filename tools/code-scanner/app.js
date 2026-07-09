@@ -61,47 +61,51 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ── Camera Scanner Logic ──────────────────────────────────────
+  // Helper to populate the cameras dropdown
+  const populateCamerasDropdown = (devices) => {
+    cameraSelect.innerHTML = "";
+    let backCameraId = "";
+    
+    devices.forEach(device => {
+      const option = document.createElement("option");
+      option.value = device.id;
+      option.textContent = device.label || `Camera ${cameraSelect.children.length + 1}`;
+      cameraSelect.appendChild(option);
+
+      const labelLower = (device.label || "").toLowerCase();
+      if (labelLower.includes("back") || labelLower.includes("rear") || labelLower.includes("environment")) {
+        backCameraId = device.id;
+      }
+    });
+
+    if (backCameraId) {
+      cameraSelect.value = backCameraId;
+    } else {
+      cameraSelect.value = devices[0].id;
+    }
+    activeCameraId = cameraSelect.value;
+  };
+
   const initCameras = () => {
     if (typeof Html5Qrcode === "undefined") {
       cameraSelect.innerHTML = `<option value="">Scanner library not loaded</option>`;
       return;
     }
 
+    // Try to list cameras without triggering a prompt first. If browser blocks/gives empty list, we don't disable button
     Html5Qrcode.getCameras()
       .then(devices => {
         if (devices && devices.length > 0) {
-          cameraSelect.innerHTML = "";
-          let backCameraId = "";
-          
-          devices.forEach(device => {
-            const option = document.createElement("option");
-            option.value = device.id;
-            option.textContent = device.label || `Camera ${cameraSelect.children.length + 1}`;
-            cameraSelect.appendChild(option);
-
-            // Attempt to auto-select back/rear camera on mobile devices
-            const labelLower = (device.label || "").toLowerCase();
-            if (labelLower.includes("back") || labelLower.includes("rear") || labelLower.includes("environment")) {
-              backCameraId = device.id;
-            }
-          });
-
-          // Set default selected camera
-          if (backCameraId) {
-            cameraSelect.value = backCameraId;
-          } else {
-            cameraSelect.value = devices[0].id;
-          }
-          activeCameraId = cameraSelect.value;
+          populateCamerasDropdown(devices);
         } else {
-          cameraSelect.innerHTML = `<option value="">No cameras detected</option>`;
-          toggleCameraBtn.disabled = true;
+          cameraSelect.innerHTML = `<option value="">Access permission required</option>`;
+          activeCameraId = "";
         }
       })
       .catch(err => {
-        console.warn("Camera request error:", err);
-        cameraSelect.innerHTML = `<option value="">Permissions denied or error</option>`;
+        console.warn("Camera check on load:", err);
+        cameraSelect.innerHTML = `<option value="">Access permission required</option>`;
+        activeCameraId = "";
       });
   };
 
@@ -113,9 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  const startCameraScanner = () => {
-    if (!activeCameraId) return;
-
+  const startScanningStream = () => {
     if (!html5QrCode) {
       html5QrCode = new Html5Qrcode("reader");
     }
@@ -140,13 +142,11 @@ document.addEventListener("DOMContentLoaded", () => {
       activeCameraId,
       config,
       (decodedText, decodedResult) => {
-        // Success
         handleScanSuccess(decodedText, decodedResult);
-        // Turn off camera on successful read to visually lock the result
         stopCameraScanner();
       },
       (errorMessage) => {
-        // Ignore verbose console logs from loop re-evaluations
+        // ignore
       }
     )
     .then(() => {
@@ -160,6 +160,42 @@ document.addEventListener("DOMContentLoaded", () => {
       if (window.showToast) window.showToast("Could not open camera stream.", false);
       stopCameraScanner();
     });
+  };
+
+  const startCameraScanner = () => {
+    // If activeCameraId is empty, it means we don't have camera permission yet or devices weren't queried
+    if (!activeCameraId) {
+      toggleCameraBtn.disabled = true;
+      toggleCameraBtn.innerHTML = `<i data-lucide="loader"></i> Requesting access...`;
+      if (typeof lucide !== "undefined") lucide.createIcons();
+
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          // Stop stream immediately
+          stream.getTracks().forEach(track => track.stop());
+          // Query devices now that permission is granted
+          return Html5Qrcode.getCameras();
+        })
+        .then(devices => {
+          if (devices && devices.length > 0) {
+            populateCamerasDropdown(devices);
+            startScanningStream();
+          } else {
+            throw new Error("No cameras found");
+          }
+        })
+        .catch(err => {
+          console.error("Camera prompt error:", err);
+          if (window.showToast) window.showToast("Camera permission denied.", false);
+          cameraSelect.innerHTML = `<option value="">Access Denied</option>`;
+          toggleCameraBtn.disabled = false;
+          toggleCameraBtn.innerHTML = `<i data-lucide="play"></i> Start Scanner`;
+          if (typeof lucide !== "undefined") lucide.createIcons();
+        });
+      return;
+    }
+
+    startScanningStream();
   };
 
   const stopCameraScanner = () => {
