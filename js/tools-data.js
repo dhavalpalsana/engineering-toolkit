@@ -84,7 +84,7 @@ const TOOLS_DATA = [
     tags: ["mechanical", "thermal", "heatsink", "simulation", "heat-transfer", "cfd"],
     icon: "thermometer",
     path: "./tools/heatsink-simulator/index.html",
-    status: "active"
+    status: "beta"
   },
   {
     id: "bolt-torque",

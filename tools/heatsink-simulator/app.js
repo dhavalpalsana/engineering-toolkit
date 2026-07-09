@@ -453,281 +453,285 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Throttled in standard browser frame timeout to permit CSS loading state to render
     setTimeout(() => {
-      // 1. Fetch input values
-      heatsink.width = parseFloat(baseWidthInput.value) || 80;
-      heatsink.length = parseFloat(baseLengthInput.value) || 80;
-      heatsink.thickness = parseFloat(baseHeightInput.value) || 6;
-      heatsink.finHeight = parseFloat(finHeightInput.value) || 25;
-      heatsink.finThickness = parseFloat(finThicknessInput.value) || 1.5;
-      heatsink.finCount = parseInt(finCountInput.value) || 16;
-      heatsink.customK = parseFloat(customKInput.value) || 200;
+      try {
+        // 1. Fetch input values
+        heatsink.width = parseFloat(baseWidthInput.value) || 80;
+        heatsink.length = parseFloat(baseLengthInput.value) || 80;
+        heatsink.thickness = parseFloat(baseHeightInput.value) || 6;
+        heatsink.finHeight = parseFloat(finHeightInput.value) || 25;
+        heatsink.finThickness = parseFloat(finThicknessInput.value) || 1.5;
+        heatsink.finCount = parseInt(finCountInput.value) || 16;
+        heatsink.customK = parseFloat(customKInput.value) || 200;
 
-      tim.thickness = parseFloat(timThicknessInput.value) || 50;
-      tim.k = parseFloat(timKInput.value) || 3.5;
+        tim.thickness = parseFloat(timThicknessInput.value) || 50;
+        tim.k = parseFloat(timKInput.value) || 3.5;
 
-      environment.ambientTemp = parseFloat(ambientTempInput.value) || 25;
-      environment.fanAirflow = parseFloat(fanAirflowInput.value) || 32;
-      environment.bypassSide = parseFloat(bypassSideInput.value) || 2;
-      environment.bypassTop = parseFloat(bypassTopInput.value) || 1;
-      environment.emissivity = parseFloat(surfaceEmissivityInput.value) || 0.85;
+        environment.ambientTemp = parseFloat(ambientTempInput.value) || 25;
+        environment.fanAirflow = parseFloat(fanAirflowInput.value) || 32;
+        environment.bypassSide = parseFloat(bypassSideInput.value) || 2;
+        environment.bypassTop = parseFloat(bypassTopInput.value) || 1;
+        environment.emissivity = parseFloat(surfaceEmissivityInput.value) || 0.85;
 
-      const kBase = heatsink.material === "custom" ? heatsink.customK : materials[heatsink.material].k;
+        const kBase = heatsink.material === "custom" ? heatsink.customK : materials[heatsink.material].k;
 
-      // 2. Perform convection calculations
-      let h = 8.0; // default convection coeff
-      let sysFlow = 0; // CFM
-      let sysPress = 0; // Pa
+        // 2. Perform convection calculations
+        let h = 8.0; // default convection coeff
+        let sysFlow = 0; // CFM
+        let sysPress = 0; // Pa
 
-      if (environment.mode === "forced") {
-        // Geometric channel parameters
-        const s = (heatsink.width - heatsink.finCount * heatsink.finThickness) / (heatsink.finCount - 1 || 1);
-        const Dh = (2 * s * heatsink.finHeight) / (s + heatsink.finHeight || 1);
+        if (environment.mode === "forced") {
+          // Geometric channel parameters
+          const s = (heatsink.width - heatsink.finCount * heatsink.finThickness) / (heatsink.finCount - 1 || 1);
+          const Dh = (2 * s * heatsink.finHeight) / (s + heatsink.finHeight || 1);
 
-        // Solve operating airflow matching flow impedance to fan curves
-        // Fan Curve: P_fan = P_max * (1 - (Q / Q_max)^2)
-        // Low static pressure axial fan curve approximation: Max Pressure = 45 Pa
-        const pMax = 45;
-        const qMaxCFM = environment.fanAirflow;
-        const qMaxM3S = qMaxCFM * 0.000471947; // CFM to m³/s
+          // Solve operating airflow matching flow impedance to fan curves
+          // Fan Curve: P_fan = P_max * (1 - (Q / Q_max)^2)
+          // Low static pressure axial fan curve approximation: Max Pressure = 45 Pa
+          const pMax = 45;
+          const qMaxCFM = environment.fanAirflow;
+          const qMaxM3S = qMaxCFM * 0.000471947; // CFM to m³/s
 
-        // Numerical solver for operating flow intersection
-        let operatingFlowCFM = qMaxCFM;
-        let flowVelocity = 1.0;
+          // Numerical solver for operating flow intersection
+          let operatingFlowCFM = qMaxCFM;
+          let flowVelocity = 1.0;
 
-        for (let flow = 0.5; flow <= qMaxCFM; flow += 0.5) {
-          const qM3S = flow * 0.000471947;
-          
-          // Calculate channel velocity considering duct bypass clearances
-          const areaChannel = (heatsink.width * heatsink.finHeight) / 1e6; // m²
-          const areaBypass = ((environment.bypassSide * 2 * (heatsink.finHeight + heatsink.thickness)) + (environment.bypassTop * heatsink.width)) / 1e6;
-          
-          // Bypass ratio
-          const bypassFactor = areaBypass > 0 ? 1 / (1 + 1.6 * (areaBypass / areaChannel)) : 1.0;
-          const vChannel = (qM3S / areaChannel) * bypassFactor;
-          
-          // Channel Reynolds
-          const nuAir = 1.56e-5; // m²/s
-          const Re = (vChannel * (Dh / 1000)) / nuAir;
+          for (let flow = 0.5; flow <= qMaxCFM; flow += 0.5) {
+            const qM3S = flow * 0.000471947;
+            
+            // Calculate channel velocity considering duct bypass clearances
+            const areaChannel = (heatsink.width * heatsink.finHeight) / 1e6; // m²
+            const areaBypass = ((environment.bypassSide * 2 * (heatsink.finHeight + heatsink.thickness)) + (environment.bypassTop * heatsink.width)) / 1e6;
+            
+            // Bypass ratio
+            const bypassFactor = areaBypass > 0 ? 1 / (1 + 1.6 * (areaBypass / areaChannel)) : 1.0;
+            const vChannel = (qM3S / areaChannel) * bypassFactor;
+            
+            // Channel Reynolds
+            const nuAir = 1.56e-5; // m²/s
+            const Re = (vChannel * (Dh / 1000)) / nuAir;
 
-          // Friction factor
-          const f = Re > 2000 ? 0.316 * Math.pow(Re, -0.25) : 64 / (Re || 1);
-          
-          // Pressure drop
-          const rhoAir = 1.18; // kg/m³
-          const pressureDrop = f * (heatsink.length / Dh) * (rhoAir * vChannel * vChannel) / 2;
+            // Friction factor
+            const f = Re > 2000 ? 0.316 * Math.pow(Re, -0.25) : 64 / (Re || 1);
+            
+            // Pressure drop
+            const rhoAir = 1.18; // kg/m³
+            const pressureDrop = f * (heatsink.length / Dh) * (rhoAir * vChannel * vChannel) / 2;
 
-          // Fan Curve pressure matching
-          const fanPressure = pMax * (1 - Math.pow(flow / qMaxCFM, 2));
+            // Fan Curve pressure matching
+            const fanPressure = pMax * (1 - Math.pow(flow / qMaxCFM, 2));
 
-          if (pressureDrop >= fanPressure) {
-            operatingFlowCFM = flow;
-            flowVelocity = vChannel;
-            sysPress = pressureDrop;
-            break;
-          }
-        }
-
-        sysFlow = operatingFlowCFM;
-        
-        // Calculate Forced Convection Nusselt / Heat Coefficient (h)
-        const reChannel = (flowVelocity * (Dh / 1000)) / 1.56e-5;
-        const pr = 0.7; // air Prandtl
-        let Nu = 3.66; // laminar default
-        
-        if (reChannel > 2300) {
-          Nu = 0.023 * Math.pow(reChannel, 0.8) * Math.pow(pr, 0.4);
-        } else {
-          Nu = 3.66 + (0.0668 * (Dh / heatsink.length) * reChannel * pr) / (1 + 0.04 * Math.pow((Dh / heatsink.length) * reChannel * pr, 2/3));
-        }
-
-        h = (Nu * 0.026) / (Dh / 1000);
-      } else {
-        // Natural Convection (Vertical channels free convection)
-        // Convective coefficient + Radiative coefficient based on emissivity
-        const dT_est = 25.0; // estimated delta temperature
-        const h_conv = 1.42 * Math.pow(dT_est / (heatsink.finHeight / 1000), 0.25);
-        
-        const sigma = 5.67e-8; // Stefan-Boltzmann
-        const T_avg_k = environment.ambientTemp + 273.15 + dT_est / 2;
-        const h_rad = environment.emissivity * sigma * 4 * Math.pow(T_avg_k, 3);
-        
-        h = h_conv + h_rad;
-      }
-
-      // Match fin surface area enhancements
-      // Fin efficiency (eta_f)
-      const P_fin = 2 * heatsink.length / 1000; // perimeter
-      const Ac_fin = (heatsink.finThickness * heatsink.length) / 1e6; // cross section
-      const m = Math.sqrt((h * P_fin) / (kBase * Ac_fin || 1));
-      const eta_f = Math.tanh(m * (heatsink.finHeight / 1000)) / (m * (heatsink.finHeight / 1000) || 1);
-
-      // Fin area multiplier
-      const areaFins = heatsink.finCount * 2 * heatsink.length * heatsink.finHeight / 1e6; // m²
-      const areaBase = (heatsink.width * heatsink.length) / 1e6;
-      const hEff = h * (1 + eta_f * (areaFins / areaBase));
-
-      // 3. Finite Difference Solver Relaxation iteration
-      const dx = (heatsink.width / 1000) / Nx;
-      const dy = (heatsink.length / 1000) / Ny;
-      const t_m = heatsink.thickness / 1000;
-
-      // Reset base temps
-      for (let i = 0; i < Nx; i++) {
-        for (let j = 0; j < Ny; j++) {
-          gridT[i][j] = environment.ambientTemp;
-        }
-      }
-
-      // Heat source Node mapping
-      const heatNodes = Array(Nx).fill(0).map(() => Array(Ny).fill(0));
-      let totalPower = 0;
-
-      chips.forEach(chip => {
-        // Chip coordinates converted to grid nodes indexes
-        const leftX = ((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx;
-        const rightX = ((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx;
-        const topY = ((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny;
-        const bottomY = ((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny;
-
-        let numMatchedNodes = 0;
-        for (let i = 0; i < Nx; i++) {
-          for (let j = 0; j < Ny; j++) {
-            if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
-              numMatchedNodes++;
+            if (pressureDrop >= fanPressure) {
+              operatingFlowCFM = flow;
+              flowVelocity = vChannel;
+              sysPress = pressureDrop;
+              break;
             }
           }
+
+          sysFlow = operatingFlowCFM;
+          
+          // Calculate Forced Convection Nusselt / Heat Coefficient (h)
+          const reChannel = (flowVelocity * (Dh / 1000)) / 1.56e-5;
+          const pr = 0.7; // air Prandtl
+          let Nu = 3.66; // laminar default
+          
+          if (reChannel > 2300) {
+            Nu = 0.023 * Math.pow(reChannel, 0.8) * Math.pow(pr, 0.4);
+          } else {
+            Nu = 3.66 + (0.0668 * (Dh / heatsink.length) * reChannel * pr) / (1 + 0.04 * Math.pow((Dh / heatsink.length) * reChannel * pr, 2/3));
+          }
+
+          h = (Nu * 0.026) / (Dh / 1000);
+        } else {
+          // Natural Convection (Vertical channels free convection)
+          // Convective coefficient + Radiative coefficient based on emissivity
+          const dT_est = 25.0; // estimated delta temperature
+          const h_conv = 1.42 * Math.pow(dT_est / (heatsink.finHeight / 1000), 0.25);
+          
+          const sigma = 5.67e-8; // Stefan-Boltzmann
+          const T_avg_k = environment.ambientTemp + 273.15 + dT_est / 2;
+          const h_rad = environment.emissivity * sigma * 4 * Math.pow(T_avg_k, 3);
+          
+          h = h_conv + h_rad;
         }
 
-        if (numMatchedNodes > 0) {
-          const powerPerNode = chip.power / numMatchedNodes;
+        // Match fin surface area enhancements
+        // Fin efficiency (eta_f)
+        const P_fin = 2 * heatsink.length / 1000; // perimeter
+        const Ac_fin = (heatsink.finThickness * heatsink.length) / 1e6; // cross section
+        const m = Math.sqrt((h * P_fin) / (kBase * Ac_fin || 1));
+        const eta_f = Math.tanh(m * (heatsink.finHeight / 1000)) / (m * (heatsink.finHeight / 1000) || 1);
+
+        // Fin area multiplier
+        const areaFins = heatsink.finCount * 2 * heatsink.length * heatsink.finHeight / 1e6; // m²
+        const areaBase = (heatsink.width * heatsink.length) / 1e6;
+        const hEff = h * (1 + eta_f * (areaFins / areaBase));
+
+        // 3. Finite Difference Solver Relaxation iteration
+        const dx = (heatsink.width / 1000) / Nx;
+        const dy = (heatsink.length / 1000) / Ny;
+        const t_m = heatsink.thickness / 1000;
+
+        // Reset base temps
+        for (let i = 0; i < Nx; i++) {
+          for (let j = 0; j < Ny; j++) {
+            gridT[i][j] = environment.ambientTemp;
+          }
+        }
+
+        // Heat source Node mapping
+        const heatNodes = Array(Nx).fill(0).map(() => Array(Ny).fill(0));
+        let totalPower = 0;
+
+        chips.forEach(chip => {
+          // Chip coordinates converted to grid nodes indexes
+          const leftX = ((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx;
+          const rightX = ((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx;
+          const topY = ((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny;
+          const bottomY = ((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny;
+
+          let numMatchedNodes = 0;
           for (let i = 0; i < Nx; i++) {
             for (let j = 0; j < Ny; j++) {
               if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
-                heatNodes[i][j] += powerPerNode;
+                numMatchedNodes++;
               }
             }
           }
-        }
-        totalPower += chip.power;
-      });
 
-      // Relaxation solver iterations (steady state diffusion solution)
-      const conductX = (kBase * t_m * dy) / dx;
-      const conductY = (kBase * t_m * dx) / dy;
-      const conductConv = hEff * dx * dy;
-
-      for (let iter = 0; iter < 120; iter++) {
-        const nextT = Array(Nx).fill(0).map(() => Array(Ny).fill(25));
-        
-        for (let i = 0; i < Nx; i++) {
-          for (let j = 0; j < Ny; j++) {
-            let sumNeighborTerms = 0;
-            let sumConductance = 0;
-
-            // X-conductance neighbors
-            if (i > 0) {
-              sumNeighborTerms += conductX * gridT[i-1][j];
-              sumConductance += conductX;
-            }
-            if (i < Nx-1) {
-              sumNeighborTerms += conductX * gridT[i+1][j];
-              sumConductance += conductX;
-            }
-
-            // Y-conductance neighbors
-            if (j > 0) {
-              sumNeighborTerms += conductY * gridT[i][j-1];
-              sumConductance += conductY;
-            }
-            if (j < Ny-1) {
-              sumNeighborTerms += conductY * gridT[i][j+1];
-              sumConductance += conductY;
-            }
-
-            // Convection loss
-            sumNeighborTerms += conductConv * environment.ambientTemp;
-            sumConductance += conductConv;
-
-            // Heat input source
-            const nodePower = heatNodes[i][j];
-
-            // Node temperature solution
-            nextT[i][j] = (sumNeighborTerms + nodePower) / sumConductance;
-          }
-        }
-        gridT = nextT;
-      }
-
-      // Compute statistics results
-      let maxBaseTemp = environment.ambientTemp;
-      for (let i = 0; i < Nx; i++) {
-        for (let j = 0; j < Ny; j++) {
-          if (gridT[i][j] > maxBaseTemp) maxBaseTemp = gridT[i][j];
-        }
-      }
-
-      // Silicon Junction Temp matching chip contact and TIM thermal resistance
-      // R_tim = thickness / (k_tim * Area)
-      // T_junction = T_base + Q * R_tim
-      let maxJunctionTemp = maxBaseTemp;
-      chips.forEach(chip => {
-        // Average base temperature under this chip
-        const leftX = Math.floor(((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
-        const rightX = Math.ceil(((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
-        const topY = Math.floor(((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
-        const bottomY = Math.ceil(((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
-
-        let sumBaseT = 0;
-        let cCount = 0;
-        for (let i = 0; i < Nx; i++) {
-          for (let j = 0; j < Ny; j++) {
-            if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
-              sumBaseT += gridT[i][j];
-              cCount++;
+          if (numMatchedNodes > 0) {
+            const powerPerNode = chip.power / numMatchedNodes;
+            for (let i = 0; i < Nx; i++) {
+              for (let j = 0; j < Ny; j++) {
+                if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
+                  heatNodes[i][j] += powerPerNode;
+                }
+              }
             }
           }
+          totalPower += chip.power;
+        });
+
+        // Relaxation solver iterations (steady state diffusion solution)
+        const conductX = (kBase * t_m * dy) / dx;
+        const conductY = (kBase * t_m * dx) / dy;
+        const conductConv = hEff * dx * dy;
+
+        for (let iter = 0; iter < 120; iter++) {
+          const nextT = Array(Nx).fill(0).map(() => Array(Ny).fill(25));
+          
+          for (let i = 0; i < Nx; i++) {
+            for (let j = 0; j < Ny; j++) {
+              let sumNeighborTerms = 0;
+              let sumConductance = 0;
+
+              // X-conductance neighbors
+              if (i > 0) {
+                sumNeighborTerms += conductX * gridT[i-1][j];
+                sumConductance += conductX;
+              }
+              if (i < Nx-1) {
+                sumNeighborTerms += conductX * gridT[i+1][j];
+                sumConductance += conductX;
+              }
+
+              // Y-conductance neighbors
+              if (j > 0) {
+                sumNeighborTerms += conductY * gridT[i][j-1];
+                sumConductance += conductY;
+              }
+              if (j < Ny-1) {
+                sumNeighborTerms += conductY * gridT[i][j+1];
+                sumConductance += conductY;
+              }
+
+              // Convection loss
+              sumNeighborTerms += conductConv * environment.ambientTemp;
+              sumConductance += conductConv;
+
+              // Heat input source
+              const nodePower = heatNodes[i][j];
+
+              // Node temperature solution
+              nextT[i][j] = (sumNeighborTerms + nodePower) / sumConductance;
+            }
+          }
+          gridT = nextT;
         }
-        const avgBaseT = cCount > 0 ? sumBaseT / cCount : maxBaseTemp;
-        
-        // TIM contact resistance
-        const chipAreaM2 = (chip.width * chip.length) / 1e6;
-        const R_tim = (tim.thickness / 1e6) / (tim.k * chipAreaM2);
-        
-        // Chip spreading/conduction
-        const tJunc = avgBaseT + chip.power * R_tim;
-        if (tJunc > maxJunctionTemp) maxJunctionTemp = tJunc;
-      });
 
-      const maxTheta = totalPower > 0 ? (maxJunctionTemp - environment.ambientTemp) / totalPower : 0;
+        // Compute statistics results
+        let maxBaseTemp = environment.ambientTemp;
+        for (let i = 0; i < Nx; i++) {
+          for (let j = 0; j < Ny; j++) {
+            if (gridT[i][j] > maxBaseTemp) maxBaseTemp = gridT[i][j];
+          }
+        }
 
-      // 4. Update UI labels and badge states
-      resTJunction.textContent = `${maxJunctionTemp.toFixed(1)} °C`;
-      resTBase.textContent = `${maxBaseTemp.toFixed(1)} °C`;
-      resHCoeff.textContent = `${h.toFixed(1)} W/m²K`;
-      resTheta.textContent = `${maxTheta.toFixed(3)} K/W`;
+        // Silicon Junction Temp matching chip contact and TIM thermal resistance
+        // R_tim = thickness / (k_tim * Area)
+        // T_junction = T_base + Q * R_tim
+        let maxJunctionTemp = maxBaseTemp;
+        chips.forEach(chip => {
+          // Average base temperature under this chip
+          const leftX = Math.floor(((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
+          const rightX = Math.ceil(((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
+          const topY = Math.floor(((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
+          const bottomY = Math.ceil(((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
 
-      // Status colors
-      if (maxJunctionTemp > 105) {
-        statusBadge.className = "badge critical-badge";
-        statusBadge.textContent = "Critical";
-      } else if (maxJunctionTemp > 85) {
-        statusBadge.className = "badge warning-badge";
-        statusBadge.textContent = "Warning";
-      } else {
-        statusBadge.className = "badge active-badge";
-        statusBadge.textContent = "Normal";
+          let sumBaseT = 0;
+          let cCount = 0;
+          for (let i = 0; i < Nx; i++) {
+            for (let j = 0; j < Ny; j++) {
+              if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
+                sumBaseT += gridT[i][j];
+                cCount++;
+              }
+            }
+          }
+          const avgBaseT = cCount > 0 ? sumBaseT / cCount : maxBaseTemp;
+          
+          // TIM contact resistance
+          const chipAreaM2 = (chip.width * chip.length) / 1e6;
+          const R_tim = (tim.thickness / 1e6) / (tim.k * chipAreaM2);
+          
+          // Chip spreading/conduction
+          const tJunc = avgBaseT + chip.power * R_tim;
+          if (tJunc > maxJunctionTemp) maxJunctionTemp = tJunc;
+        });
+
+        const maxTheta = totalPower > 0 ? (maxJunctionTemp - environment.ambientTemp) / totalPower : 0;
+
+        // 4. Update UI labels and badge states
+        resTJunction.textContent = `${maxJunctionTemp.toFixed(1)} °C`;
+        resTBase.textContent = `${maxBaseTemp.toFixed(1)} °C`;
+        resHCoeff.textContent = `${h.toFixed(1)} W/m²K`;
+        resTheta.textContent = `${maxTheta.toFixed(3)} K/W`;
+
+        // Status colors
+        if (maxJunctionTemp > 105) {
+          statusBadge.className = "badge critical-badge";
+          statusBadge.textContent = "Critical";
+        } else if (maxJunctionTemp > 85) {
+          statusBadge.className = "badge warning-badge";
+          statusBadge.textContent = "Warning";
+        } else {
+          statusBadge.className = "badge active-badge";
+          statusBadge.textContent = "Normal";
+        }
+
+        // Update 3D colors legends
+        document.getElementById("legend-min").textContent = `${Math.round(environment.ambientTemp)}°C`;
+        document.getElementById("legend-max").textContent = `${Math.round(maxBaseTemp)}°C`;
+
+        // Redraw 3D scene and Fan curve chart
+        update3DModel(environment.ambientTemp, maxBaseTemp);
+        drawFanCurve(sysFlow, sysPress);
+      } catch (err) {
+        console.error("Solver execution error:", err);
+      } finally {
+        // Hide Loader
+        simSpinner.classList.add("hidden");
       }
-
-      // Update 3D colors legends
-      document.getElementById("legend-min").textContent = `${Math.round(environment.ambientTemp)}°C`;
-      document.getElementById("legend-max").textContent = `${Math.round(maxBaseTemp)}°C`;
-
-      // Redraw 3D scene and Fan curve chart
-      update3DModel(environment.ambientTemp, maxBaseTemp);
-      drawFanCurve(sysFlow, sysPress);
-
-      // Hide Loader
-      simSpinner.classList.add("hidden");
     }, 150);
   };
 

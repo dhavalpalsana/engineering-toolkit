@@ -66,9 +66,12 @@ document.addEventListener("DOMContentLoaded", () => {
       card.className = "tool-card";
 
       const isActive = tool.status === "active";
-      const badgeClass = isActive ? "active" : "upcoming";
-      const badgeText = isActive ? "Active" : "Coming Soon";
-      const ariaLabel = isActive
+      const isBeta = tool.status === "beta";
+      const isAvailable = isActive || isBeta;
+
+      const badgeClass = isActive ? "active" : (isBeta ? "beta" : "upcoming");
+      const badgeText = isActive ? "Active" : (isBeta ? "Beta" : "Coming Soon");
+      const ariaLabel = isAvailable
         ? `Open ${tool.name}`
         : `${tool.name} — Coming Soon. Click to suggest this tool.`;
 
@@ -86,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <h3 class="tool-card-title">${tool.name}</h3>
         <p class="tool-card-desc">${tool.description}</p>
         <div class="tool-card-footer">
-          ${isActive 
+          ${isAvailable 
             ? `<span class="launch-btn">Open Tool ${registryIcons.arrowRight}</span>` 
             : `<span class="coming-soon-text">Under Development</span>`
           }
@@ -94,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
 
       const handleActivate = (e) => {
-        if (isActive) {
+        if (isAvailable) {
           window.location.href = tool.path;
         } else {
           window.openFeatureSuggestionModal(e, `Propose: ${tool.name}`);
