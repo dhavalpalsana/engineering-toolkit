@@ -34,7 +34,8 @@ document.addEventListener("DOMContentLoaded", () => {
     bypassSide: 2,   // mm
     bypassTop: 1,    // mm
     emissivity: 0.85,
-    orientation: "upward"
+    orientation: "upward",
+    meshResolution: "medium"
   };
 
   // 3D Rendering variables
@@ -44,11 +45,10 @@ document.addEventListener("DOMContentLoaded", () => {
   
   let cadMode = false;
   let cadParts = [];
+  let currentScale = 1.0;
   
   // Solver Grid dimensions
-  const Nx = 15;
-  const Ny = 15;
-  let gridT = Array(Nx).fill(0).map(() => Array(Ny).fill(25)); // base temperatures
+
 
   // HTML DOM Selections
   const baseWidthInput = document.getElementById("base-width");
@@ -84,6 +84,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const cadPartsList = document.getElementById("cad-parts-list");
   const cadActiveControls = document.getElementById("cad-active-controls");
   const cadClearBtn = document.getElementById("cad-clear-btn");
+  const cadUploadStatus = document.getElementById("cad-upload-status");
+  const cadUploadStatusText = document.getElementById("cad-upload-status-text");
+  const meshResolutionSlider = document.getElementById("mesh-resolution-slider");
+  const meshResolutionValue = document.getElementById("mesh-resolution-value");
+  const showMeshGridInput = document.getElementById("show-mesh-grid");
+  let voxelGridHelper = null;
   const resTJunction = document.getElementById("res-t-junction");
   const resTBase = document.getElementById("res-t-base");
   const resHCoeff = document.getElementById("res-h-coeff");
@@ -147,13 +153,11 @@ document.addEventListener("DOMContentLoaded", () => {
     environment.bypassTop = parseFloat(bypassTopInput.value) || 1;
     environment.mode = convectionMode.value;
     environment.orientation = assemblyOrientation.value;
-
-    // Set grid temperatures to ambient for standard CAD representation
-    for (let i = 0; i < Nx; i++) {
-      for (let j = 0; j < Ny; j++) {
-        gridT[i][j] = environment.ambientTemp;
-      }
-    }
+    environment.ambientTemp = parseFloat(ambientTempInput.value) || 25;
+    environment.fanAirflow = parseFloat(fanAirflowInput.value) || 32;
+    environment.emissivity = parseFloat(surfaceEmissivityInput.value) || 0.85;
+    tim.thickness = parseFloat(timThicknessInput.value) || 100;
+    tim.k = parseFloat(timKInput.value) || 5.0;
 
     // Update 3D model meshes
     update3DModel(environment.ambientTemp, environment.ambientTemp);
@@ -225,6 +229,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const id = e.target.getAttribute("data-id");
         const match = chips.find(c => c.id === id);
         if (match) match.power = parseFloat(e.target.value) || 0;
+        updateCADGeometry();
         document.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
@@ -291,6 +296,118 @@ document.addEventListener("DOMContentLoaded", () => {
     environment.orientation = assemblyOrientation.value;
     updateCADGeometry();
   });
+
+  const getMeshResolutionVal = () => {
+    if (meshResolutionSlider) {
+      return parseInt(meshResolutionSlider.value) || 20;
+    }
+    return 20;
+  };
+
+  const updateVoxelGridHelper = () => {
+    if (voxelGridHelper) {
+      scene.remove(voxelGridHelper);
+      voxelGridHelper = null;
+    }
+
+    if (!showMeshGridInput || !showMeshGridInput.checked) return;
+
+    scene.updateMatrixWorld(true);
+    const bbox = new THREE.Box3();
+    if (cadMode) {
+      bbox.setFromObject(cadAssemblyGroup);
+    } else {
+      bbox.setFromObject(heatsinkGroup);
+      bbox.union(new THREE.Box3().setFromObject(chipsGroup));
+    }
+    const min = bbox.min;
+    const max = bbox.max;
+    const size = bbox.getSize(new THREE.Vector3());
+
+    const Vx = getMeshResolutionVal();
+    const Vy = Vx;
+    const Vz = Math.round(Vx / 2);
+
+    const dx = size.x / Vx;
+    const dy = size.y / Vy;
+    const dz = size.z / Vz;
+
+    const points = [];
+
+    // X direction lines
+    for (let j = 0; j <= Vy; j++) {
+      const y = min.y + j * dy;
+      points.push(new THREE.Vector3(min.x, y, min.z), new THREE.Vector3(max.x, y, min.z));
+      points.push(new THREE.Vector3(min.x, y, max.z), new THREE.Vector3(max.x, y, max.z));
+    }
+    for (let k = 0; k <= Vz; k++) {
+      const z = min.z + k * dz;
+      points.push(new THREE.Vector3(min.x, min.y, z), new THREE.Vector3(max.x, min.y, z));
+      points.push(new THREE.Vector3(min.x, max.y, z), new THREE.Vector3(max.x, max.y, z));
+    }
+
+    // Y direction lines
+    for (let i = 0; i <= Vx; i++) {
+      const x = min.x + i * dx;
+      points.push(new THREE.Vector3(x, min.y, min.z), new THREE.Vector3(x, max.y, min.z));
+      points.push(new THREE.Vector3(x, min.y, max.z), new THREE.Vector3(x, max.y, max.z));
+    }
+    for (let k = 0; k <= Vz; k++) {
+      const z = min.z + k * dz;
+      points.push(new THREE.Vector3(min.x, min.y, z), new THREE.Vector3(min.x, max.y, z));
+      points.push(new THREE.Vector3(max.x, min.y, z), new THREE.Vector3(max.x, max.y, z));
+    }
+
+    // Z direction lines
+    for (let i = 0; i <= Vx; i++) {
+      const x = min.x + i * dx;
+      points.push(new THREE.Vector3(x, min.y, min.z), new THREE.Vector3(x, min.y, max.z));
+      points.push(new THREE.Vector3(x, max.y, min.z), new THREE.Vector3(x, max.y, max.z));
+    }
+    for (let j = 0; j <= Vy; j++) {
+      const y = min.y + j * dy;
+      points.push(new THREE.Vector3(min.x, y, min.z), new THREE.Vector3(min.x, y, max.z));
+      points.push(new THREE.Vector3(max.x, y, min.z), new THREE.Vector3(max.x, y, max.z));
+    }
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+      color: 0x06b6d4,
+      transparent: true,
+      opacity: 0.35
+    });
+
+    voxelGridHelper = new THREE.LineSegments(geometry, material);
+    scene.add(voxelGridHelper);
+  };
+
+  if (showMeshGridInput) {
+    showMeshGridInput.addEventListener("change", () => {
+      updateVoxelGridHelper();
+    });
+  }
+
+  const updateResolutionDisplay = () => {
+    const val = getMeshResolutionVal();
+    const Vx = val;
+    const Vy = val;
+    const Vz = Math.round(val / 2);
+    const nodes = Vx * Vy * Vz;
+    if (meshResolutionValue) {
+      meshResolutionValue.textContent = `${Vx} divs (${nodes.toLocaleString()} nodes)`;
+    }
+  };
+
+  if (meshResolutionSlider) {
+    meshResolutionSlider.addEventListener("input", () => {
+      updateResolutionDisplay();
+    });
+    meshResolutionSlider.addEventListener("change", () => {
+      environment.meshResolution = meshResolutionSlider.value;
+      updateCADGeometry();
+      document.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
 
   // ── Three.js Viewport Setup ───────────────────────────────────
   const init3DScene = () => {
@@ -416,36 +533,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const scale = 0.5; // Scale down base dimensions so it fits viewport scene nicely
+    currentScale = scale;
     const W = heatsink.width * scale;
     const L = heatsink.length * scale;
     const t = heatsink.thickness * scale;
     const Hf = heatsink.finHeight * scale;
     const tf = heatsink.finThickness * scale;
 
-    // 1. Build heatsink base box with grid segments for vertex coloring
-    const baseGeo = new THREE.BoxBufferGeometry(W, t, L, Nx - 1, 1, Ny - 1);
-    
-    // Apply vertex colors based on local FDM temperature arrays
-    const colors = [];
-    const positions = baseGeo.attributes.position;
-    for (let i = 0; i < positions.count; i++) {
-      // Map X/Z vertex positions to Nx/Ny indices
-      const xVal = positions.getX(i);
-      const zVal = positions.getZ(i);
-      
-      const gridX = Math.round(((xVal + W / 2) / W) * (Nx - 1));
-      const gridY = Math.round(((zVal + L / 2) / L) * (Ny - 1));
-      
-      const idxX = Math.max(0, Math.min(Nx - 1, gridX));
-      const idxY = Math.max(0, Math.min(Ny - 1, gridY));
-      
-      const temp = gridT[idxX][idxY];
-      const color = getTemperatureColor(temp, minT, maxT);
-      colors.push(color.r, color.g, color.b);
-    }
-    baseGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const segs = Math.min(60, getMeshResolutionVal());
 
-    const baseMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    // 1. Build heatsink base box with grid segments for vertex coloring
+    const baseGeo = new THREE.BoxBufferGeometry(W, t, L, segs, 1, segs);
+    const baseMat = new THREE.MeshLambertMaterial({ color: 0xd1d5db });
     const baseMesh = new THREE.Mesh(baseGeo, baseMat);
     baseMesh.position.set(0, t / 2, 0);
     heatsinkGroup.add(baseMesh);
@@ -455,83 +554,39 @@ document.addEventListener("DOMContentLoaded", () => {
     const spacing = (W - tf) / (numFins - 1 || 1);
     const startX = -W / 2 + tf / 2;
 
+    const finMeshes = [];
     for (let i = 0; i < numFins; i++) {
       const finX = startX + i * spacing;
       
       // Fin box geometry. Segment along length so we get linear heat map gradients
-      const finGeo = new THREE.BoxBufferGeometry(tf, Hf, L, 1, 4, Ny - 1);
-      
-      const finColors = [];
-      const finPos = finGeo.attributes.position;
-      for (let k = 0; k < finPos.count; k++) {
-        const zVal = finPos.getZ(k);
-        const yVal = finPos.getY(k); // height coordinate
-        
-        const gridY = Math.round(((zVal + L / 2) / L) * (Ny - 1));
-        const idxY = Math.max(0, Math.min(Ny - 1, gridY));
-        
-        // Linear temperature drop from base of fin (bottom) to tip of fin (top)
-        const mappedX = Math.max(0, Math.min(Nx - 1, Math.round(((finX + W / 2) / W) * (Nx - 1))));
-        const baseTemp = gridT[mappedX][idxY];
-        
-        const yFraction = (yVal + Hf/2) / Hf; // 0 (bottom) to 1 (top)
-        // Approximate temperature along fin height using standard hyperbolic cosine fin decay
-        const mVal = 0.2; // fin thermal decay parameter
-        const finTemp = environment.ambientTemp + (baseTemp - environment.ambientTemp) * (Math.cosh(mVal * (1 - yFraction)) / Math.cosh(mVal));
-        
-        const color = getTemperatureColor(finTemp, minT, maxT);
-        finColors.push(color.r, color.g, color.b);
-      }
-      finGeo.setAttribute('color', new THREE.Float32BufferAttribute(finColors, 3));
-
-      const finMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+      const finGeo = new THREE.BoxBufferGeometry(tf, Hf, L, 1, Math.max(2, Math.round(segs/3)), segs);
+      const finMat = new THREE.MeshLambertMaterial({ color: 0xd1d5db });
       const finMesh = new THREE.Mesh(finGeo, finMat);
       finMesh.position.set(finX, t + Hf / 2, 0);
       heatsinkGroup.add(finMesh);
+      finMeshes.push(finMesh);
     }
 
     // 3. Build Silicon Chips (Heat Sources) and TIM transparent layers
-    chips.forEach(chip => {
+    const chipMeshes = [];
+    const timMeshes = [];
+    chips.forEach((chip, index) => {
       const cW = chip.width * scale;
       const cL = chip.length * scale;
       const cX = chip.x * scale;
       const cY = -chip.y * scale; // invert Y for standard Cartesian 3D map
 
-      // Calculate junction temperature of this heat source
-      const leftX = Math.max(0, Math.min(Nx - 1, Math.floor(((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx)));
-      const rightX = Math.max(0, Math.min(Nx - 1, Math.ceil(((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx)));
-      const topY = Math.max(0, Math.min(Ny - 1, Math.floor(((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny)));
-      const bottomY = Math.max(0, Math.min(Ny - 1, Math.ceil(((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny)));
-
-      let sumBaseT = 0;
-      let cCount = 0;
-      for (let i = 0; i < Nx; i++) {
-        for (let j = 0; j < Ny; j++) {
-          if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
-            sumBaseT += gridT[i][j];
-            cCount++;
-          }
-        }
-      }
-      const avgBaseT = cCount > 0 ? sumBaseT / cCount : minT;
-      const chipAreaM2 = (chip.width * chip.length) / 1e6;
-      const R_tim = (tim.thickness / 1e6) / (tim.k * chipAreaM2);
-      const tJunc = avgBaseT + chip.power * R_tim;
-
-      // Color dynamically if simulated (minT !== maxT), else show CAD location reference red
-      const sourceColor = (minT === maxT) ? new THREE.Color(0xef4444) : getTemperatureColor(tJunc, minT, maxT);
-
-      // Chip / Heat Source (colored dynamically)
+      // Chip / Heat Source (colored red by default)
       const chipGeo = new THREE.BoxBufferGeometry(cW, 2, cL);
       const chipMat = new THREE.MeshLambertMaterial({
-        color: sourceColor,
+        color: 0xef4444,
         transparent: true,
         opacity: 0.95
       });
       const chipMesh = new THREE.Mesh(chipGeo, chipMat);
-      // Place directly under base
       chipMesh.position.set(cX, -1, cY);
       chipsGroup.add(chipMesh);
+      chipMeshes.push(chipMesh);
 
       // TIM (grey interface material)
       const timGeo = new THREE.BoxBufferGeometry(cW, 0.4, cL);
@@ -543,7 +598,64 @@ document.addEventListener("DOMContentLoaded", () => {
       const timMesh = new THREE.Mesh(timGeo, timMat);
       timMesh.position.set(cX, -0.2, cY);
       chipsGroup.add(timMesh);
+      timMeshes.push(timMesh);
     });
+
+    // Populate cadParts procedurally if not in CAD mode
+    if (!cadMode) {
+      cadParts = [];
+      
+      // Add base
+      cadParts.push({
+        id: "procedural-base",
+        name: "Heatsink Base",
+        mesh: baseMesh,
+        role: "heatsink",
+        material: heatsink.material,
+        customK: heatsink.customK,
+        power: 0
+      });
+      
+      // Add fins
+      finMeshes.forEach((finMesh, idx) => {
+        cadParts.push({
+          id: `procedural-fin-${idx}`,
+          name: `Fin #${idx + 1}`,
+          mesh: finMesh,
+          role: "heatsink",
+          material: heatsink.material,
+          customK: heatsink.customK,
+          power: 0
+        });
+      });
+      
+      // Add chips
+      chipMeshes.forEach((chipMesh, idx) => {
+        const chipData = chips[idx];
+        cadParts.push({
+          id: `procedural-source-${idx}`,
+          name: `Heat Source #${idx + 1}`,
+          mesh: chipMesh,
+          role: "source",
+          material: "custom",
+          customK: 150, // silicon
+          power: chipData.power
+        });
+      });
+
+      // Add tim layers
+      timMeshes.forEach((timMesh, idx) => {
+        cadParts.push({
+          id: `procedural-tim-${idx}`,
+          name: `TIM Layer #${idx + 1}`,
+          mesh: timMesh,
+          role: "tim",
+          material: "custom",
+          customK: tim.k,
+          power: 0
+        });
+      });
+    }
 
     // 4. Build Translucent Airflow Duct (if forced cooling)
     if (environment.mode === "forced") {
@@ -638,6 +750,8 @@ document.addEventListener("DOMContentLoaded", () => {
         helpersGroup.add(arrow2);
       });
     }
+    
+    updateVoxelGridHelper();
   };
 
   // ── Simulator Solver Engine ──────────────────────────────────
@@ -647,332 +761,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Throttled in standard browser frame timeout to permit CSS loading state to render
     setTimeout(() => {
-      try {
-        if (cadMode) {
-          runVoxelSimulation();
-          return;
-        }
-        syncFinLimits();
-        // 1. Fetch input values
-        heatsink.width = parseFloat(baseWidthInput.value) || 80;
-        heatsink.length = parseFloat(baseLengthInput.value) || 80;
-        heatsink.thickness = parseFloat(baseHeightInput.value) || 6;
-        heatsink.finHeight = parseFloat(finHeightInput.value) || 25;
-        heatsink.finThickness = parseFloat(finThicknessInput.value) || 1.5;
-        heatsink.finCount = parseInt(finCountInput.value) || 16;
-        heatsink.customK = parseFloat(customKInput.value) || 200;
-
-        tim.thickness = parseFloat(timThicknessInput.value) || 100;
-        tim.k = parseFloat(timKInput.value) || 5.0;
-
-        environment.ambientTemp = parseFloat(ambientTempInput.value) || 25;
-        environment.fanAirflow = parseFloat(fanAirflowInput.value) || 32;
-        environment.bypassSide = parseFloat(bypassSideInput.value) || 2;
-        environment.bypassTop = parseFloat(bypassTopInput.value) || 1;
-        environment.emissivity = parseFloat(surfaceEmissivityInput.value) || 0.85;
-
-        const kBase = heatsink.material === "custom" ? heatsink.customK : materials[heatsink.material].k;
-
-        // 2. Perform convection calculations
-        let h = 8.0; // default convection coeff
-        let sysFlow = 0; // CFM
-        let sysPress = 0; // Pa
-
-        if (environment.mode === "forced") {
-          // Geometric channel parameters
-          const s = (heatsink.width - heatsink.finCount * heatsink.finThickness) / (heatsink.finCount - 1 || 1);
-          const Dh = (2 * s * heatsink.finHeight) / (s + heatsink.finHeight || 1);
-
-          // Solve operating airflow matching flow impedance to fan curves
-          // Fan Curve: P_fan = P_max * (1 - (Q / Q_max)^2)
-          // Low static pressure axial fan curve approximation: Max Pressure = 45 Pa
-          const pMax = 45;
-          const qMaxCFM = environment.fanAirflow;
-          const qMaxM3S = qMaxCFM * 0.000471947; // CFM to m³/s
-
-          // Numerical solver for operating flow intersection
-          let operatingFlowCFM = qMaxCFM;
-          let flowVelocity = 1.0;
-
-          for (let flow = 0.5; flow <= qMaxCFM; flow += 0.5) {
-            const qM3S = flow * 0.000471947;
-            
-            // Calculate channel velocity considering duct bypass clearances
-            const areaChannel = (heatsink.width * heatsink.finHeight) / 1e6; // m²
-            const areaBypass = ((environment.bypassSide * 2 * (heatsink.finHeight + heatsink.thickness)) + (environment.bypassTop * heatsink.width)) / 1e6;
-            
-            // Bypass ratio
-            const bypassFactor = areaBypass > 0 ? 1 / (1 + 1.6 * (areaBypass / areaChannel)) : 1.0;
-            const vChannel = (qM3S / areaChannel) * bypassFactor;
-            
-            // Channel Reynolds
-            const nuAir = 1.56e-5; // m²/s
-            const Re = (vChannel * (Dh / 1000)) / nuAir;
-
-            // Friction factor
-            const f = Re > 2000 ? 0.316 * Math.pow(Re, -0.25) : 64 / (Re || 1);
-            
-            // Pressure drop
-            const rhoAir = 1.18; // kg/m³
-            const pressureDrop = f * (heatsink.length / Dh) * (rhoAir * vChannel * vChannel) / 2;
-
-            // Fan Curve pressure matching
-            const fanPressure = pMax * (1 - Math.pow(flow / qMaxCFM, 2));
-
-            if (pressureDrop >= fanPressure) {
-              operatingFlowCFM = flow;
-              flowVelocity = vChannel;
-              sysPress = pressureDrop;
-              break;
-            }
-          }
-
-          sysFlow = operatingFlowCFM;
-          
-          // Calculate Forced Convection Nusselt / Heat Coefficient (h)
-          const reChannel = (flowVelocity * (Dh / 1000)) / 1.56e-5;
-          const pr = 0.7; // air Prandtl
-          let Nu = 3.66; // laminar default
-          
-          if (reChannel > 2300) {
-            Nu = 0.023 * Math.pow(reChannel, 0.8) * Math.pow(pr, 0.4);
-          } else {
-            Nu = 3.66 + (0.0668 * (Dh / heatsink.length) * reChannel * pr) / (1 + 0.04 * Math.pow((Dh / heatsink.length) * reChannel * pr, 2/3));
-          }
-
-          h = (Nu * 0.026) / (Dh / 1000);
-        } else {
-          // Natural Convection (Free convection based on orientation)
-          const dT_est = 25.0; // estimated delta temperature
-          
-          let C_orientation = 1.42; // default vertical chimney
-          let L_char = heatsink.finHeight / 1000;
-
-          if (environment.orientation === "upward") {
-            C_orientation = 1.32;
-            const AreaM2 = (heatsink.width * heatsink.length) / 1e6;
-            const PerimM = (2 * (heatsink.width + heatsink.length)) / 1000;
-            L_char = Math.max(0.01, AreaM2 / PerimM);
-          } else if (environment.orientation === "downward") {
-            C_orientation = 0.59;
-            const AreaM2 = (heatsink.width * heatsink.length) / 1e6;
-            const PerimM = (2 * (heatsink.width + heatsink.length)) / 1000;
-            L_char = Math.max(0.01, AreaM2 / PerimM);
-          }
-
-          const h_conv = C_orientation * Math.pow(dT_est / L_char, 0.25);
-          
-          const sigma = 5.67e-8; // Stefan-Boltzmann
-          const T_avg_k = environment.ambientTemp + 273.15 + dT_est / 2;
-          const h_rad = environment.emissivity * sigma * 4 * Math.pow(T_avg_k, 3);
-          
-          h = h_conv + h_rad;
-        }
-
-        // Match fin surface area enhancements
-        // Fin efficiency (eta_f)
-        const P_fin = 2 * heatsink.length / 1000; // perimeter
-        const Ac_fin = (heatsink.finThickness * heatsink.length) / 1e6; // cross section
-        const m = Math.sqrt((h * P_fin) / (kBase * Ac_fin || 1));
-        const eta_f = Math.tanh(m * (heatsink.finHeight / 1000)) / (m * (heatsink.finHeight / 1000) || 1);
-
-        // Fin area multiplier
-        const areaFins = heatsink.finCount * 2 * heatsink.length * heatsink.finHeight / 1e6; // m²
-        const areaBase = (heatsink.width * heatsink.length) / 1e6;
-        const hEff = h * (1 + eta_f * (areaFins / areaBase));
-
-        // 3. Finite Difference Solver Relaxation iteration
-        const dx = (heatsink.width / 1000) / Nx;
-        const dy = (heatsink.length / 1000) / Ny;
-        const t_m = heatsink.thickness / 1000;
-
-        // Reset base temps
-        for (let i = 0; i < Nx; i++) {
-          for (let j = 0; j < Ny; j++) {
-            gridT[i][j] = environment.ambientTemp;
-          }
-        }
-
-        // Heat source Node mapping
-        const heatNodes = Array(Nx).fill(0).map(() => Array(Ny).fill(0));
-        let totalPower = 0;
-
-        chips.forEach(chip => {
-          // Chip coordinates converted to grid nodes indexes
-          const leftX = ((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx;
-          const rightX = ((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx;
-          const topY = ((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny;
-          const bottomY = ((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny;
-
-          let numMatchedNodes = 0;
-          for (let i = 0; i < Nx; i++) {
-            for (let j = 0; j < Ny; j++) {
-              if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
-                numMatchedNodes++;
-              }
-            }
-          }
-
-          if (numMatchedNodes > 0) {
-            const powerPerNode = chip.power / numMatchedNodes;
-            for (let i = 0; i < Nx; i++) {
-              for (let j = 0; j < Ny; j++) {
-                if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
-                  heatNodes[i][j] += powerPerNode;
-                }
-              }
-            }
-          }
-          totalPower += chip.power;
-        });
-
-        // Relaxation solver iterations (steady state diffusion solution)
-        const conductX = (kBase * t_m * dy) / dx;
-        const conductY = (kBase * t_m * dx) / dy;
-        const conductConv = hEff * dx * dy;
-
-        for (let iter = 0; iter < 120; iter++) {
-          const nextT = Array(Nx).fill(0).map(() => Array(Ny).fill(25));
-          
-          for (let i = 0; i < Nx; i++) {
-            for (let j = 0; j < Ny; j++) {
-              let sumNeighborTerms = 0;
-              let sumConductance = 0;
-
-              // X-conductance neighbors
-              if (i > 0) {
-                sumNeighborTerms += conductX * gridT[i-1][j];
-                sumConductance += conductX;
-              }
-              if (i < Nx-1) {
-                sumNeighborTerms += conductX * gridT[i+1][j];
-                sumConductance += conductX;
-              }
-
-              // Y-conductance neighbors
-              if (j > 0) {
-                sumNeighborTerms += conductY * gridT[i][j-1];
-                sumConductance += conductY;
-              }
-              if (j < Ny-1) {
-                sumNeighborTerms += conductY * gridT[i][j+1];
-                sumConductance += conductY;
-              }
-
-              // Convection loss
-              sumNeighborTerms += conductConv * environment.ambientTemp;
-              sumConductance += conductConv;
-
-              // Heat input source
-              const nodePower = heatNodes[i][j];
-
-              // Node temperature solution
-              nextT[i][j] = (sumNeighborTerms + nodePower) / sumConductance;
-            }
-          }
-          gridT = nextT;
-        }
-
-        // Compute statistics results
-        let maxBaseTemp = environment.ambientTemp;
-        for (let i = 0; i < Nx; i++) {
-          for (let j = 0; j < Ny; j++) {
-            if (gridT[i][j] > maxBaseTemp) maxBaseTemp = gridT[i][j];
-          }
-        }
-
-      // Junction Temp matching chip contact and TIM thermal resistance
-      // R_tim = thickness / (k_tim * Area)
-      // T_junction = T_base + Q * R_tim
-      let maxJunctionTemp = maxBaseTemp;
-      const individualTemps = [];
-
-      chips.forEach(chip => {
-        // Average base temperature under this chip
-        const leftX = Math.floor(((chip.x - chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
-        const rightX = Math.ceil(((chip.x + chip.width/2 + heatsink.width/2) / heatsink.width) * Nx);
-        const topY = Math.floor(((chip.y - chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
-        const bottomY = Math.ceil(((chip.y + chip.length/2 + heatsink.length/2) / heatsink.length) * Ny);
-
-        let sumBaseT = 0;
-        let cCount = 0;
-        for (let i = 0; i < Nx; i++) {
-          for (let j = 0; j < Ny; j++) {
-            if (i >= leftX && i <= rightX && j >= topY && j <= bottomY) {
-              sumBaseT += gridT[i][j];
-              cCount++;
-            }
-          }
-        }
-        const avgBaseT = cCount > 0 ? sumBaseT / cCount : maxBaseTemp;
-        
-        // TIM contact resistance
-        const chipAreaM2 = (chip.width * chip.length) / 1e6;
-        const R_tim = (tim.thickness / 1e6) / (tim.k * chipAreaM2);
-        
-        // Chip spreading/conduction
-        const tJunc = avgBaseT + chip.power * R_tim;
-        if (tJunc > maxJunctionTemp) maxJunctionTemp = tJunc;
-
-        individualTemps.push({ power: chip.power, tJunc });
-      });
-
-      // Update individual heat source temps in DOM
-      const sourcesTempList = document.getElementById("sources-temp-list");
-      if (sourcesTempList) {
-        sourcesTempList.innerHTML = "";
-        individualTemps.forEach((item, idx) => {
-          const row = document.createElement("div");
-          row.style.display = "flex";
-          row.style.justify = "space-between";
-          row.style.fontSize = "13px";
-          row.style.fontFamily = "var(--font-mono)";
-          row.style.color = "var(--text-primary)";
-          row.style.background = "var(--bg-tertiary)";
-          row.style.padding = "6px 12px";
-          row.style.borderRadius = "var(--radius-sm)";
-          row.style.marginTop = "4px";
-          row.innerHTML = `
-            <span>Heat Source #${idx + 1} (${item.power}W)</span>
-            <strong>${item.tJunc.toFixed(1)} °C</strong>
-          `;
-          sourcesTempList.appendChild(row);
-        });
-      }
-
-        const maxTheta = totalPower > 0 ? (maxJunctionTemp - environment.ambientTemp) / totalPower : 0;
-
-        // 4. Update UI labels and badge states
-        resTJunction.textContent = `${maxJunctionTemp.toFixed(1)} °C`;
-        resTBase.textContent = `${maxBaseTemp.toFixed(1)} °C`;
-        resHCoeff.textContent = `${h.toFixed(1)} W/m²K`;
-        resTheta.textContent = `${maxTheta.toFixed(3)} K/W`;
-
-        // Status colors
-        if (maxJunctionTemp > 105) {
-          statusBadge.className = "badge critical-badge";
-          statusBadge.textContent = "Critical";
-        } else if (maxJunctionTemp > 85) {
-          statusBadge.className = "badge warning-badge";
-          statusBadge.textContent = "Warning";
-        } else {
-          statusBadge.className = "badge active-badge";
-          statusBadge.textContent = "Normal";
-        }
-
-        // Update 3D colors legends
-        document.getElementById("legend-min").textContent = `${Math.round(environment.ambientTemp)}°C`;
-        document.getElementById("legend-max").textContent = `${Math.round(maxJunctionTemp)}°C`;
-
-        // Redraw 3D scene and Fan curve chart
-        update3DModel(environment.ambientTemp, maxJunctionTemp, individualTemps);
-        drawFanCurve(sysFlow, sysPress);
-      } catch (err) {
-        console.error("Solver execution error:", err);
-      } finally {
-        // Hide Loader
-        simSpinner.classList.add("hidden");
-      }
+      runVoxelSimulation();
     }, 150);
   };
 
@@ -1086,6 +875,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ambientTempInput, fanAirflowInput, surfaceEmissivityInput
   ].forEach(input => {
     input.addEventListener("input", () => {
+      updateCADGeometry();
       document.dispatchEvent(new Event("change", { bubbles: true }));
     });
   });
@@ -1171,6 +961,10 @@ document.addEventListener("DOMContentLoaded", () => {
           bypassSideInput.value = environment.bypassSide;
           bypassTopInput.value = environment.bypassTop;
           surfaceEmissivityInput.value = environment.emissivity;
+          if (environment.meshResolution) {
+            meshResolutionSlider.value = environment.meshResolution;
+            updateResolutionDisplay();
+          }
 
           renderChipsUI();
           runSimulation();
@@ -1258,6 +1052,10 @@ document.addEventListener("DOMContentLoaded", () => {
         bypassSideInput.value = environment.bypassSide;
         bypassTopInput.value = environment.bypassTop;
         surfaceEmissivityInput.value = environment.emissivity;
+        if (environment.meshResolution) {
+          meshResolutionSlider.value = environment.meshResolution;
+          updateResolutionDisplay();
+        }
 
         renderChipsUI();
         runSimulation();
@@ -1447,6 +1245,7 @@ document.addEventListener("DOMContentLoaded", () => {
     globalBox.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
     const scale = 50.0 / maxDim;
+    currentScale = scale;
     
     cadParts.forEach(part => {
       part.mesh.position.sub(center);
@@ -1463,8 +1262,11 @@ document.addEventListener("DOMContentLoaded", () => {
     
     cadActiveControls.classList.remove("hidden");
     simSpinner.classList.add("hidden");
+    cadUploadStatus.classList.add("hidden");
+    cadFileInput.disabled = false;
     renderCADPartsList();
     
+    updateVoxelGridHelper();
     if (window.showToast) window.showToast("CAD File loaded! Assign roles in Parts Manager.");
   };
 
@@ -1475,16 +1277,34 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     
+    cadUploadStatus.className = "margin-top-12";
+    cadUploadStatus.style.borderColor = "var(--border-color)";
+    cadUploadStatus.style.background = "var(--bg-tertiary)";
+    cadUploadStatusText.textContent = "Reading file bytes... (0%)";
+    cadUploadStatusText.style.color = "var(--text-secondary)";
+    cadFileInput.disabled = true;
+
     const reader = new FileReader();
     simSpinner.classList.remove("hidden");
     
+    reader.onprogress = function(evt) {
+      if (evt.lengthComputable) {
+        const percent = Math.round((evt.loaded / evt.total) * 100);
+        cadUploadStatusText.textContent = `Reading file bytes... (${percent}%)`;
+      }
+    };
+
     reader.onload = function(evt) {
       try {
         const buffer = evt.target.result;
+        cadUploadStatusText.textContent = "Decoding STEP geometry structure... (may take a few seconds)";
+        
         if (typeof occtimportjs === "undefined") {
           throw new Error("STEP decoder library is not fully loaded. Check internet connection.");
         }
         occtimportjs().then(occt => {
+          cadUploadStatusText.textContent = "Generating 3D meshes and computing bounds...";
+          
           const fileContent = new Uint8Array(buffer);
           const result = occt.ReadStepFile(fileContent);
           if (!result || !result.success) {
@@ -1511,11 +1331,21 @@ document.addEventListener("DOMContentLoaded", () => {
           });
           setupCADAssembly(partsList);
         }).catch(err => {
-          alert("STEP Import Error: " + err.message);
+          console.error(err);
+          cadUploadStatus.style.borderColor = "var(--text-critical)";
+          cadUploadStatus.style.background = "rgba(239, 68, 68, 0.05)";
+          cadUploadStatusText.textContent = "STEP Import Error: " + err.message;
+          cadUploadStatusText.style.color = "var(--text-critical)";
+          cadFileInput.disabled = false;
           simSpinner.classList.add("hidden");
         });
       } catch (err) {
-        alert("CAD Loading Error: " + err.message);
+        console.error(err);
+        cadUploadStatus.style.borderColor = "var(--text-critical)";
+        cadUploadStatus.style.background = "rgba(239, 68, 68, 0.05)";
+        cadUploadStatusText.textContent = "CAD Loading Error: " + err.message;
+        cadUploadStatusText.style.color = "var(--text-critical)";
+        cadFileInput.disabled = false;
         simSpinner.classList.add("hidden");
       }
     };
@@ -1543,24 +1373,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const runVoxelSimulation = () => {
     try {
-      const Vx = 20;
-      const Vy = 20;
-      const Vz = 10;
+      const Vx = getMeshResolutionVal();
+      const Vy = Vx;
+      const Vz = Math.round(Vx / 2);
       const ambient = parseFloat(ambientTempInput.value) || 25;
       
-      const bbox = new THREE.Box3().setFromObject(cadAssemblyGroup);
+      // Force update of Three.js world transforms to get correct AABB world boxes
+      scene.updateMatrixWorld(true);
+
+      const bbox = new THREE.Box3();
+      if (cadMode) {
+        bbox.setFromObject(cadAssemblyGroup);
+      } else {
+        bbox.setFromObject(heatsinkGroup);
+        bbox.union(new THREE.Box3().setFromObject(chipsGroup));
+      }
       const minPt = bbox.min;
       const maxPt = bbox.max;
       const size = bbox.getSize(new THREE.Vector3());
       
-      const dx = size.x / Vx;
-      const dy = size.y / Vy;
-      const dz = size.z / Vz;
+      const dx_scaled = size.x / Vx;
+      const dy_scaled = size.y / Vy;
+      const dz_scaled = size.z / Vz;
+
+      const physicalScale = currentScale * 1000;
+      const dx = dx_scaled / physicalScale;
+      const dy = dy_scaled / physicalScale;
+      const dz = dz_scaled / physicalScale;
+
+      const size_total = Vx * Vy * Vz;
+      const strideY = Vy * Vz;
+      const strideZ = Vz;
       
-      const grid = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill(ambient)));
-      const gridK = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill(0.026)));
-      const gridQ = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill(0)));
-      const gridType = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill("air")));
+      const grid = new Float32Array(size_total).fill(ambient);
+      const gridK = new Float32Array(size_total).fill(0.026); // default air thermal conductivity
+      const gridQ = new Float32Array(size_total);
+      const gridType = new Uint8Array(size_total); // 0: air, 1: heatsink, 2: source, 3: tim, 4: duct
       
       cadParts.forEach(part => {
         if (part.role === "ignore") return;
@@ -1572,38 +1420,74 @@ document.addEventListener("DOMContentLoaded", () => {
         else kVal = parseFloat(part.customK) || 200;
         part._k = kVal;
       });
+
+      console.log("Global Simulation AABB:", bbox);
+      cadParts.forEach(p => {
+        if (p.role !== "ignore") {
+          console.log(`Part [${p.name}] role=[${p.role}] k=[${p._k}] bbox:`, p._worldBBox);
+        }
+      });
       
+      const voxelBox = new THREE.Box3();
+      const halfX = dx_scaled / 2;
+      const halfY = dy_scaled / 2;
+      const halfZ = dz_scaled / 2;
+
       for (let i = 0; i < Vx; i++) {
-        const px = minPt.x + (i + 0.5) * dx;
+        const px = minPt.x + (i + 0.5) * dx_scaled;
+        const iStride = i * strideY;
         for (let j = 0; j < Vy; j++) {
-          const py = minPt.y + (j + 0.5) * dy;
+          const py = minPt.y + (j + 0.5) * dy_scaled;
+          const jStride = j * strideZ;
           for (let k = 0; k < Vz; k++) {
-            const pz = minPt.z + (k + 0.5) * dz;
-            const pt = new THREE.Vector3(px, py, pz);
+            const pz = minPt.z + (k + 0.5) * dz_scaled;
+            const idx = iStride + jStride + k;
+            
+            voxelBox.min.set(px - halfX, py - halfY, pz - halfZ);
+            voxelBox.max.set(px + halfX, py + halfY, pz + halfZ);
             
             for (let pIdx = 0; pIdx < cadParts.length; pIdx++) {
               const part = cadParts[pIdx];
               if (part.role === "ignore") continue;
-              if (part._worldBBox.containsPoint(pt)) {
-                gridK[i][j][k] = part._k;
-                gridType[i][j][k] = part.role;
+              if (part._worldBBox.intersectsBox(voxelBox)) {
+                gridK[idx] = part._k;
+                if (part.role === "heatsink") gridType[idx] = 1;
+                else if (part.role === "source") gridType[idx] = 2;
+                else if (part.role === "tim") gridType[idx] = 3;
+                else if (part.role === "duct") gridType[idx] = 4;
                 break;
               }
             }
           }
         }
       }
+
+      let hsCount = 0, srcCount = 0, timCount = 0, airCount = 0;
+      for (let idx = 0; idx < size_total; idx++) {
+        if (gridType[idx] === 1) hsCount++;
+        else if (gridType[idx] === 2) srcCount++;
+        else if (gridType[idx] === 3) timCount++;
+        else airCount++;
+      }
+      console.log("Classified voxel grid counts:", { hsCount, srcCount, timCount, airCount });
       
       cadParts.forEach(part => {
         if (part.role !== "source") return;
         let nodeCount = 0;
         for (let i = 0; i < Vx; i++) {
-          const px = minPt.x + (i + 0.5) * dx;
+          const px = minPt.x + (i + 0.5) * dx_scaled;
+          const iStride = i * strideY;
           for (let j = 0; j < Vy; j++) {
-            const py = minPt.y + (j + 0.5) * dy;
+            const py = minPt.y + (j + 0.5) * dy_scaled;
+            const jStride = j * strideZ;
             for (let k = 0; k < Vz; k++) {
-              const pz = minPt.z + (k + 0.5) * dz;
-              if (gridType[i][j][k] === "source" && part._worldBBox.containsPoint(new THREE.Vector3(px, py, pz))) {
+              const pz = minPt.z + (k + 0.5) * dz_scaled;
+              const idx = iStride + jStride + k;
+              
+              voxelBox.min.set(px - halfX, py - halfY, pz - halfZ);
+              voxelBox.max.set(px + halfX, py + halfY, pz + halfZ);
+              
+              if (gridType[idx] === 2 && part._worldBBox.intersectsBox(voxelBox)) {
                 nodeCount++;
               }
             }
@@ -1612,13 +1496,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (nodeCount > 0) {
           const qVal = part.power / nodeCount;
           for (let i = 0; i < Vx; i++) {
-            const px = minPt.x + (i + 0.5) * dx;
+            const px = minPt.x + (i + 0.5) * dx_scaled;
+            const iStride = i * strideY;
             for (let j = 0; j < Vy; j++) {
-              const py = minPt.y + (j + 0.5) * dy;
+              const py = minPt.y + (j + 0.5) * dy_scaled;
+              const jStride = j * strideZ;
               for (let k = 0; k < Vz; k++) {
-                const pz = minPt.z + (k + 0.5) * dz;
-                if (gridType[i][j][k] === "source" && part._worldBBox.containsPoint(new THREE.Vector3(px, py, pz))) {
-                  gridQ[i][j][k] = qVal;
+                const pz = minPt.z + (k + 0.5) * dz_scaled;
+                const idx = iStride + jStride + k;
+                
+                voxelBox.min.set(px - halfX, py - halfY, pz - halfZ);
+                voxelBox.max.set(px + halfX, py + halfY, pz + halfZ);
+                
+                if (gridType[idx] === 2 && part._worldBBox.intersectsBox(voxelBox)) {
+                  gridQ[idx] = qVal;
                 }
               }
             }
@@ -1626,173 +1517,291 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
       
-      const hVal = environment.mode === "forced" ? 30.0 : 8.0;
-      const maxIter = 100;
-      
-      for (let iter = 0; iter < maxIter; iter++) {
-        const nextGrid = Array(Vx).fill(0).map(() => Array(Vy).fill(0).map(() => Array(Vz).fill(ambient)));
-        
-        for (let i = 0; i < Vx; i++) {
-          for (let j = 0; j < Vy; j++) {
-            for (let k = 0; k < Vz; k++) {
-              const type = gridType[i][j][k];
-              if (type === "air" || type === "duct") {
-                nextGrid[i][j][k] = ambient;
-                continue;
-              }
-              
-              let condSum = 0;
-              let tSum = 0;
-              
-              const neighbors = [
-                { ni: i - 1, nj: j, nk: k, area: dy * dz, dist: dx },
-                { ni: i + 1, nj: j, nk: k, area: dy * dz, dist: dx },
-                { ni: i, nj: j - 1, nk: k, area: dx * dz, dist: dy },
-                { ni: i, nj: j + 1, nk: k, area: dx * dz, dist: dy },
-                { ni: i, nj: j, nk: k - 1, area: dx * dy, dist: dz },
-                { ni: i, nj: j, nk: k + 1, area: dx * dy, dist: dz }
-              ];
-              
-              neighbors.forEach(n => {
-                if (n.ni >= 0 && n.ni < Vx && n.nj >= 0 && n.nj < Vy && n.nk >= 0 && n.nk < Vz) {
-                  const kNode = gridK[i][j][k];
-                  const kNeigh = gridK[n.ni][n.nj][n.nk];
-                  const kAvg = 2 * kNode * kNeigh / (kNode + kNeigh || 1);
-                  const cond = (kAvg * n.area) / n.dist;
-                  condSum += cond;
-                  tSum += cond * grid[n.ni][n.nj][n.nk];
-                } else {
-                  const condAir = hVal * n.area;
-                  condSum += condAir;
-                  tSum += condAir * ambient;
-                }
-              });
-              
-              nextGrid[i][j][k] = (tSum + gridQ[i][j][k]) / (condSum || 1);
-            }
+      let hVal = 8.0;
+      if (environment.mode === "forced") {
+        const W = cadMode ? size.x * 2 : heatsink.width;
+        const L = cadMode ? size.z * 2 : heatsink.length;
+        const Hf = cadMode ? size.y * 2 : heatsink.finHeight;
+        const tf = heatsink.finThickness;
+        const N = heatsink.finCount;
+        const s = (W - N * tf) / (N - 1 || 1);
+        const Dh = (2 * s * Hf) / (s + Hf || 1);
+        const pMax = 45;
+        const qMaxCFM = environment.fanAirflow;
+        let operatingFlowCFM = qMaxCFM;
+        let flowVelocity = 1.0;
+        for (let flow = 0.5; flow <= qMaxCFM; flow += 0.5) {
+          const qM3S = flow * 0.000471947;
+          const areaChannel = (W * Hf) / 1e6;
+          const areaBypass = ((environment.bypassSide * 2 * (Hf + heatsink.thickness)) + (environment.bypassTop * W)) / 1e6;
+          const bypassFactor = areaBypass > 0 ? 1 / (1 + 1.6 * (areaBypass / areaChannel)) : 1.0;
+          const vChannel = (qM3S / areaChannel) * bypassFactor;
+          const nuAir = 1.56e-5;
+          const Re = (vChannel * (Dh / 1000)) / nuAir;
+          const f = Re > 2000 ? 0.316 * Math.pow(Re, -0.25) : 64 / (Re || 1);
+          const rhoAir = 1.18;
+          const pressureDrop = f * (L / Dh) * (rhoAir * vChannel * vChannel) / 2;
+          const fanPressure = pMax * (1 - Math.pow(flow / qMaxCFM, 2));
+          if (pressureDrop >= fanPressure) {
+            operatingFlowCFM = flow;
+            flowVelocity = vChannel;
+            break;
           }
         }
-        
-        for (let i = 0; i < Vx; i++) {
-          for (let j = 0; j < Vy; j++) {
-            for (let k = 0; k < Vz; k++) {
-              grid[i][j][k] = nextGrid[i][j][k];
-            }
-          }
-        }
-      }
-      
-      let minT = 999;
-      let maxT = -999;
-      for (let i = 0; i < Vx; i++) {
-        for (let j = 0; j < Vy; j++) {
-          for (let k = 0; k < Vz; k++) {
-            if (gridType[i][j][k] !== "air" && gridType[i][j][k] !== "ignore") {
-              const T = grid[i][j][k];
-              if (T < minT) minT = T;
-              if (T > maxT) maxT = T;
-            }
-          }
-        }
-      }
-      if (minT > maxT) { minT = ambient; maxT = ambient + 1; }
-      
-      const totalP = cadParts.reduce((acc, p) => p.role === "source" ? acc + p.power : acc, 0);
-      document.getElementById("res-t-max").textContent = `${maxT.toFixed(1)} °C`;
-      document.getElementById("res-t-base").textContent = `${minT.toFixed(1)} °C`;
-      document.getElementById("res-h-coeff").textContent = `${hVal.toFixed(1)} W/m²K`;
-      document.getElementById("res-theta").textContent = `${totalP > 0 ? ((maxT - ambient) / totalP).toFixed(2) : 0} K/W`;
-      
-      if (maxT > 105) {
-        statusBadge.className = "badge critical-badge";
-        statusBadge.textContent = "Critical";
-      } else if (maxT > 85) {
-        statusBadge.className = "badge warning-badge";
-        statusBadge.textContent = "Warning";
+        const reChannel = (flowVelocity * (Dh / 1000)) / 1.56e-5;
+        const pr = 0.7;
+        let Nu = reChannel > 2300 ? 0.023 * Math.pow(reChannel, 0.8) * Math.pow(pr, 0.4) : 3.66 + (0.0668 * (Dh / L) * reChannel * pr) / (1 + 0.04 * Math.pow((Dh / L) * reChannel * pr, 2/3));
+        hVal = (Nu * 0.026) / (Dh / 1000);
       } else {
-        statusBadge.className = "badge active-badge";
-        statusBadge.textContent = "Normal";
+        const dT_est = 25.0;
+        let C_orientation = 1.42;
+        let L_char = (cadMode ? size.y * 2 : heatsink.finHeight) / 1000;
+        const W = cadMode ? size.x * 2 : heatsink.width;
+        const L = cadMode ? size.z * 2 : heatsink.length;
+        if (environment.orientation === "upward") {
+          C_orientation = 1.32;
+          const AreaM2 = (W * L) / 1e6;
+          const PerimM = (2 * (W + L)) / 1000;
+          L_char = Math.max(0.01, AreaM2 / PerimM);
+        } else if (environment.orientation === "downward") {
+          C_orientation = 0.59;
+          const AreaM2 = (W * L) / 1e6;
+          const PerimM = (2 * (W + L)) / 1000;
+          L_char = Math.max(0.01, AreaM2 / PerimM);
+        }
+        const h_conv = C_orientation * Math.pow(dT_est / L_char, 0.25);
+        const sigma = 5.67e-8;
+        const T_avg_k = environment.ambientTemp + 273.15 + dT_est / 2;
+        const h_rad = environment.emissivity * sigma * 4 * Math.pow(T_avg_k, 3);
+        hVal = h_conv + h_rad;
       }
+
+      let iter = 0;
+      const maxIter = Math.min(5000, Math.max(800, Math.round(50 * Vx)));
       
-      document.getElementById("legend-min").textContent = `${Math.round(ambient)}°C`;
-      document.getElementById("legend-max").textContent = `${Math.round(maxT)}°C`;
-      
-      const indTemps = [];
-      cadParts.forEach(part => {
-        if (part.role === "ignore") return;
-        const geom = part.mesh.geometry;
-        const count = geom.attributes.position.count;
-        const colors = new Float32Array(count * 3);
-        const pos = geom.attributes.position;
-        const meshMatrix = part.mesh.matrixWorld;
+      const updateVisuals = () => {
+        let minT = 999;
+        let maxT = -999;
+        for (let i = 0; i < Vx; i++) {
+          const iStride = i * strideY;
+          for (let j = 0; j < Vy; j++) {
+            const jStride = j * strideZ;
+            for (let k = 0; k < Vz; k++) {
+              const idx = iStride + jStride + k;
+              const type = gridType[idx];
+              if (type !== 0 && type !== 4) { // solid parts
+                const T = grid[idx];
+                if (T < minT) minT = T;
+                if (T > maxT) maxT = T;
+              }
+            }
+          }
+        }
+        if (minT > maxT) { minT = ambient; maxT = ambient + 1; }
         
-        let sumT = 0;
-        let vCount = 0;
+        const totalP = cadParts.reduce((acc, p) => p.role === "source" ? acc + p.power : acc, 0);
+        resTJunction.textContent = `${maxT.toFixed(1)} °C`;
+        resTBase.textContent = `${minT.toFixed(1)} °C`;
+        resHCoeff.textContent = `${hVal.toFixed(1)} W/m²K`;
+        resTheta.textContent = `${totalP > 0 ? ((maxT - ambient) / totalP).toFixed(3) : 0} K/W`;
         
-        for (let idx = 0; idx < count; idx++) {
-          const localPt = new THREE.Vector3(pos.getX(idx), pos.getY(idx), pos.getZ(idx));
-          const worldPt = localPt.clone().applyMatrix4(meshMatrix);
-          
-          const i = Math.max(0, Math.min(Vx - 1, Math.floor(((worldPt.x - minPt.x) / size.x) * Vx)));
-          const j = Math.max(0, Math.min(Vy - 1, Math.floor(((worldPt.y - minPt.y) / size.y) * Vy)));
-          const k = Math.max(0, Math.min(Vz - 1, Math.floor(((worldPt.z - minPt.z) / size.z) * Vz)));
-          
-          const temp = grid[i][j][k];
-          sumT += temp;
-          vCount++;
-          
-          const color = getTemperatureColor(temp, ambient, maxT);
-          colors[idx * 3] = color.r;
-          colors[idx * 3 + 1] = color.g;
-          colors[idx * 3 + 2] = color.b;
+        if (maxT > 105) {
+          statusBadge.className = "badge critical-badge";
+          statusBadge.textContent = "Critical";
+        } else if (maxT > 85) {
+          statusBadge.className = "badge warning-badge";
+          statusBadge.textContent = "Warning";
+        } else {
+          statusBadge.className = "badge active-badge";
+          statusBadge.textContent = "Normal";
         }
         
-        geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-        part.mesh.material = new THREE.MeshLambertMaterial({
-          vertexColors: true,
-          transparent: true,
-          opacity: 0.95
-        });
-        geom.attributes.color.needsUpdate = true;
+        document.getElementById("legend-min").textContent = `${Math.round(ambient)}°C`;
+        document.getElementById("legend-max").textContent = `${Math.round(maxT)}°C`;
         
-        if (part.role === "source") {
-          indTemps.push({ power: part.power, tJunc: vCount > 0 ? sumT / vCount : maxT });
-        }
-      });
-      
-      const sourcesTempList = document.getElementById("sources-temp-list");
-      if (sourcesTempList) {
-        sourcesTempList.innerHTML = "";
-        indTemps.forEach((item, idx) => {
-          const row = document.createElement("div");
-          row.style.display = "flex";
-          row.style.justify = "space-between";
-          row.style.fontSize = "13px";
-          row.style.fontFamily = "var(--font-mono)";
-          row.style.color = "var(--text-primary)";
-          row.style.background = "var(--bg-tertiary)";
-          row.style.padding = "6px 12px";
-          row.style.borderRadius = "var(--radius-sm)";
-          row.style.marginTop = "4px";
-          row.innerHTML = `
-            <span>Heat Source #${idx + 1} (${item.power}W)</span>
-            <strong>${item.tJunc.toFixed(1)} °C</strong>
-          `;
-          sourcesTempList.appendChild(row);
+        const indTemps = [];
+        cadParts.forEach(part => {
+          if (part.role === "ignore") return;
+          const geom = part.mesh.geometry;
+          const count = geom.attributes.position.count;
+          const colors = new Float32Array(count * 3);
+          const pos = geom.attributes.position;
+          const meshMatrix = part.mesh.matrixWorld;
+          
+          let sumT = 0;
+          let vCount = 0;
+          
+          for (let idx = 0; idx < count; idx++) {
+            const localPt = new THREE.Vector3(pos.getX(idx), pos.getY(idx), pos.getZ(idx));
+            const worldPt = localPt.clone().applyMatrix4(meshMatrix);
+            
+            const i = Math.max(0, Math.min(Vx - 1, Math.floor(((worldPt.x - minPt.x) / size.x) * Vx)));
+            const j = Math.max(0, Math.min(Vy - 1, Math.floor(((worldPt.y - minPt.y) / size.y) * Vy)));
+            const k = Math.max(0, Math.min(Vz - 1, Math.floor(((worldPt.z - minPt.z) / size.z) * Vz)));
+            
+            const gIdx = i * strideY + j * strideZ + k;
+            const temp = grid[gIdx];
+            sumT += temp;
+            vCount++;
+            
+            const color = getTemperatureColor(temp, ambient, maxT);
+            colors[idx * 3] = color.r;
+            colors[idx * 3 + 1] = color.g;
+            colors[idx * 3 + 2] = color.b;
+          }
+          
+          geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+          geom.attributes.color.needsUpdate = true;
+          
+          if (!part.mesh.material.vertexColors) {
+            part.mesh.material = new THREE.MeshLambertMaterial({
+              vertexColors: true
+            });
+          }
+          
+          if (part.role === "source") {
+            indTemps.push({ power: part.power, tJunc: vCount > 0 ? sumT / vCount : maxT });
+          }
         });
-      }
+        
+        const sourcesTempList = document.getElementById("sources-temp-list");
+        if (sourcesTempList) {
+          sourcesTempList.innerHTML = "";
+          indTemps.forEach((item, idx) => {
+            const row = document.createElement("div");
+            row.style.display = "flex";
+            row.style.justify = "space-between";
+            row.style.fontSize = "13px";
+            row.style.fontFamily = "var(--font-mono)";
+            row.style.color = "var(--text-primary)";
+            row.style.background = "var(--bg-tertiary)";
+            row.style.padding = "6px 12px";
+            row.style.borderRadius = "var(--radius-sm)";
+            row.style.marginTop = "4px";
+            row.innerHTML = `
+              <span>Heat Source #${idx + 1} (${item.power}W)</span>
+              <strong>${item.tJunc.toFixed(1)} °C</strong>
+            `;
+            sourcesTempList.appendChild(row);
+          });
+        }
+      };
+
+      const finalizeSimulation = () => {
+        updateVisuals();
+        simSpinner.classList.add("hidden");
+        if (window.showToast) window.showToast("Volumetric 3D Finite Difference Simulation complete!");
+      };
       
-      if (window.showToast) window.showToast("Volumetric 3D Finite Difference Simulation complete!");
-    } catch (err) {
-      console.error("Voxel simulation solver error:", err);
-      alert("Simulation failed: " + err.message);
-    } finally {
-      simSpinner.classList.add("hidden");
-    }
-  };
+      const solveStep = () => {
+        if (iter >= maxIter) {
+          finalizeSimulation();
+          return;
+        }
+
+        const iterationsPerFrame = Math.max(1, Math.min(100, Math.round(80000 / size_total)));
+        let maxDiff = 0;
+        const omega = 1.9 - 1.5 / Vx; // Optimal SOR acceleration parameter based on grid size
+        
+        for (let step = 0; step < iterationsPerFrame && iter < maxIter; step++, iter++) {
+          maxDiff = 0;
+          
+          for (let i = 0; i < Vx; i++) {
+            const iStride = i * strideY;
+            for (let j = 0; j < Vy; j++) {
+              const jStride = j * strideZ;
+              for (let k = 0; k < Vz; k++) {
+                const idx = iStride + jStride + k;
+                const type = gridType[idx];
+                
+                if (type === 0 || type === 4) { // air or duct
+                  grid[idx] = ambient;
+                  continue;
+                }
+                
+                let condSum = 0;
+                let tSum = 0;
+                
+                const neighbors = [
+                  { ni: i - 1, nj: j, nk: k, area: dy * dz, dist: dx, nidx: idx - strideY },
+                  { ni: i + 1, nj: j, nk: k, area: dy * dz, dist: dx, nidx: idx + strideY },
+                  { ni: i, nj: j - 1, nk: k, area: dx * dz, dist: dy, nidx: idx - strideZ },
+                  { ni: i, nj: j + 1, nk: k, area: dx * dz, dist: dy, nidx: idx + strideZ },
+                  { ni: i, nj: j, nk: k - 1, area: dx * dy, dist: dz, nidx: idx - 1 },
+                  { ni: i, nj: j, nk: k + 1, area: dx * dy, dist: dz, nidx: idx + 1 }
+                ];
+                
+                neighbors.forEach(n => {
+                  let isSolidNeigh = false;
+                  if (n.ni >= 0 && n.ni < Vx && n.nj >= 0 && n.nj < Vy && n.nk >= 0 && n.nk < Vz) {
+                    const typeNeigh = gridType[n.nidx];
+                    if (typeNeigh !== 0 && typeNeigh !== 4) {
+                      isSolidNeigh = true;
+                    }
+                  }
+                  
+                  if (isSolidNeigh) {
+                    const typeNode = gridType[idx];
+                    const typeNeigh = gridType[n.nidx];
+                    
+                    const kNode = gridK[idx];
+                    const kNeigh = gridK[n.nidx];
+                    const kAvg = 2 * kNode * kNeigh / (kNode + kNeigh || 1);
+                    
+                    let R_total = n.dist / (kAvg * n.area || 1);
+                    
+                    if ((typeNode === 2 && typeNeigh === 1) || (typeNode === 1 && typeNeigh === 2)) {
+                      const R_tim = (tim.thickness / 1e6) / (tim.k * n.area || 1);
+                      R_total += R_tim;
+                    }
+                    
+                    const cond = 1 / (R_total || 1);
+                    condSum += cond;
+                    tSum += cond * grid[n.nidx];
+                  } else {
+                    const condAir = hVal * n.area;
+                    condSum += condAir;
+                    tSum += condAir * ambient;
+                  }
+                });
+                
+                const val = (tSum + gridQ[idx]) / (condSum || 1);
+                const diff = val - grid[idx];
+                grid[idx] += omega * diff;
+                
+                const absDiff = Math.abs(diff);
+                if (absDiff > maxDiff) maxDiff = absDiff;
+              }
+            }
+          }
+        }
+        
+        simSpinner.querySelector("span").textContent = `Solving... Iteration ${iter}/${maxIter} (residual: ${maxDiff.toFixed(5)}°C)`;
+        
+        // Update visuals in real-time
+        updateVisuals();
+        
+        // Exit early once the grid is mathematically converged
+        if (iter >= 30 && maxDiff < 0.0001) {
+          finalizeSimulation();
+          return;
+        }
+        
+        requestAnimationFrame(solveStep);
+      };
+      
+      requestAnimationFrame(solveStep);
+    
+  } catch (err) {
+    console.error("Voxel simulation solver error:", err);
+    alert("Simulation failed: " + err.message);
+    simSpinner.classList.add("hidden");
+  }
+};
 
   // Run Initializations
   init3DScene();
   renderChipsUI();
+  updateCADGeometry();
   runSimulation();
 });
