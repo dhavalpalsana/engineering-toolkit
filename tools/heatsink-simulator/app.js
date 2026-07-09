@@ -1047,6 +1047,7 @@ document.addEventListener("DOMContentLoaded", () => {
         finCountInput.value = heatsink.finCount;
         materialSelect.value = heatsink.material;
         customKInput.value = heatsink.customK;
+        customDensityInput.value = heatsink.density || 2.7;
         if (heatsink.material === "custom") {
           customKGroup.classList.remove("hidden");
         } else {
@@ -1076,6 +1077,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         renderChipsUI();
+        updateCADGeometry();
         runSimulation();
       }
     }
@@ -1856,5 +1858,22 @@ document.addEventListener("DOMContentLoaded", () => {
   init3DScene();
   renderChipsUI();
   updateCADGeometry();
-  runSimulation();
+  
+  // Parse shared URL design if present
+  const urlParams = new URLSearchParams(window.location.search);
+  const designParam = urlParams.get("design");
+  let loadedFromUrl = false;
+  if (designParam) {
+    try {
+      const decoded = JSON.parse(atob(designParam));
+      window.projectManagerConfig.setInputs(decoded);
+      loadedFromUrl = true;
+    } catch (err) {
+      console.error("Failed to parse design from URL:", err);
+    }
+  }
+  
+  if (!loadedFromUrl) {
+    runSimulation();
+  }
 });
