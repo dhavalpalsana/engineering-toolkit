@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Heat Sink Simulator — Engineering Toolkit</title>
+  
+  <!-- SEO & Social Meta Tags -->
+  <meta name="description" content="Design and simulate parametric plate-fin heat sinks in interactive 3D. Optimize thermal interface materials (TIM), chip positions, air ducting, and fan curves.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eng-toolkit.web.app/tools/heatsink-simulator/">
+  <meta property="og:title" content="3D Heat Sink Simulator — Engineering Toolkit">
+  <meta property="og:description" content="Interactive 3D heatsink design optimizer and finite difference thermal solver in your browser.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="3D Heat Sink Simulator — Engineering Toolkit">
+
+  <!-- Typography & Stylesheets -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Standard Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <!-- Standard Back Button -->
+        <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        
+        <!-- Tool Icon -->
+        <div class="hdr-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+          </svg>
+        </div>
+        
+        <!-- Titles -->
+        <div class="hdr-titles">
+          <h1>3D Heat Sink Simulator</h1>
+          <p>Design finned assemblies, optimize chip locations, TIM, and forced air cooling</p>
+        </div>
+      </div>
+      
+      <div class="hdr-right">
+        <!-- Standardized Action Buttons -->
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <i data-lucide="share-2"></i> Share Link
+        </button>
+        <button onclick="exportJSON()" class="hdr-btn" title="Export setup to JSON file">
+          <i data-lucide="download"></i> Export JSON
+        </button>
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import setup from JSON file">
+          <i data-lucide="upload"></i> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" style="display:none;" />
+        
+        <div class="hdr-divider"></div>
+        
+        <!-- Auth Button -->
+        <button id="auth-btn" title="Sign In">
+          <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+        </button>
+        
+        <!-- Theme Toggle -->
+        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+          <i data-lucide="moon" class="moon-icon"></i>
+          <i data-lucide="sun" class="sun-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container page-content">
+    <div class="simulator-layout">
+      
+      <!-- Left Column: Input Configurator -->
+      <section class="inputs-panel">
+        
+        <!-- Tab Switcher -->
+        <div class="tabs-row">
+          <button class="tab-btn active" data-tab="geometry-tab">
+            <i data-lucide="box"></i> Geometry & Material
+          </button>
+          <button class="tab-btn" data-tab="sources-tab">
+            <i data-lucide="cpu"></i> Chip & TIM Stack
+          </button>
+          <button class="tab-btn" data-tab="cooling-tab">
+            <i data-lucide="wind"></i> Cooling & Airflow
+          </button>
+        </div>
+
+        <!-- Tab 1: Geometry & Material -->
+        <div class="tab-content" id="geometry-tab">
+          <article class="config-card">
+            <h2>Heatsink Dimensions</h2>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="base-width">Base Width (W - mm)</label>
+                <input type="number" id="base-width" class="form-input" min="20" max="300" value="80" step="1" />
+              </div>
+              <div class="form-group flex-1">
+                <label for="base-length">Base Length (L - mm)</label>
+                <input type="number" id="base-length" class="form-input" min="20" max="300" value="80" step="1" />
+              </div>
+            </div>
+            <div class="form-group margin-top-12">
+              <label for="base-height">Base Thickness (t - mm)</label>
+              <input type="number" id="base-height" class="form-input" min="2" max="30" value="6" step="0.5" />
+            </div>
+
+            <h2 class="margin-top-20">Fin Geometry (Plate Fins)</h2>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="fin-height">Fin Height (mm)</label>
+                <input type="number" id="fin-height" class="form-input" min="5" max="100" value="25" step="1" />
+              </div>
+              <div class="form-group flex-1">
+                <label for="fin-thickness">Fin Thickness (mm)</label>
+                <input type="number" id="fin-thickness" class="form-input" min="0.5" max="5" value="1.5" step="0.1" />
+              </div>
+            </div>
+            <div class="form-group margin-top-12">
+              <label for="fin-count">Number of Fins</label>
+              <input type="number" id="fin-count" class="form-input" min="2" max="50" value="16" step="1" />
+            </div>
+
+            <h2 class="margin-top-20">Material Properties</h2>
+            <div class="form-group">
+              <label for="material-select">Conductor Material</label>
+              <select id="material-select" class="form-select">
+                <option value="aluminum">Aluminum 6061-T6 (k = 167 W/m·K)</option>
+                <option value="copper">Pure Copper (k = 400 W/m·K)</option>
+                <option value="custom">Custom Conductor</option>
+              </select>
+            </div>
+            <div class="form-group margin-top-12 hidden" id="custom-k-group">
+              <label for="custom-k">Thermal Conductivity (k - W/m·K)</label>
+              <input type="number" id="custom-k" class="form-input" min="1" max="1000" value="200" step="1" />
+            </div>
+          </article>
+        </div>
+
+        <!-- Tab 2: Chip & TIM Stack -->
+        <div class="tab-content hidden" id="sources-tab">
+          <article class="config-card">
+            <div class="card-header-actions">
+              <h2>Heat Sources (Silicon Chips)</h2>
+              <button id="add-chip-btn" class="action-btn secondary-btn small-btn">
+                <i data-lucide="plus"></i> Add Chip
+              </button>
+            </div>
+            
+            <div id="chips-list-container" class="chips-list-container">
+              <!-- Dynamically populated chip configurations -->
+            </div>
+
+            <h2 class="margin-top-20">Thermal Interface Material (TIM)</h2>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="tim-thickness">TIM Thickness (&mu;m)</label>
+                <input type="number" id="tim-thickness" class="form-input" min="10" max="500" value="50" step="5" />
+              </div>
+              <div class="form-group flex-1">
+                <label for="tim-k">TIM Conductivity (W/m·K)</label>
+                <input type="number" id="tim-k" class="form-input" min="0.1" max="20" value="3.5" step="0.1" />
+              </div>
+            </div>
+            <p class="tool-tip margin-top-12">
+              TIM bridges micro-gaps between the silicon chip and heatsink base. Silicon chips generate heat which is conducted through the TIM layer.
+            </p>
+          </article>
+        </div>
+
+        <!-- Tab 3: Cooling & Airflow -->
+        <div class="tab-content hidden" id="cooling-tab">
+          <article class="config-card">
+            <h2>Convection Environment</h2>
+            <div class="form-group">
+              <label for="convection-mode">Cooling Method</label>
+              <select id="convection-mode" class="form-select">
+                <option value="forced">Forced Convection (Fan Cooling)</option>
+                <option value="natural">Natural Convection (Free Air Flow)</option>
+              </select>
+            </div>
+            <div class="form-group margin-top-12">
+              <label for="ambient-temp">Ambient Temperature (&deg;C)</label>
+              <input type="number" id="ambient-temp" class="form-input" min="-20" max="100" value="25" step="1" />
+            </div>
+
+            <!-- Forced convection controls -->
+            <div id="forced-cooling-controls" class="margin-top-20">
+              <h2>Forced Air Intake</h2>
+              <div class="form-group">
+                <label for="fan-airflow">Fan Intake Airflow (CFM)</label>
+                <input type="number" id="fan-airflow" class="form-input" min="1" max="200" value="32" step="1" />
+              </div>
+              <div class="form-row margin-top-12">
+                <div class="form-group flex-1">
+                  <label for="duct-bypass-side">Side Duct Clearance (mm)</label>
+                  <input type="number" id="duct-bypass-side" class="form-input" min="0" max="20" value="2" step="0.5" />
+                </div>
+                <div class="form-group flex-1">
+                  <label for="duct-bypass-top">Top Duct Clearance (mm)</label>
+                  <input type="number" id="duct-bypass-top" class="form-input" min="0" max="20" value="1" step="0.5" />
+                </div>
+              </div>
+              <p class="tool-tip margin-top-12">
+                Clearance around the heatsink causes air bypass, dropping effective flow velocity across the cooling fins.
+              </p>
+            </div>
+
+            <!-- Natural convection controls -->
+            <div id="natural-cooling-controls" class="margin-top-20 hidden">
+              <h2>Radiative Properties</h2>
+              <div class="form-group">
+                <label for="surface-emissivity">Surface Emissivity (&epsilon;)</label>
+                <input type="number" id="surface-emissivity" class="form-input" min="0.0" max="1.0" value="0.85" step="0.05" />
+              </div>
+              <p class="tool-tip margin-top-12">
+                Anodized aluminum has high emissivity (&epsilon; &approx; 0.85), significantly boosting natural convection heat dissipation via radiation.
+              </p>
+            </div>
+          </article>
+        </div>
+
+      </section>
+
+      <!-- Right Column: 3D Viewport & Simulation Results -->
+      <section class="results-panel">
+        
+        <!-- 3D Canvas Visualizer -->
+        <article class="config-card viewport-card">
+          <div class="card-header-actions">
+            <h2>3D Model Assembly & Heat Gradient</h2>
+            <div class="legend-scale">
+              <span class="legend-color-box temp-cold"></span>
+              <span id="legend-min">25&deg;C</span>
+              <span class="legend-gradient"></span>
+              <span id="legend-max">75&deg;C</span>
+              <span class="legend-color-box temp-hot"></span>
+            </div>
+          </div>
+
+          <div class="viewport-wrapper">
+            <div id="canvas-container" class="canvas-container"></div>
+            <!-- Loading Indicator overlay -->
+            <div id="sim-spinner" class="spinner-overlay hidden">
+              <i data-lucide="loader" class="spin-icon"></i>
+              <span>Running Solver...</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Simulation Results Summary -->
+        <article class="config-card">
+          <div class="card-header-actions">
+            <h2>Thermal Performance Report</h2>
+            <span id="status-badge" class="badge active-badge">Normal</span>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <span class="metric-title">Max Junction Temp</span>
+              <span class="metric-value" id="res-t-junction">52.4 &deg;C</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-title">Max Base Temp</span>
+              <span class="metric-value" id="res-t-base">44.8 &deg;C</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-title">Convective Coefficient (h)</span>
+              <span class="metric-value" id="res-h-coeff">42.1 W/m&sup2;K</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-title">Total Resistance (&theta;)</span>
+              <span class="metric-value" id="res-theta">0.27 K/W</span>
+            </div>
+          </div>
+
+          <div class="chart-section margin-top-20">
+            <h3>System Flow & Fan Impedance Match</h3>
+            <div class="chart-wrapper">
+              <canvas id="fan-curve-chart" width="400" height="180"></canvas>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+    </div>
+  </main>
+
+  <!-- JS Dependencies -->
+  <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.157.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/project-manager.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

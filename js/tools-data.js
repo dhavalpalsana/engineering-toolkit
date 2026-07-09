@@ -78,6 +78,15 @@ const TOOLS_DATA = [
     status: "active"
   },
   {
+    id: "heatsink-simulator",
+    name: "3D Heat Sink Simulator",
+    description: "Design and simulate parametric finned heat sinks in 3D. Define thermal interfaces (TIM), custom materials, heat sources, and run real-time local steady-state or transient simulations.",
+    tags: ["mechanical", "thermal", "heatsink", "simulation", "heat-transfer", "cfd"],
+    icon: "thermometer",
+    path: "./tools/heatsink-simulator/index.html",
+    status: "active"
+  },
+  {
     id: "bolt-torque",
     name: "Bolt Torque & Tension Calculator",
     description: "Determine target bolt torque, preload tension, and friction coefficient adjustments for mechanical design.",
