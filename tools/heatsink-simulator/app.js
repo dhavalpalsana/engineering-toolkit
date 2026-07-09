@@ -15,7 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
     finThickness: 1.5, // mm
     finCount: 16,
     material: "aluminum",
-    customK: 200
+    customK: 200,
+    density: 2.7
   };
 
   let chips = [
@@ -61,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const materialSelect = document.getElementById("material-select");
   const customKGroup = document.getElementById("custom-k-group");
   const customKInput = document.getElementById("custom-k");
+  const customDensityInput = document.getElementById("custom-density");
 
   const addChipBtn = document.getElementById("add-source-btn");
   const chipsListContainer = document.getElementById("sources-list-container");
@@ -94,6 +96,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const resTBase = document.getElementById("res-t-base");
   const resHCoeff = document.getElementById("res-h-coeff");
   const resTheta = document.getElementById("res-theta");
+  const resMass = document.getElementById("res-mass");
+  const resMassEff = document.getElementById("res-mass-eff");
   const fanCurveChart = document.getElementById("fan-curve-chart");
 
   const tabButtons = document.querySelectorAll(".tab-btn");
@@ -147,7 +151,20 @@ document.addEventListener("DOMContentLoaded", () => {
     heatsink.finHeight = parseFloat(finHeightInput.value) || 25;
     heatsink.finThickness = parseFloat(finThicknessInput.value) || 1.5;
     heatsink.finCount = parseInt(finCountInput.value) || 16;
-    heatsink.customK = parseFloat(customKInput.value) || 200;
+    
+    heatsink.material = materialSelect.value;
+    let kVal = 200;
+    let densityVal = 2.7;
+    if (heatsink.material === "aluminum") { kVal = 200; densityVal = 2.7; }
+    else if (heatsink.material === "copper") { kVal = 400; densityVal = 8.96; }
+    else if (heatsink.material === "magnesium") { kVal = 96; densityVal = 1.77; }
+    else if (heatsink.material === "graphite") { kVal = 400; densityVal = 2.2; }
+    else {
+      kVal = parseFloat(customKInput.value) || 200;
+      densityVal = parseFloat(customDensityInput.value) || 2.7;
+    }
+    heatsink.customK = kVal;
+    heatsink.density = densityVal;
 
     environment.bypassSide = parseFloat(bypassSideInput.value) || 2;
     environment.bypassTop = parseFloat(bypassTopInput.value) || 1;
@@ -171,6 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
       customKGroup.classList.add("hidden");
     }
     heatsink.material = materialSelect.value;
+    updateCADGeometry();
     document.dispatchEvent(new Event("change", { bubbles: true }));
   });
 
@@ -871,7 +889,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   [
-    customKInput, timThicknessInput, timKInput,
+    customKInput, customDensityInput, timThicknessInput, timKInput,
     ambientTempInput, fanAirflowInput, surfaceEmissivityInput
   ].forEach(input => {
     input.addEventListener("input", () => {
@@ -1143,6 +1161,8 @@ document.addEventListener("DOMContentLoaded", () => {
             <select class="form-select part-mat-select" data-id="${part.id}" style="padding: 4px; font-size: 11px;">
               <option value="aluminum" ${part.material === "aluminum" ? "selected" : ""}>Aluminum</option>
               <option value="copper" ${part.material === "copper" ? "selected" : ""}>Copper</option>
+              <option value="magnesium" ${part.material === "magnesium" ? "selected" : ""}>Magnesium</option>
+              <option value="graphite" ${part.material === "graphite" ? "selected" : ""}>Graphite</option>
               <option value="custom" ${part.material === "custom" ? "selected" : ""}>Custom</option>
             </select>
           </div>
@@ -1168,13 +1188,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (part.material === "custom") {
           detailGrp.innerHTML += `
-            <div class="form-group" style="margin-top: 4px;">
-              <label style="font-size: 11px;">Conductivity (W/m·K)</label>
-              <input type="number" class="form-input part-k-input" data-id="${part.id}" value="${part.customK}" min="1" step="5" style="padding: 4px; font-size: 11px;" />
+            <div class="form-row" style="margin-top: 4px; display: flex; gap: 8px;">
+              <div class="form-group flex-1">
+                <label style="font-size: 11px;">Conductivity (W/m·K)</label>
+                <input type="number" class="form-input part-k-input" data-id="${part.id}" value="${part.customK || 200}" min="1" step="5" style="padding: 4px; font-size: 11px;" />
+              </div>
+              <div class="form-group flex-1">
+                <label style="font-size: 11px;">Density (g/cm³)</label>
+                <input type="number" class="form-input part-density-input" data-id="${part.id}" value="${part.customDensity || 2.7}" min="0.1" step="0.1" style="padding: 4px; font-size: 11px;" />
+              </div>
             </div>
           `;
           detailGrp.querySelector(".part-k-input").addEventListener("change", (e) => {
             part.customK = parseFloat(e.target.value) || 200;
+          });
+          detailGrp.querySelector(".part-density-input").addEventListener("change", (e) => {
+            part.customDensity = parseFloat(e.target.value) || 2.7;
           });
         }
       };
@@ -1221,6 +1250,7 @@ document.addEventListener("DOMContentLoaded", () => {
         role: idx === 0 ? "heatsink" : "ignore",
         material: "aluminum",
         customK: 200,
+        customDensity: 2.7,
         power: 30
       };
     });
@@ -1409,16 +1439,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const gridK = new Float32Array(size_total).fill(0.026); // default air thermal conductivity
       const gridQ = new Float32Array(size_total);
       const gridType = new Uint8Array(size_total); // 0: air, 1: heatsink, 2: source, 3: tim, 4: duct
+      const gridDensity = new Float32Array(size_total);
       
       cadParts.forEach(part => {
         if (part.role === "ignore") return;
         part.mesh.geometry.computeBoundingBox();
         part._worldBBox = new THREE.Box3().setFromObject(part.mesh);
         let kVal = 200;
-        if (part.material === "aluminum") kVal = 200;
-        else if (part.material === "copper") kVal = 400;
-        else kVal = parseFloat(part.customK) || 200;
+        let densityVal = 2.7;
+        if (part.material === "aluminum") { kVal = 200; densityVal = 2.7; }
+        else if (part.material === "copper") { kVal = 400; densityVal = 8.96; }
+        else if (part.material === "magnesium") { kVal = 96; densityVal = 1.77; }
+        else if (part.material === "graphite") { kVal = 400; densityVal = 2.2; }
+        else {
+          kVal = parseFloat(part.customK) || 200;
+          densityVal = parseFloat(part.customDensity) || 2.7;
+        }
         part._k = kVal;
+        part._density = densityVal;
       });
 
       console.log("Global Simulation AABB:", bbox);
@@ -1451,6 +1489,7 @@ document.addEventListener("DOMContentLoaded", () => {
               if (part.role === "ignore") continue;
               if (part._worldBBox.intersectsBox(voxelBox)) {
                 gridK[idx] = part._k;
+                gridDensity[idx] = part._density;
                 if (part.role === "heatsink") gridType[idx] = 1;
                 else if (part.role === "source") gridType[idx] = 2;
                 else if (part.role === "tim") gridType[idx] = 3;
@@ -1603,7 +1642,21 @@ document.addEventListener("DOMContentLoaded", () => {
         resTJunction.textContent = `${maxT.toFixed(1)} °C`;
         resTBase.textContent = `${minT.toFixed(1)} °C`;
         resHCoeff.textContent = `${hVal.toFixed(1)} W/m²K`;
-        resTheta.textContent = `${totalP > 0 ? ((maxT - ambient) / totalP).toFixed(3) : 0} K/W`;
+        const theta = totalP > 0 ? (maxT - ambient) / totalP : 0;
+        resTheta.textContent = `${theta.toFixed(2)} K/W`;
+        
+        // Mass and Specific Performance calculation
+        const voxelVolCm3 = (dx * dy * dz) * 1e6;
+        let massGrams = 0;
+        for (let idx = 0; idx < size_total; idx++) {
+          if (gridType[idx] === 1) { // heatsink voxels
+            massGrams += gridDensity[idx] * voxelVolCm3;
+          }
+        }
+        resMass.textContent = `${massGrams.toFixed(0)} g`;
+        
+        const specPerf = (theta > 0 && massGrams > 0) ? (1000 / (theta * massGrams)) : 0; // mW / (K * g)
+        resMassEff.textContent = `${specPerf.toFixed(1)} mW/(K·g)`;
         
         if (maxT > 105) {
           statusBadge.className = "badge critical-badge";

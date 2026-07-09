@@ -155,14 +155,24 @@
             <div class="form-group">
               <label for="material-select">Conductor Material</label>
               <select id="material-select" class="form-select">
-                <option value="aluminum">Aluminum 6061-T6 (k = 167 W/m·K)</option>
+                <option value="aluminum">Aluminum 6061-T6 (k = 200 W/m·K)</option>
                 <option value="copper">Pure Copper (k = 400 W/m·K)</option>
+                <option value="magnesium">Magnesium Alloy (k = 96 W/m·K)</option>
+                <option value="graphite">Pyrolytic Graphite (k = 400 W/m·K)</option>
                 <option value="custom">Custom Conductor</option>
               </select>
             </div>
             <div class="form-group margin-top-12 hidden" id="custom-k-group">
-              <label for="custom-k">Thermal Conductivity (k - W/m·K)</label>
-              <input type="number" id="custom-k" class="form-input" min="1" max="1000" value="200" step="1" />
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="custom-k">Thermal Conductivity (k - W/m·K)</label>
+                  <input type="number" id="custom-k" class="form-input" min="1" max="1000" value="200" step="1" />
+                </div>
+                <div class="form-group flex-1">
+                  <label for="custom-density">Density (g/cm³)</label>
+                  <input type="number" id="custom-density" class="form-input" min="0.1" max="25" value="2.7" step="0.1" />
+                </div>
+              </div>
             </div>
           </article>
         </div>
@@ -372,6 +382,14 @@
             <div class="metric-box">
               <span class="metric-title">Total Resistance (&theta;)</span>
               <span class="metric-value" id="res-theta">0.27 K/W</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-title">Heatsink Mass</span>
+              <span class="metric-value" id="res-mass">-- g</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-title">Specific Performance</span>
+              <span class="metric-value" id="res-mass-eff" title="Specific cooling conductance per unit mass. Higher is better.">-- mW/(K·g)</span>
             </div>
           </div>
 
