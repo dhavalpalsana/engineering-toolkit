@@ -1150,6 +1150,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Populate global offset panel initially
+  // Populate global offset panel initially and boot canvas
   showEntityInspector();
+  drawSketchCanvas();
+  initSketcherEvents();
 });
