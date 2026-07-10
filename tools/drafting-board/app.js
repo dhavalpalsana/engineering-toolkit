@@ -3,6 +3,9 @@
 // ==========================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
+  const MetricThreads = window.MetricThreads || {};
+  const ParallelKeys = window.ParallelKeys || {};
+
   // --- Drawing State ---
   let sketchVertices = []; // Coordinates array in mm
   let sketchCircles = [];  // Circle entities: [{ cx, cy, r, construction: false }]
@@ -741,6 +744,71 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    // --- Draw Tapped Holes & Clearance Fits Leader Annotations (Phase 5) ---
+    sketchCircles.forEach((c) => {
+      if (c.standardHole) {
+        const thread = MetricThreads[c.standardHole];
+        if (!thread) return;
+
+        const angle = -Math.PI / 4; // 45 deg up-right
+        const sx = c.cx + c.r * Math.cos(angle);
+        const sy = c.cy + c.r * Math.sin(angle);
+        const ex = sx + 20;
+        const ey = sy - 20;
+        const shX = ex + 25;
+
+        // Leader line
+        const leader = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        leader.setAttribute("x1", sx); leader.setAttribute("y1", sy);
+        leader.setAttribute("x2", ex); leader.setAttribute("y2", ey);
+        leader.setAttribute("stroke", "var(--accent-primary)");
+        leader.setAttribute("stroke-width", 0.8);
+        leader.setAttribute("marker-start", "url(#arrow-start)");
+        svg.appendChild(leader);
+
+        // Horizontal shoulder line
+        const shoulder = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        shoulder.setAttribute("x1", ex); shoulder.setAttribute("y1", ey);
+        shoulder.setAttribute("x2", shX); shoulder.setAttribute("y2", ey);
+        shoulder.setAttribute("stroke", "var(--accent-primary)");
+        shoulder.setAttribute("stroke-width", 0.8);
+        svg.appendChild(shoulder);
+
+        // Text labels above shoulder
+        addTextToViewport(svg, `${c.standardHole}x${thread.pitch} TAPPED`, ex + 2, ey - 9, 3.5, "bold", "start");
+        addTextToViewport(svg, `TAP DRILL: Ø${thread.tapDrill} mm`, ex + 2, ey - 5, 3.0, "normal", "start");
+        addTextToViewport(svg, `TORQUE: ${thread.maxTorque} N-m`, ex + 2, ey - 1, 3.0, "normal", "start");
+      }
+      else if (c.holeTolerance) {
+        const angle = Math.PI / 4; // 45 deg down-right
+        const sx = c.cx + c.r * Math.cos(angle);
+        const sy = c.cy + c.r * Math.sin(angle);
+        const ex = sx + 20;
+        const ey = sy + 20;
+        const shX = ex + 25;
+
+        // Leader line
+        const leader = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        leader.setAttribute("x1", sx); leader.setAttribute("y1", sy);
+        leader.setAttribute("x2", ex); leader.setAttribute("y2", ey);
+        leader.setAttribute("stroke", "var(--accent-primary)");
+        leader.setAttribute("stroke-width", 0.8);
+        leader.setAttribute("marker-start", "url(#arrow-start)");
+        svg.appendChild(leader);
+
+        // Horizontal shoulder line
+        const shoulder = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        shoulder.setAttribute("x1", ex); shoulder.setAttribute("y1", ey);
+        shoulder.setAttribute("x2", shX); shoulder.setAttribute("y2", ey);
+        shoulder.setAttribute("stroke", "var(--accent-primary)");
+        shoulder.setAttribute("stroke-width", 0.8);
+        svg.appendChild(shoulder);
+
+        // Fit label
+        addTextToViewport(svg, `Ø${(c.r * 2).toFixed(1)} ${c.holeTolerance}`, ex + 2, ey - 2, 3.5, "bold", "start");
+      }
+    });
+
     // Draw measuring ruler
     if (editorMode === "measure" && measureStartPos) {
       const dotStart = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -1268,9 +1336,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selectedEntity.type === "circle") {
       const c = sketchCircles[idx];
       if (!c) return;
+      
+      const diam = c.r * 2;
+      let keywayInfo = "No standard recommendation";
+      for (const range in ParallelKeys) {
+        const [minD, maxD] = range.split("-").map(Number);
+        if (diam >= minD && diam <= maxD) {
+          const spec = ParallelKeys[range];
+          keywayInfo = `Key: ${spec.width}x${spec.height}mm (Depth: ${spec.keywayShaft}mm)`;
+          break;
+        }
+      }
+
       container.innerHTML = `
         <div class="inspector-fields">
-          <div class="inspector-title">Circle Entity (Hole)</div>
+          <div class="inspector-title">Circle Entity (Hole/Shaft)</div>
           <div class="inspector-row">
             <label>Center X (mm)</label>
             <input type="number" value="${c.cx}" onchange="updateSelectedEntityParam('cx', this.value)">
@@ -1283,7 +1363,37 @@ document.addEventListener("DOMContentLoaded", () => {
             <label>Diameter (mm)</label>
             <input type="number" value="${c.r * 2}" onchange="updateSelectedEntityParam('diameter', this.value)">
           </div>
-          <div class="inspector-checkbox-row">
+          
+          <div class="inspector-row">
+            <label>Standard Tapped Hole</label>
+            <select onchange="updateSelectedEntityParam('standardHole', this.value)">
+              <option value="">None (Custom)</option>
+              <option value="M3" ${c.standardHole === "M3" ? "selected" : ""}>M3 x 0.5</option>
+              <option value="M4" ${c.standardHole === "M4" ? "selected" : ""}>M4 x 0.7</option>
+              <option value="M5" ${c.standardHole === "M5" ? "selected" : ""}>M5 x 0.8</option>
+              <option value="M6" ${c.standardHole === "M6" ? "selected" : ""}>M6 x 1.0</option>
+              <option value="M8" ${c.standardHole === "M8" ? "selected" : ""}>M8 x 1.25</option>
+              <option value="M10" ${c.standardHole === "M10" ? "selected" : ""}>M10 x 1.5</option>
+              <option value="M12" ${c.standardHole === "M12" ? "selected" : ""}>M12 x 1.75</option>
+            </select>
+          </div>
+
+          <div class="inspector-row">
+            <label>ISO Clearance Fit (Hole)</label>
+            <select onchange="updateSelectedEntityParam('holeTolerance', this.value)">
+              <option value="">None</option>
+              <option value="H7" ${c.holeTolerance === "H7" ? "selected" : ""}>H7 (Close Fit)</option>
+              <option value="H8" ${c.holeTolerance === "H8" ? "selected" : ""}>H8 (Medium Fit)</option>
+              <option value="H11" ${c.holeTolerance === "H11" ? "selected" : ""}>H11 (Free Fit)</option>
+            </select>
+          </div>
+
+          <div class="inspector-row" style="margin-top: 6px; padding: 6px; background: var(--bg-secondary); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">ISO 773 Keyway Recommendation</div>
+            <div style="font-size: 11px; margin-top: 2px; font-family: var(--font-mono);">${keywayInfo}</div>
+          </div>
+
+          <div class="inspector-checkbox-row" style="margin-top: 10px;">
             <input type="checkbox" id="c-construction" ${c.construction ? 'checked' : ''} onchange="updateSelectedEntityParam('construction', this.checked)">
             <label for="c-construction">Construction Line (No Mass)</label>
           </div>
@@ -1346,6 +1456,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (param === "cy") c.cy = Math.round(parseFloat(val));
       if (param === "diameter") c.r = Math.round(parseFloat(val) / 2);
       if (param === "construction") c.construction = !!val;
+      if (param === "standardHole") {
+        c.standardHole = val;
+        if (val) {
+          const d = parseInt(val.substring(1));
+          c.r = d / 2;
+        }
+      }
+      if (param === "holeTolerance") {
+        c.holeTolerance = val;
+      }
     } 
     else if (selectedEntity.type === "vertex") {
       const v = sketchVertices[idx];
