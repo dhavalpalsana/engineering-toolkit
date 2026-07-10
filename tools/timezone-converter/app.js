@@ -314,11 +314,11 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="timeline-slider-container">
           <!-- The visual day/night segments -->
           <div class="timeline-track-background">
-            <div class="track-segment track-night" style="width: 25%;"></div>   <!-- 00:00 to 06:00 -->
-            <div class="track-segment track-day" style="width: 12.5%;"></div>  <!-- 06:00 to 09:00 -->
+            <div class="track-segment track-night-1" style="width: 25%;"></div>   <!-- 00:00 to 06:00 -->
+            <div class="track-segment track-day-1" style="width: 12.5%;"></div>  <!-- 06:00 to 09:00 -->
             <div class="track-segment track-work" style="width: 33.33%;"></div> <!-- 09:00 to 17:00 -->
-            <div class="track-segment track-day" style="width: 4.17%;"></div>   <!-- 17:00 to 18:00 -->
-            <div class="track-segment track-night" style="width: 25%;"></div>   <!-- 18:00 to 24:00 -->
+            <div class="track-segment track-day-2" style="width: 4.17%;"></div>   <!-- 17:00 to 18:00 -->
+            <div class="track-segment track-night-2" style="width: 25%;"></div>   <!-- 18:00 to 24:00 -->
           </div>
           
           <!-- Faint vertical grid lines -->

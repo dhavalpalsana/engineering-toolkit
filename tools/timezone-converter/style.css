@@ -321,17 +321,29 @@ body::before {
 }
 
 /* Color palettes for segments */
-.track-night {
-  background: linear-gradient(to bottom, #0d1e3d, #1a325a); /* Premium dark midnight blue */
+.track-night-1 {
+  background: linear-gradient(to right, #090e1a, #0f1c3f); /* Deep midnight to early pre-dawn */
   box-shadow: inset 0 1px 2px rgba(0,0,0,0.4);
 }
 
-.track-day {
-  background: linear-gradient(to bottom, #bae6fd, #e0f2fe); /* Sky blue */
+.track-day-1 {
+  background: linear-gradient(to right, #f97316, #7dd3fc); /* Golden hour sunrise to light sky blue */
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .track-work {
-  background: linear-gradient(to bottom, #fef08a, #fef9c3); /* Warm yellow */
+  background: linear-gradient(to right, #7dd3fc, #fef08a); /* Sky blue morning into focused light yellow workday */
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.track-day-2 {
+  background: linear-gradient(to right, #fef08a, #ea580c); /* Workday yellow to deep orange sunset */
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.track-night-2 {
+  background: linear-gradient(to right, #1e1b4b, #090e1a); /* Twilight purple-indigo back to deep midnight */
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.4);
 }
 
 /* Transparent Range Slider Overlay */
