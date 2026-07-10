@@ -30,6 +30,12 @@ document.addEventListener("DOMContentLoaded", () => {
   
   let shiftPressed = false;
 
+  // Viewport Zoom & Pan state
+  let zoomLevel = 1.0;
+  let panOffset = { x: 0, y: 0 };
+  let isPanning = false;
+  let panStart = { x: 0, y: 0 };
+
   // --- Theme/UI Boot ---
   const svg = document.getElementById("sketch-canvas-svg");
 
@@ -42,9 +48,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function getMousePos(svgCanvas, evt) {
     const rect = svgCanvas.getBoundingClientRect();
+    const sx = ((evt.clientX - rect.left) / rect.width) * 500;
+    const sy = ((evt.clientY - rect.top) / rect.height) * 500;
     return {
-      x: ((evt.clientX - rect.left) / rect.width) * 500,
-      y: ((evt.clientY - rect.top) / rect.height) * 500
+      x: (sx - panOffset.x) / zoomLevel,
+      y: (sy - panOffset.y) / zoomLevel
     };
   }
 
@@ -358,6 +366,15 @@ document.addEventListener("DOMContentLoaded", () => {
         </marker>
       </defs>
     `;
+    
+    const viewportG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    viewportG.setAttribute("transform", `translate(${panOffset.x}, ${panOffset.y}) scale(${zoomLevel})`);
+    svg.appendChild(viewportG);
+
+    renderToViewport(viewportG, drawCursorLine);
+  }
+
+  function renderToViewport(svg, drawCursorLine) {
     
     // Draw Grid Lines (10px increments)
     for (let x = 20; x < 500; x += 20) {
@@ -905,6 +922,15 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Binding SVG mouse listeners...");
     svg.addEventListener("mousedown", (e) => {
       console.log("mousedown fired on target element:", e.target);
+      
+      // Pan handling: middle-click or pan-mode left-click
+      if (e.button === 1 || (e.button === 0 && editorMode === "pan")) {
+        isPanning = true;
+        panStart = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
+        return;
+      }
+
       const pos = getMousePos(svg, e);
       console.log("Relative coordinate position:", pos);
       
@@ -1043,6 +1069,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     svg.addEventListener("mousemove", (e) => {
+      if (isPanning) {
+        const dx = e.clientX - panStart.x;
+        const dy = e.clientY - panStart.y;
+        const rect = svg.getBoundingClientRect();
+        panOffset.x += (dx / rect.width) * 500;
+        panOffset.y += (dy / rect.height) * 500;
+        panStart = { x: e.clientX, y: e.clientY };
+        drawSketchCanvas();
+        return;
+      }
+
       const pos = getMousePos(svg, e);
       const rawSnapped = snapToGrid(pos.x, pos.y, gridSnap);
       
@@ -1078,6 +1115,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     svg.addEventListener("mouseup", (e) => {
+      if (isPanning) {
+        isPanning = false;
+        return;
+      }
+
       const pos = getMousePos(svg, e);
       const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
 
@@ -1109,12 +1151,52 @@ document.addEventListener("DOMContentLoaded", () => {
         drawSketchCanvas();
       }
     });
+
+    // Wheel zooming
+    svg.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const zoomFactor = 1.1;
+      const rect = svg.getBoundingClientRect();
+      const mousePosScreen = {
+        x: ((e.clientX - rect.left) / rect.width) * 500,
+        y: ((e.clientY - rect.top) / rect.height) * 500
+      };
+      
+      const prevZoom = zoomLevel;
+      if (e.deltaY < 0) {
+        zoomLevel = Math.min(zoomLevel * zoomFactor, 10.0);
+      } else {
+        zoomLevel = Math.max(zoomLevel / zoomFactor, 0.25);
+      }
+      
+      panOffset.x = mousePosScreen.x - (mousePosScreen.x - panOffset.x) * (zoomLevel / prevZoom);
+      panOffset.y = mousePosScreen.y - (mousePosScreen.y - panOffset.y) * (zoomLevel / prevZoom);
+      
+      drawSketchCanvas();
+    }, { passive: false });
   }
+
+  // --- CAD Viewport Scaling Helpers ---
+  window.zoomViewport = (factor) => {
+    const prevZoom = zoomLevel;
+    zoomLevel = Math.max(0.25, Math.min(zoomLevel * factor, 10.0));
+    // Zoom centered at viewport midpoint (250, 250)
+    panOffset.x = 250 - (250 - panOffset.x) * (zoomLevel / prevZoom);
+    panOffset.y = 250 - (250 - panOffset.y) * (zoomLevel / prevZoom);
+    drawSketchCanvas();
+  };
+
+  window.resetViewport = () => {
+    zoomLevel = 1.0;
+    panOffset = { x: 0, y: 0 };
+    drawSketchCanvas();
+  };
 
   // --- CAD Editor Toolbar Switcher ---
   window.setEditorMode = (mode) => {
     editorMode = mode;
     document.querySelectorAll(".tool-btn").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".viewport-btn").forEach(btn => btn.classList.remove("active"));
     
     if (mode === "draw") document.getElementById("tool-draw-btn").classList.add("active");
     else if (mode === "circle") document.getElementById("tool-circle-btn").classList.add("active");
@@ -1122,6 +1204,10 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (mode === "offset") document.getElementById("tool-offset-btn").classList.add("active");
     else if (mode === "dimension") document.getElementById("tool-dimension-btn").classList.add("active");
     else if (mode === "measure") document.getElementById("tool-measure-btn").classList.add("active");
+    else if (mode === "pan") {
+      const panBtn = document.getElementById("vp-pan");
+      if (panBtn) panBtn.classList.add("active");
+    }
     
     selectedVertexA = -1;
     selectedVertexB = -1;
@@ -1151,6 +1237,9 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (mode === "measure") {
       instr.textContent = "Measure Mode: Click any point to start measuring. Click second point to resolve distance.";
       statusText.textContent = "Status: Dynamic Ruler Tool";
+    } else if (mode === "pan") {
+      instr.textContent = "Pan Mode: Left-click and drag on the canvas to move the viewport.";
+      statusText.textContent = "Status: Panning Viewport";
     }
     
     showEntityInspector();

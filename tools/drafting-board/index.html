@@ -109,6 +109,22 @@
           </button>
         </div>
         
+        <!-- Floating CAD Viewport Controls (Top Right) -->
+        <div class="cad-viewport-controls">
+          <button class="viewport-btn" id="vp-zoom-in" title="Zoom In" onclick="zoomViewport(1.2)">
+            <i data-lucide="zoom-in"></i>
+          </button>
+          <button class="viewport-btn" id="vp-zoom-out" title="Zoom Out" onclick="zoomViewport(1/1.2)">
+            <i data-lucide="zoom-out"></i>
+          </button>
+          <button class="viewport-btn" id="vp-pan" title="Pan Viewport" onclick="setEditorMode('pan')">
+            <i data-lucide="hand"></i>
+          </button>
+          <button class="viewport-btn" id="vp-reset" title="Reset View" onclick="resetViewport()">
+            <i data-lucide="maximize"></i>
+          </button>
+        </div>
+
         <!-- Large high-fidelity 500x500 Grid SVG -->
         <svg id="sketch-canvas-svg" width="500" height="500" viewBox="0 0 500 500"></svg>
         
@@ -196,7 +212,7 @@
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
   <script id="project-manager-script" src="../../js/project-manager.js"></script>
-  <script src="app.js?v=2.0.1"></script>
+  <script src="app.js?v=2.0.2"></script>
 
   <script>
     lucide.createIcons();
