@@ -172,70 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // --- Load Shape Presets ---
-  window.loadSketchTemplate = (type) => {
-    isSketchClosed = true;
-    customDimensions = [];
-    sketchCircles = [];
-    selectedEntity = null;
-    showEntityInspector();
-    if (type === "rect") {
-      sketchVertices = [
-        { x: 150, y: 150 },
-        { x: 350, y: 150 },
-        { x: 350, y: 350 },
-        { x: 150, y: 350 }
-      ];
-    } else if (type === "ibeam") {
-      sketchVertices = [
-        { x: 150, y: 380 },
-        { x: 350, y: 380 },
-        { x: 350, y: 350 },
-        { x: 270, y: 350 },
-        { x: 270, y: 150 },
-        { x: 350, y: 150 },
-        { x: 350, y: 120 },
-        { x: 150, y: 120 },
-        { x: 150, y: 150 },
-        { x: 230, y: 150 },
-        { x: 230, y: 350 },
-        { x: 150, y: 350 }
-      ];
-    } else if (type === "tbeam") {
-      sketchVertices = [
-        { x: 150, y: 380 },
-        { x: 350, y: 380 },
-        { x: 350, y: 340 },
-        { x: 270, y: 340 },
-        { x: 270, y: 120 },
-        { x: 230, y: 120 },
-        { x: 230, y: 340 },
-        { x: 150, y: 340 }
-      ];
-    } else if (type === "angle") {
-      sketchVertices = [
-        { x: 150, y: 350 },
-        { x: 350, y: 350 },
-        { x: 350, y: 310 },
-        { x: 190, y: 310 },
-        { x: 190, y: 150 },
-        { x: 150, y: 150 }
-      ];
-    } else if (type === "channel") {
-      sketchVertices = [
-        { x: 150, y: 350 },
-        { x: 350, y: 350 },
-        { x: 350, y: 310 },
-        { x: 190, y: 310 },
-        { x: 190, y: 190 },
-        { x: 350, y: 190 },
-        { x: 350, y: 150 },
-        { x: 150, y: 150 }
-      ];
-    }
-    drawSketchCanvas();
-    updateLiveProperties();
-  };
+
 
   // --- Export DXF & SVG Vector Blueprints ---
   window.exportSVGDrawing = () => {
