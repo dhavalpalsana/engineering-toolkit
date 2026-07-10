@@ -887,8 +887,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Mouse & Touch Events Handler ---
   function initSketcherEvents() {
+    console.log("Binding SVG mouse listeners...");
     svg.addEventListener("mousedown", (e) => {
+      console.log("mousedown fired on target element:", e.target);
       const pos = getMousePos(svg, e);
+      console.log("Relative coordinate position:", pos);
       
       // Determine click targets
       const targetCircleIndex = e.target.getAttribute("data-circle-index");
