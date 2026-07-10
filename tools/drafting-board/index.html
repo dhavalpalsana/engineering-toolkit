@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2D Engineering Drafting Board - Engineering Toolkit</title>
+  
+  <!-- Standardized CSS Links -->
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- Standardized Tool Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <!-- Standardized Back Button -->
+        <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        
+        <!-- Tool-Specific Icon -->
+        <div class="hdr-icon">
+          <i data-lucide="ruler"></i>
+        </div>
+        
+        <!-- Titles -->
+        <div class="hdr-titles">
+          <h1>2D Engineering Drafting Board</h1>
+          <p>Draft vector parts, profiles, and layouts with dimension annotations & distance meters.</p>
+        </div>
+      </div>
+      
+      <div class="hdr-right">
+        <!-- Standardized Share & File Action Buttons -->
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <i data-lucide="share-2"></i> Share Link
+        </button>
+        <button onclick="exportJSON()" class="hdr-btn" title="Export drawing to JSON file">
+          <i data-lucide="download"></i> Export JSON
+        </button>
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import drawing from JSON file">
+          <i data-lucide="upload"></i> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" />
+        
+        <!-- Standard divider -->
+        <div class="hdr-divider"></div>
+        
+        <!-- Global Auth Button (Managed by auth-ui.js) -->
+        <button id="auth-btn" title="Sign In">
+          <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+        </button>
+        
+        <!-- Standard Theme Toggle -->
+        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+          <i data-lucide="moon" class="moon-icon"></i>
+          <i data-lucide="sun" class="sun-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container page-content">
+    <div id="sketcher-instruction" class="sketcher-instruction">
+      Click on the grid to place vertices. Click the starting node (or 'Close Shape') to close the loop.
+    </div>
+
+    <div class="drafting-workspace">
+      <!-- Left: SVG Drawing Canvas Area -->
+      <div class="canvas-wrapper">
+        <div class="sketcher-toolbar">
+          <button id="tool-draw-btn" class="tool-btn active" title="Draw Shape (Plot vertices)" onclick="setEditorMode('draw')">
+            <i data-lucide="pen-tool"></i>
+          </button>
+          <button id="tool-dimension-btn" class="tool-btn" title="Add Custom Dimension (Select 2 nodes)" onclick="setEditorMode('dimension')">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+              <line x1="4" y1="6" x2="4" y2="18"></line>
+              <line x1="20" y1="6" x2="20" y2="18"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <polyline points="8 8 4 12 8 16"></polyline>
+              <polyline points="16 8 20 12 16 16"></polyline>
+            </svg>
+          </button>
+          <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (Click any 2 points)" onclick="setEditorMode('measure')">
+            <i data-lucide="ruler"></i>
+          </button>
+        </div>
+        
+        <!-- Large high-fidelity 500x500 Grid SVG -->
+        <svg id="sketch-canvas-svg" width="500" height="500" viewBox="0 0 500 500"></svg>
+      </div>
+
+      <!-- Right: Blueprint Sidebar Controls & Live Telemetry -->
+      <div class="drafting-sidebar">
+        <!-- Load Shape Templates -->
+        <div class="sidebar-section">
+          <h3>Load Profile Preset</h3>
+          <div class="template-buttons">
+            <button class="preset-btn" onclick="loadSketchTemplate('rect')">Solid Rectangle</button>
+            <button class="preset-btn" onclick="loadSketchTemplate('ibeam')">Standard I-Beam</button>
+            <button class="preset-btn" onclick="loadSketchTemplate('tbeam')">T-Flange Beam</button>
+            <button class="preset-btn" onclick="loadSketchTemplate('angle')">L-Angle Bracket</button>
+            <button class="preset-btn" onclick="loadSketchTemplate('channel')">C-Channel Profile</button>
+          </div>
+        </div>
+
+        <!-- Snap Options and Commands -->
+        <div class="sidebar-section">
+          <h3>Drafting Controls</h3>
+          <div class="action-grid">
+            <button class="action-btn secondary" id="close-shape-btn" onclick="closeSketchShape()">Close Shape</button>
+            <button class="action-btn secondary" onclick="clearSketchCanvas()">Clear Board</button>
+            <button class="action-btn secondary" id="undo-btn" onclick="undoSketchPoint()">Undo Node</button>
+          </div>
+          <div class="grid-controls-row">
+            <label for="grid-snap-select">Grid Snap Resolution</label>
+            <select id="grid-snap-select" class="form-select" onchange="changeGridSnap()">
+              <option value="5">5 mm</option>
+              <option value="10" selected>10 mm</option>
+              <option value="20">20 mm</option>
+              <option value="50">50 mm</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Vector Exports -->
+        <div class="sidebar-section">
+          <h3>Vector Exports</h3>
+          <div class="action-grid">
+            <button class="action-btn primary" onclick="exportSVGDrawing()">
+              <i data-lucide="image"></i> Export SVG
+            </button>
+            <button class="action-btn primary" onclick="exportDXFDrawing()">
+              <i data-lucide="file-text"></i> Export DXF
+            </button>
+          </div>
+        </div>
+
+        <!-- Calculated Structural Telemetry (Live updates!) -->
+        <div class="sidebar-section">
+          <h3>Profile Area properties</h3>
+          <div class="telemetry-readout">
+            <div class="tel-item">
+              <span class="lbl">Cross-Section Area (A)</span>
+              <span class="val" id="sk-area">0.0 cm²</span>
+            </div>
+            <div class="tel-item">
+              <span class="lbl">Moment of Inertia (Iz)</span>
+              <span class="val" id="sk-inertia">0.0 cm⁴</span>
+            </div>
+            <div class="tel-item">
+              <span class="lbl">Neutral Axis / Centroid (ȳ)</span>
+              <span class="val" id="sk-centroid">0.0 mm</span>
+            </div>
+            <div class="tel-item">
+              <span class="lbl">Outer Profile Height (d)</span>
+              <span class="val" id="sk-height">0.0 mm</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Firebase Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  
+  <!-- Shared Hooks & Account/Project Managers -->
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script id="project-manager-script" src="../../js/project-manager.js"></script>
+  <script src="app.js"></script>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

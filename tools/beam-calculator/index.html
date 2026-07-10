@@ -121,12 +121,27 @@
                 <option value="circ-hollow">Hollow Round Tube / Pipe</option>
                 <option value="i-beam">I-Beam (Standard W-Shape)</option>
                 <option value="custom">Custom Properties (Direct Input)</option>
-                <option value="sketch">Sketch 2D Custom Section</option>
+                <option value="import-drafting">Import from 2D Engineering Drafting Board</option>
               </select>
             </div>
-            <button id="open-sketcher-btn" class="add-row-btn full-width hidden" style="grid-column: span 2; margin-top: 4px;" onclick="openSketcher()">
-              <i data-lucide="edit-3"></i> Open 2D Sketcher
-            </button>
+            
+            <!-- Import drafting board fields (shown when import-drafting is selected) -->
+            <div id="import-drafting-fields" class="shape-input-group full-width hidden" style="grid-column: span 2; width: 100%;">
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label for="import-drawing-select">Select Saved CAD Drawing</label>
+                <select id="import-drawing-select" style="width: 100%;">
+                  <option value="">Loading your drawings...</option>
+                </select>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                <button type="button" id="load-drawing-btn" class="add-row-btn" style="flex: 1;" onclick="loadSelectedDraftingDrawing()">
+                  <i data-lucide="download"></i> Load Section
+                </button>
+                <a href="../drafting-board/index.html" target="_blank" class="hdr-btn" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; text-decoration: none;" title="Open 2D Engineering Drafting Board in new tab">
+                  <i data-lucide="external-link"></i> Launch Board
+                </a>
+              </div>
+            </div>
             
             <!-- Shape specific inputs (toggled in JS) -->
             <div class="shape-input-group rect-solid-fields">
@@ -372,104 +387,7 @@
     </div>
   </main>
 
-  <!-- 2D Section Sketcher Modal -->
-  <div id="sketcher-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3>2D Section Builder & Sketcher</h3>
-        <button class="close-modal-btn" onclick="closeSketcher()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div id="sketcher-instruction" class="sketcher-instruction">
-          Click on the grid to place vertices. Click the starting node (or 'Close Shape') to close the loop.
-        </div>
-        
-        <div class="sketcher-layout">
-          <!-- Left: SVG Drawing Canvas -->
-          <div class="canvas-wrapper" style="position: relative;">
-            <div class="sketcher-toolbar" style="position: absolute; top: 12px; left: 12px; z-index: 10; margin-bottom: 0;">
-              <button id="tool-draw-btn" class="tool-btn active" title="Draw Shape (Plot vertices)" onclick="setEditorMode('draw')">
-                <i data-lucide="pen-tool"></i>
-              </button>
-              <button id="tool-dimension-btn" class="tool-btn" title="Add Custom Dimension (Select 2 nodes)" onclick="setEditorMode('dimension')">
-                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-                  <line x1="4" y1="6" x2="4" y2="18"></line>
-                  <line x1="20" y1="6" x2="20" y2="18"></line>
-                  <line x1="4" y1="12" x2="20" y2="12"></line>
-                  <polyline points="8 8 4 12 8 16"></polyline>
-                  <polyline points="16 8 20 12 16 16"></polyline>
-                </svg>
-              </button>
-              <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (Click any 2 points)" onclick="setEditorMode('measure')">
-                <i data-lucide="ruler"></i>
-              </button>
-            </div>
-            <svg id="sketch-canvas-svg" width="400" height="400" viewBox="0 0 400 400"></svg>
-          </div>
-          
-          <!-- Right: Controls and Live Properties -->
-          <div class="sketcher-sidebar">
-            <!-- Shape templates -->
-            <div class="sidebar-section">
-              <h4>Load Template</h4>
-              <div class="template-buttons">
-                <button onclick="loadSketchTemplate('rect')">Rectangle</button>
-                <button onclick="loadSketchTemplate('ibeam')">I-Beam</button>
-                <button onclick="loadSketchTemplate('tbeam')">T-Beam</button>
-                <button onclick="loadSketchTemplate('angle')">L-Angle</button>
-                <button onclick="loadSketchTemplate('channel')">C-Channel</button>
-              </div>
-            </div>
-            
-            <!-- Controls -->
-            <div class="sidebar-section">
-              <h4>Editor Tools</h4>
-              <div class="action-buttons">
-                <button id="close-shape-btn" onclick="closeSketchShape()">Close Shape</button>
-                <button onclick="clearSketchCanvas()">Clear Canvas</button>
-                <button id="undo-btn" onclick="undoSketchPoint()">Undo</button>
-              </div>
-              <div class="grid-controls">
-                <label for="grid-snap-select">Grid Snap</label>
-                <select id="grid-snap-select" onchange="changeGridSnap()">
-                  <option value="5">5 mm</option>
-                  <option value="10" selected>10 mm</option>
-                  <option value="20">20 mm</option>
-                </select>
-              </div>
-            </div>
 
-            <!-- Live properties -->
-            <div class="sidebar-section">
-              <h4>Live Calculated Properties</h4>
-              <div class="calculated-telemetry">
-                <div class="tel-item">
-                  <span>Area (A):</span>
-                  <span id="sk-area">0.0 cm²</span>
-                </div>
-                <div class="tel-item">
-                  <span>Inertia (Iz):</span>
-                  <span id="sk-inertia">0.0 cm⁴</span>
-                </div>
-                <div class="tel-item">
-                  <span>Centroid (ȳ):</span>
-                  <span id="sk-centroid">0.0 mm</span>
-                </div>
-                <div class="tel-item">
-                  <span>Height (d):</span>
-                  <span id="sk-height">0.0 mm</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="hdr-btn" onclick="closeSketcher()">Cancel</button>
-        <button class="add-row-btn" id="apply-sketch-btn" onclick="applySketchedSection()" disabled>Apply Custom Section</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Firebase Scripts -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>

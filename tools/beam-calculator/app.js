@@ -12,29 +12,12 @@ document.addEventListener("DOMContentLoaded", () => {
   let selfWeightEnabled = true;
   let sectionShape = "rect-solid";
 
-  // Sketched custom shape state
+  // Imported CAD drawing shape state
   let sketchedIz = 33750.0; // cm⁴ (defaults to 150x300 rect)
   let sketchedD = 300.0; // mm
   let sketchedA = 450.0; // cm²
   let sketchedSz = 2250.0; // cm³
-  let sketchedVertices = []; // Saved coordinates array in mm
-
-  // Live Sketcher Canvas drawing state
-  let sketchVertices = []; // Active editor points
-  let isSketchClosed = false;
-  let gridSnap = 10; // Snap resolution in mm
-  let selectedVertexIndex = -1;
-  let mousePos = { x: 0, y: 0 };
-  let hoveredSegmentIndex = -1; // Index of segment currently hovered in list
-
-  // Interactive CAD modes variables
-  let editorMode = "draw"; // "draw", "dimension", "measure"
-  let customDimensions = []; // [{ v1: index1, v2: index2 }]
-  let selectedVertexA = -1; // Vertex A for custom dimension selection
-  let selectedVertexB = -1; // Vertex B for custom dimension selection
-  let measureStartPos = null; // Ruler start coordinate
-  let measureEndPos = null; // Ruler end coordinate
-  let isMeasuring = false;
+  let sketchedVertices = []; // Coordinates array in mm
 
   // Section shape parameters
   let sectionParams = {
@@ -135,7 +118,6 @@ document.addEventListener("DOMContentLoaded", () => {
     sectionShape = e.target.value;
     // Toggle input field displays
     document.querySelectorAll(".shape-input-group").forEach(el => el.classList.add("hidden"));
-    document.getElementById("open-sketcher-btn").classList.add("hidden");
     
     if (sectionShape === "rect-solid") document.querySelector(".rect-solid-fields").classList.remove("hidden");
     else if (sectionShape === "rect-hollow") document.querySelector(".rect-hollow-fields").classList.remove("hidden");
@@ -143,8 +125,9 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (sectionShape === "circ-hollow") document.querySelector(".circ-hollow-fields").classList.remove("hidden");
     else if (sectionShape === "i-beam") document.querySelector(".ibeam-fields").classList.remove("hidden");
     else if (sectionShape === "custom") document.querySelector(".custom-fields").classList.remove("hidden");
-    else if (sectionShape === "sketch") {
-      document.getElementById("open-sketcher-btn").classList.remove("hidden");
+    else if (sectionShape === "import-drafting") {
+      document.getElementById("import-drafting-fields").classList.remove("hidden");
+      loadDraftingBoardProjects();
     }
     
     recalculate();
@@ -2256,5 +2239,140 @@ document.addEventListener("DOMContentLoaded", () => {
     
     drawSketchCanvas();
     updateLiveProperties();
+  };
+
+  // ==========================================================================
+  // --- 2D Engineering Drafting Board Cloud Integration ---
+  // ==========================================================================
+
+  function calculatePolygonProperties(vertices) {
+    const n = vertices.length;
+    if (n < 3) return { A: 0, yc: 0, Iz: 0, Sz: 0, height: 0 };
+    
+    let area = 0;
+    let cx = 0;
+    let cy = 0;
+    
+    for (let i = 0; i < n; i++) {
+      const p1 = vertices[i];
+      const p2 = vertices[(i + 1) % n];
+      const factor = (p1.x * p2.y - p2.x * p1.y);
+      area += factor;
+      cx += (p1.x + p2.x) * factor;
+      cy += (p1.y + p2.y) * factor;
+    }
+    
+    area = area / 2.0;
+    if (Math.abs(area) < 0.1) {
+      return { A: 0, yc: 0, Iz: 0, Sz: 0, height: 0 };
+    }
+    
+    cx = cx / (6.0 * area);
+    cy = cy / (6.0 * area);
+    
+    let Ixx_origin = 0;
+    let ymin = Infinity;
+    let ymax = -Infinity;
+    
+    for (let i = 0; i < n; i++) {
+      const p1 = vertices[i];
+      const p2 = vertices[(i + 1) % n];
+      ymin = Math.min(ymin, p1.y);
+      ymax = Math.max(ymax, p1.y);
+      
+      const term1 = p1.y * p1.y + p1.y * p2.y + p2.y * p2.y;
+      const term2 = p1.x * p2.y - p2.x * p1.y;
+      Ixx_origin += term1 * term2;
+    }
+    Ixx_origin = Ixx_origin / 12.0;
+    
+    let Iz_centroid = Ixx_origin * Math.sign(area) - Math.abs(area) * cy * cy;
+    const height = ymax - ymin;
+    
+    const c_top = Math.abs(ymax - cy);
+    const c_bottom = Math.abs(cy - ymin);
+    const c_max = Math.max(c_top, c_bottom);
+    const Sz = c_max > 0.1 ? Iz_centroid / c_max : 0.1;
+    
+    return {
+      A: Math.max(0.1, Math.abs(area) / 100.0), // mm² to cm²
+      xc: cx,
+      yc: cy,
+      Iz: Math.max(0.1, Iz_centroid / 10000.0), // mm⁴ to cm⁴
+      Sz: Math.max(0.1, Sz / 1000.0), // mm³ to cm³
+      height: height // mm
+    };
+  }
+
+  async function loadDraftingBoardProjects() {
+    const select = document.getElementById("import-drawing-select");
+    if (!select) return;
+    select.innerHTML = "<option value=''>Loading drawings...</option>";
+    
+    const res = await window.fbHelper.getProjects("drafting-board");
+    if (res.error) {
+      select.innerHTML = "<option value=''>Error loading drawings</option>";
+      return;
+    }
+    
+    const drawings = res.data || [];
+    if (drawings.length === 0) {
+      select.innerHTML = "<option value=''>No drawings found in account</option>";
+      return;
+    }
+    
+    select.innerHTML = drawings.map(d => `<option value="${d.id}">${escapeHTML(d.name)}</option>`).join("");
+    window.loadedDraftingDrawings = drawings;
+  }
+
+  function escapeHTML(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  window.loadSelectedDraftingDrawing = () => {
+    const select = document.getElementById("import-drawing-select");
+    if (!select) return;
+    const projId = select.value;
+    if (!projId || !window.loadedDraftingDrawings) {
+      alert("Please select a valid drawing to load.");
+      return;
+    }
+    
+    const drawing = window.loadedDraftingDrawings.find(d => d.id === projId);
+    if (!drawing || !drawing.config || !drawing.config.vertices) {
+      alert("Selected drawing does not contain valid CAD data.");
+      return;
+    }
+    
+    const vertices = drawing.config.vertices;
+    if (vertices.length < 3) {
+      alert("A valid closed drawing profile must have at least 3 nodes.");
+      return;
+    }
+    
+    const props = calculatePolygonProperties(vertices);
+    if (props.A <= 0.1) {
+      alert("Calculated cross-sectional area is invalid. Please ensure the shape represents a non-zero area closed loop.");
+      return;
+    }
+    
+    // Load calculated properties into custom inputs
+    document.getElementById("section-shape").value = "custom";
+    
+    // Trigger toggling of fields manually
+    document.querySelectorAll(".shape-input-group").forEach(el => el.classList.add("hidden"));
+    document.querySelector(".custom-fields").classList.remove("hidden");
+    
+    // Set parameters in inputs
+    document.getElementById("cust-i").value = props.Iz.toFixed(2);
+    document.getElementById("cust-d").value = props.height.toFixed(1);
+    
+    // Update global state section shape
+    sectionShape = "custom";
+    
+    readShapeParameters();
+    recalculate();
+    
+    alert(`Successfully imported "${drawing.name}"!\nProperties Calculated & Loaded:\n- Area (A): ${props.A.toFixed(2)} cm²\n- Inertia (Iz): ${props.Iz.toFixed(2)} cm⁴\n- Height (d): ${props.height.toFixed(1)} mm`);
   };
 });

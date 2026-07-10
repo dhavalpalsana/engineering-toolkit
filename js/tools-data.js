@@ -78,6 +78,15 @@ const TOOLS_DATA = [
     status: "active"
   },
   {
+    id: "drafting-board",
+    name: "2D Engineering Drafting Board",
+    description: "Draw parts, blueprints, and layouts with vector snapping, dimension annotations, and distance meters. Saves drawings to your cloud account to load into solvers.",
+    tags: ["mechanical", "civil", "cad", "drafting", "vector", "blueprint"],
+    icon: "ruler",
+    path: "./tools/drafting-board/index.html",
+    status: "active"
+  },
+  {
     id: "beam-calculator",
     name: "Structural Beam Solver & Designer",
     description: "Analyze simply supported or cantilever beams with custom materials, cross-sections, and loads. Solves for reactions, shear, bending moment, deflection, and stress, with live 2D interactive diagrams.",

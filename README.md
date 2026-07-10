@@ -22,6 +22,7 @@ The toolkit runs entirely client-side as a static site with optional user authen
 
 | Tool | Domain | Key Features |
 | :--- | :--- | :--- |
+| [**2D Engineering Drafting Board**](tools/drafting-board/) | Mechanical / Civil | Draw vector parts, blueprints, layouts with snap nodes, add custom dimensions, and save to cloud user accounts to import directly into solvers. |
 | [**Structural Beam Solver**](tools/beam-calculator/) | Mechanical / Civil | 1D Finite Element Analysis (FEA) solver, custom materials & shapes (I-Beam, Box, pipe), support presets, and live interactive SFD/BMD/Deflection diagrams. |
 | [**Ishikawa Fishbone Diagram**](tools/fishbone-diagram/) | Quality & Systems | Pre-built templates (6M, 8P, 4S), auto-scaling dynamic SVG, PNG/SVG exports, and Cloud Project Manager sync. |
 | [**Dynamic Cable Thermal Solver**](tools/wire-gauge/) | Electrical / Thermo | Real-time proportional SVG heat maps, multi-segment series derating, NEC/IEC limit checks, and gauge optimization. |
@@ -54,6 +55,7 @@ engineering-toolkit/
 │   ├── busbar-sizing/
 │   ├── can-bus-designer/
 │   ├── code-scanner/
+│   ├── drafting-board/
 │   ├── fishbone-diagram/
 │   ├── heatsink-simulator/
 │   ├── plot-extractor/

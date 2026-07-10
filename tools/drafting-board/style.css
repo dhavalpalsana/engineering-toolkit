@@ -1,0 +1,386 @@
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.6;
+  overflow-x: hidden;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  position: relative;
+}
+
+/* Premium background decorative glow */
+body::before {
+  content: '';
+  position: fixed;
+  top: -150px;
+  right: -100px;
+  width: 500px;
+  height: 500px;
+  border-radius: var(--radius-full);
+  filter: blur(140px);
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--accent-primary-glow), transparent 70%);
+  opacity: 0.8;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--max-width, 1600px);
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+.page-content {
+  flex: 1;
+  padding-top: 32px;
+  padding-bottom: 64px;
+}
+
+/* Instruction Banner */
+.sketcher-instruction {
+  background: var(--accent-primary-glow);
+  border: 1px solid var(--accent-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 18px;
+  border-radius: var(--radius-lg);
+  margin-bottom: 24px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Layout Grid */
+.drafting-workspace {
+  display: grid;
+  grid-template-columns: minmax(500px, 1fr) 380px;
+  gap: 32px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .drafting-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Canvas Wrapper */
+.canvas-wrapper {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+#sketch-canvas-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #090d16;
+  cursor: crosshair;
+}
+
+/* Floating CAD Toolbar */
+.sketcher-toolbar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+}
+
+.tool-btn {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tool-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: rgba(30, 41, 59, 0.95);
+  transform: translateY(-1px);
+}
+
+.tool-btn.active {
+  background: var(--accent-primary);
+  color: #000 !important;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px var(--accent-primary-glow);
+}
+
+/* SVG Vector Styles */
+.sk-grid-minor {
+  stroke: rgba(255, 255, 255, 0.04);
+  stroke-width: 0.8;
+}
+
+.sk-grid-major {
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 1.2;
+}
+
+.sk-polygon {
+  fill: rgba(59, 130, 246, 0.22);
+  stroke: var(--accent-primary);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.sk-polyline {
+  fill: none;
+  stroke: var(--accent-primary);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+.sk-handle {
+  fill: var(--bg-secondary);
+  stroke: var(--accent-primary);
+  stroke-width: 2;
+  cursor: grab;
+  transition: r var(--transition-fast), fill var(--transition-fast);
+}
+
+.sk-handle:hover {
+  r: 7;
+  fill: var(--accent-primary);
+  cursor: grabbing;
+}
+
+.sk-handle-selected {
+  fill: #f97316;
+  stroke: #ffedd5;
+  stroke-width: 1.5;
+  animation: skPulse 1.5s infinite;
+}
+
+@keyframes skPulse {
+  0% { r: 6; opacity: 1; }
+  50% { r: 10; opacity: 0.6; }
+  100% { r: 6; opacity: 1; }
+}
+
+.sk-align-guide {
+  stroke: rgba(239, 68, 68, 0.4);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+/* CAD Dimensions */
+.sk-dim-ext {
+  stroke: var(--text-muted);
+  stroke-width: 0.8;
+  opacity: 0.65;
+}
+
+.sk-dim-line {
+  stroke: var(--accent-primary);
+  stroke-width: 1.2;
+  marker-start: url(#arrow-start);
+  marker-end: url(#arrow-end);
+}
+
+.sk-dim-lbl {
+  fill: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  text-anchor: middle;
+  font-family: var(--font-sans);
+}
+
+/* Measure Ruler */
+.sk-measure-line {
+  stroke: #22c55e;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+
+.sk-measure-lbl {
+  fill: #22c55e;
+  font-size: 11px;
+  font-weight: 800;
+  text-anchor: middle;
+  font-family: var(--font-sans);
+}
+
+/* Sidebar & sections */
+.drafting-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sidebar-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar-section h3 {
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 10px;
+}
+
+/* Preset Template Buttons */
+.template-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preset-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.preset-btn:hover {
+  background: var(--bg-interactive);
+  border-color: var(--accent-primary);
+  padding-left: 18px;
+}
+
+/* Action grids */
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.action-btn {
+  height: 38px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.action-btn.primary {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.action-btn.primary:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.action-btn.secondary {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.action-btn.secondary:hover {
+  background: var(--bg-interactive);
+  color: var(--text-primary);
+}
+
+.grid-controls-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.grid-controls-row label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-select {
+  background-color: var(--bg-interactive);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  outline: none;
+  font-family: var(--font-sans);
+}
+
+/* Telemetry display */
+.telemetry-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tel-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.tel-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.tel-item .lbl {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tel-item .val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
