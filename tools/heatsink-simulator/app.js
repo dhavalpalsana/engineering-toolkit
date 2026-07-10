@@ -631,6 +631,7 @@ document.addEventListener("DOMContentLoaded", () => {
         role: "heatsink",
         material: heatsink.material,
         customK: heatsink.customK,
+        customDensity: heatsink.density,
         power: 0
       });
       
@@ -643,6 +644,7 @@ document.addEventListener("DOMContentLoaded", () => {
           role: "heatsink",
           material: heatsink.material,
           customK: heatsink.customK,
+          customDensity: heatsink.density,
           power: 0
         });
       });

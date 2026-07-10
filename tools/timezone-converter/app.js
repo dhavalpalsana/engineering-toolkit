@@ -631,7 +631,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Run Initializations
   populateTimezoneSearch();
-  renderTimelines();
-  updateRulerHours();
-  updateAllInputs();
+  
+  // Parse shared URL design if present
+  const urlParams = new URLSearchParams(window.location.search);
+  const designParam = urlParams.get("design");
+  let loadedFromUrl = false;
+  if (designParam) {
+    try {
+      const decoded = JSON.parse(atob(designParam));
+      window.projectManagerConfig.setInputs(decoded);
+      loadedFromUrl = true;
+    } catch (err) {
+      console.error("Failed to parse design from URL:", err);
+    }
+  }
+  
+  if (!loadedFromUrl) {
+    renderTimelines();
+    updateRulerHours();
+    updateAllInputs();
+  }
 });

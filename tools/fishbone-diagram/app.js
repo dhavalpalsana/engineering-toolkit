@@ -1421,3 +1421,7 @@
                 }
             }
         };
+
+        window.shareLink = shareLink;
+        window.exportJSON = exportJSON;
+        window.importJSON = importJSON;
