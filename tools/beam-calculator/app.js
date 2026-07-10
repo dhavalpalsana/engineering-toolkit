@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let gridSnap = 10; // Snap resolution in mm
   let selectedVertexIndex = -1;
   let mousePos = { x: 0, y: 0 };
+  let hoveredSegmentIndex = -1; // Index of segment currently hovered in list
 
   // Section shape parameters
   let sectionParams = {
@@ -1582,12 +1583,23 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("sk-height").textContent = "0.0 mm";
       applyBtn.disabled = true;
     }
+    
+    updateSegmentsList();
   }
 
   function drawSketchCanvas(drawCursorLine = false) {
     const svg = document.getElementById("sketch-canvas-svg");
     if (!svg) return;
-    svg.innerHTML = "";
+    svg.innerHTML = `
+      <defs>
+        <marker id="arrow-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 10 0 L 0 5 L 10 10 z" fill="var(--accent-primary)" />
+        </marker>
+        <marker id="arrow-end" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-primary)" />
+        </marker>
+      </defs>
+    `;
     
     // Draw grid lines
     const gSize = gridSnap;
@@ -1692,6 +1704,92 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       
+      // Draw hovered segment CAD dimensions
+      if (hoveredSegmentIndex !== -1 && sketchVertices.length >= 2) {
+        const idx1 = hoveredSegmentIndex;
+        const idx2 = (hoveredSegmentIndex + 1) % sketchVertices.length;
+        
+        const p1 = sketchVertices[idx1];
+        const p2 = sketchVertices[idx2];
+        
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        
+        if (len > 0.1) {
+          const mx = (p1.x + p2.x) / 2;
+          const my = (p1.y + p2.y) / 2;
+          
+          // Calculate normal perpendicular angle pointing outwards
+          const theta = Math.atan2(dy, dx);
+          const normalAngle = theta - Math.PI / 2;
+          const offsetDist = 25; // Offset 25 pixels
+          
+          const o1x = p1.x + offsetDist * Math.cos(normalAngle);
+          const o1y = p1.y + offsetDist * Math.sin(normalAngle);
+          const o2x = p2.x + offsetDist * Math.cos(normalAngle);
+          const o2y = p2.y + offsetDist * Math.sin(normalAngle);
+          const midx = mx + offsetDist * Math.cos(normalAngle);
+          const midy = my + offsetDist * Math.sin(normalAngle);
+          
+          // Extension lines
+          const ext1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ext1.setAttribute("x1", p1.x);
+          ext1.setAttribute("y1", p1.y);
+          ext1.setAttribute("x2", o1x);
+          ext1.setAttribute("y2", o1y);
+          ext1.setAttribute("class", "sk-dim-ext");
+          svg.appendChild(ext1);
+          
+          const ext2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ext2.setAttribute("x1", p2.x);
+          ext2.setAttribute("y1", p2.y);
+          ext2.setAttribute("x2", o2x);
+          ext2.setAttribute("y2", o2y);
+          ext2.setAttribute("class", "sk-dim-ext");
+          svg.appendChild(ext2);
+          
+          // Dimension line
+          const dimLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          dimLine.setAttribute("x1", o1x);
+          dimLine.setAttribute("y1", o1y);
+          dimLine.setAttribute("x2", o2x);
+          dimLine.setAttribute("y2", o2y);
+          dimLine.setAttribute("class", "sk-dim-line");
+          svg.appendChild(dimLine);
+          
+          // Solid background pill behind text so dimension line doesn't strike through it
+          const txtBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          txtBg.setAttribute("x", midx - 22);
+          txtBg.setAttribute("y", midy - 8);
+          txtBg.setAttribute("width", 44);
+          txtBg.setAttribute("height", 16);
+          txtBg.setAttribute("rx", 3);
+          txtBg.setAttribute("fill", "var(--bg-secondary)");
+          txtBg.setAttribute("stroke", "var(--border-color)");
+          txtBg.setAttribute("stroke-width", "0.5");
+          svg.appendChild(txtBg);
+          
+          // Dimension text
+          const dimTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          dimTxt.setAttribute("x", midx);
+          dimTxt.setAttribute("y", midy + 4);
+          dimTxt.setAttribute("class", "sk-dim-lbl");
+          dimTxt.textContent = `${Math.round(len)}mm`;
+          svg.appendChild(dimTxt);
+          
+          // Highlight segment line in red
+          const highlightSeg = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          highlightSeg.setAttribute("x1", p1.x);
+          highlightSeg.setAttribute("y1", p1.y);
+          highlightSeg.setAttribute("x2", p2.x);
+          highlightSeg.setAttribute("y2", p2.y);
+          highlightSeg.setAttribute("stroke", "#ef4444");
+          highlightSeg.setAttribute("stroke-width", "3.5");
+          svg.appendChild(highlightSeg);
+        }
+      }
+      
       // Draw handles for vertex dragging
       sketchVertices.forEach((pt, idx) => {
         const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -1783,4 +1881,113 @@ document.addEventListener("DOMContentLoaded", () => {
     
     eventsBound = true;
   }
+
+  function updateSegmentsList() {
+    const container = document.getElementById("segments-list");
+    if (!container) return;
+    container.innerHTML = "";
+    
+    const n = sketchVertices.length;
+    if (n < 2) {
+      container.innerHTML = "<p class='no-segments-lbl'>Sketch lines to see dimensions...</p>";
+      return;
+    }
+    
+    const limit = isSketchClosed ? n : n - 1;
+    for (let i = 0; i < limit; i++) {
+      const p1 = sketchVertices[i];
+      const p2 = sketchVertices[(i + 1) % n];
+      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      
+      let orientation = "Diagonal";
+      if (Math.abs(p1.x - p2.x) < 0.5) orientation = "Horizontal"; // wait, if dx = 0, dy != 0, it's vertical!
+      else if (Math.abs(p1.y - p2.y) < 0.5) orientation = "Vertical"; // wait, if dy = 0, dx != 0, it's horizontal!
+      // Ah! Let's fix that!
+      // If x is constant (dx = 0), the line goes up/down, which is Vertical.
+      // If y is constant (dy = 0), the line goes left/right, which is Horizontal.
+      // So:
+      // if Math.abs(p1.x - p2.x) < 0.5 -> Vertical
+      // if Math.abs(p1.y - p2.y) < 0.5 -> Horizontal
+      if (Math.abs(p1.x - p2.x) < 0.5) orientation = "Vertical";
+      else if (Math.abs(p1.y - p2.y) < 0.5) orientation = "Horizontal";
+      
+      const item = document.createElement("div");
+      item.className = "segment-item";
+      item.dataset.index = i;
+      item.innerHTML = `
+        <div class="seg-info">
+          <span class="seg-name">Line ${i + 1} (${orientation})</span>
+          <span class="seg-length">${Math.round(len)} mm</span>
+        </div>
+        <button class="edit-seg-btn" onclick="editSegmentLength(${i})">
+          <i data-lucide="edit-2"></i> Edit
+        </button>
+      `;
+      
+      item.addEventListener("mouseenter", () => {
+        hoveredSegmentIndex = i;
+        drawSketchCanvas();
+      });
+      item.addEventListener("mouseleave", () => {
+        hoveredSegmentIndex = -1;
+        drawSketchCanvas();
+      });
+      
+      container.appendChild(item);
+    }
+    
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  }
+
+  window.editSegmentLength = (idx) => {
+    const n = sketchVertices.length;
+    if (n < 2) return;
+    
+    const i1 = idx;
+    const i2 = (idx + 1) % n;
+    
+    const p1 = sketchVertices[i1];
+    const p2 = sketchVertices[i2];
+    
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    
+    if (len < 0.1) return;
+    
+    const promptVal = prompt(`Enter new length for Line ${idx + 1} in mm (current: ${Math.round(len)} mm):`, Math.round(len));
+    if (promptVal === null) return;
+    
+    const newLen = parseFloat(promptVal);
+    if (isNaN(newLen) || newLen <= 0) {
+      alert("Please enter a valid positive length.");
+      return;
+    }
+    
+    const ratio = newLen / len;
+    
+    if (idx === n - 1) {
+      // Last segment: shift p1 (which is index i1) relative to p2
+      const newPX = p2.x - dx * ratio;
+      const newPY = p2.y - dy * ratio;
+      sketchVertices[i1].x = Math.round(newPX);
+      sketchVertices[i1].y = Math.round(newPY);
+    } else {
+      // Normal segment: move p2 and shift all downstream nodes
+      const targetX = p1.x + dx * ratio;
+      const targetY = p1.y + dy * ratio;
+      const shiftX = targetX - p2.x;
+      const shiftY = targetY - p2.y;
+      
+      for (let j = i2; j < n; j++) {
+        sketchVertices[j].x = Math.round(sketchVertices[j].x + shiftX);
+        sketchVertices[j].y = Math.round(sketchVertices[j].y + shiftY);
+      }
+    }
+    
+    drawSketchCanvas();
+    updateLiveProperties();
+  };
 });

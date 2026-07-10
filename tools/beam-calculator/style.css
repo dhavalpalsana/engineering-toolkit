@@ -741,3 +741,87 @@ body::before {
   stroke-width: 1.5;
 }
 
+/* CAD Bounding Box and Dimension overlay lines */
+.sk-dim-ext {
+  stroke: var(--text-secondary);
+  stroke-width: 1;
+  stroke-dasharray: 2,2;
+  opacity: 0.7;
+}
+
+.sk-dim-line {
+  stroke: var(--accent-primary);
+  stroke-width: 1.5;
+  marker-start: url(#arrow-start);
+  marker-end: url(#arrow-end);
+}
+
+.sk-dim-lbl {
+  fill: var(--accent-primary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+/* CAD Sidebar segment list elements */
+.segment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  margin-bottom: 6px;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.segment-item:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-interactive);
+}
+
+.seg-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.seg-name {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.seg-length {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.edit-seg-btn {
+  background: var(--accent-primary-glow);
+  border: 1px solid var(--accent-primary);
+  color: var(--accent-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity var(--transition-fast);
+}
+
+.edit-seg-btn:hover {
+  opacity: 0.8;
+}
+
+.no-segments-lbl {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 16px;
+  font-style: italic;
+}
+
