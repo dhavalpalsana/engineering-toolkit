@@ -488,13 +488,14 @@ body::before {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--text-primary);
-  opacity: 0.08;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: -1px 0 0 rgba(0, 0, 0, 0.12);
 }
 
 /* Slight extra emphasis on boundary and mid-day grid lines */
 .grid-line:nth-child(1),
 .grid-line:nth-child(5),
 .grid-line:nth-child(9) {
-  opacity: 0.15;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: -1px 0 0 rgba(0, 0, 0, 0.22);
 }
