@@ -317,7 +317,6 @@ document.addEventListener("DOMContentLoaded", () => {
           
           <!-- Faint vertical grid lines -->
           <div class="timeline-grid-lines">
-            <div class="grid-line" style="left: 0%;"></div>
             <div class="grid-line" style="left: 12.5%;"></div>
             <div class="grid-line" style="left: 25%;"></div>
             <div class="grid-line" style="left: 37.5%;"></div>
@@ -325,7 +324,6 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="grid-line" style="left: 62.5%;"></div>
             <div class="grid-line" style="left: 75%;"></div>
             <div class="grid-line" style="left: 87.5%;"></div>
-            <div class="grid-line" style="left: 100%;"></div>
           </div>
           
           <!-- Transparent range slider -->

@@ -314,18 +314,18 @@ body::before {
   overflow: hidden;
   background: linear-gradient(
     to right,
-    #2c3b5e 0%,     /* Midnight */
-    #2c3b5e 18%,    /* Late Night */
-    #435585 24%,    /* Pre-Dawn */
+    #43587d 0%,     /* Midnight */
+    #43587d 18%,    /* Late Night */
+    #5c739c 24%,    /* Pre-Dawn */
     #f97316 28%,    /* Sunrise Glow */
     #7dd3fc 34%,    /* Morning Sky */
     #7dd3fc 37.5%,  /* Morning */
     #fef08a 44%,    /* Midday Workday */
     #fef08a 70.83%, /* Afternoon Workday */
     #ea580c 74.5%,  /* Sunset */
-    #4a55a2 79%,    /* Twilight Purple */
-    #2c3b5e 84%,    /* Night Fall */
-    #2c3b5e 100%    /* Midnight */
+    #6775b8 79%,    /* Twilight Purple */
+    #43587d 84%,    /* Night Fall */
+    #43587d 100%    /* Midnight */
   );
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
 }
@@ -488,10 +488,8 @@ body::before {
   box-shadow: -1px 0 0 rgba(0, 0, 0, 0.12);
 }
 
-/* Slight extra emphasis on boundary and mid-day grid lines */
-.grid-line:nth-child(1),
-.grid-line:nth-child(5),
-.grid-line:nth-child(9) {
+/* Slight extra emphasis on the mid-day (12h) grid line */
+.grid-line:nth-child(4) {
   background: rgba(255, 255, 255, 0.3);
   box-shadow: -1px 0 0 rgba(0, 0, 0, 0.22);
 }
