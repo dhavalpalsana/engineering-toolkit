@@ -321,6 +321,19 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="track-segment track-night" style="width: 25%;"></div>   <!-- 18:00 to 24:00 -->
           </div>
           
+          <!-- Faint vertical grid lines -->
+          <div class="timeline-grid-lines">
+            <div class="grid-line" style="left: 0%;"></div>
+            <div class="grid-line" style="left: 12.5%;"></div>
+            <div class="grid-line" style="left: 25%;"></div>
+            <div class="grid-line" style="left: 37.5%;"></div>
+            <div class="grid-line" style="left: 50%;"></div>
+            <div class="grid-line" style="left: 62.5%;"></div>
+            <div class="grid-line" style="left: 75%;"></div>
+            <div class="grid-line" style="left: 87.5%;"></div>
+            <div class="grid-line" style="left: 100%;"></div>
+          </div>
+          
           <!-- Transparent range slider -->
           <input type="range" id="slider-${tz}" class="timeline-slider-input" min="0" max="1439" value="0" />
         </div>

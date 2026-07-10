@@ -474,3 +474,27 @@ body::before {
   height: 16px;
   accent-color: var(--accent-primary);
 }
+
+/* Faint Vertical Grid Lines for Hour Markers */
+.timeline-grid-lines {
+  position: absolute;
+  inset: 4px 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.grid-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--text-primary);
+  opacity: 0.08;
+}
+
+/* Slight extra emphasis on boundary and mid-day grid lines */
+.grid-line:nth-child(1),
+.grid-line:nth-child(5),
+.grid-line:nth-child(9) {
+  opacity: 0.15;
+}
