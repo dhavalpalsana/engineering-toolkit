@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
 
   // Local State
-  let selectedTimezones = ["Local Time", "UTC", "America/Los_Angeles", "Asia/Kolkata"];
+  let selectedTimezones = ["Local Time", "UTC", "America/New_York", "America/Chicago", "America/Los_Angeles", "Asia/Kolkata"];
   let anchorDate = new Date(); // Anchor UTC datetime object
 
   // DOM Selection
@@ -558,7 +558,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Reset timelines list layout
   resetSetupBtn.addEventListener("click", () => {
     if (confirm("Are you sure you want to reset your timezone rows to default?")) {
-      selectedTimezones = ["Local Time", "UTC", "America/Los_Angeles", "Asia/Kolkata"];
+      selectedTimezones = ["Local Time", "UTC", "America/New_York", "America/Chicago", "America/Los_Angeles", "Asia/Kolkata"];
       anchorDate = new Date();
       renderTimelines();
       updateAllInputs();
