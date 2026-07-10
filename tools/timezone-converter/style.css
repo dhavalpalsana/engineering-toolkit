@@ -302,7 +302,7 @@ body::before {
   align-items: center;
 }
 
-/* Visual Day / Night Background Track */
+/* Visual Day / Night Background Track (Continuous 24-hour Day/Night Gradient) */
 .timeline-track-background {
   position: absolute;
   inset: 4px 0;
@@ -312,38 +312,22 @@ body::before {
   z-index: 1;
   box-sizing: border-box;
   overflow: hidden;
-  display: flex;
-}
-
-/* Visual Blocks inside Track */
-.track-segment {
-  height: 100%;
-}
-
-/* Color palettes for segments */
-.track-night-1 {
-  background: linear-gradient(to right, #1b2a4a, #2b3e6b); /* Soft dark navy to lighter dusk blue */
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
-}
-
-.track-day-1 {
-  background: linear-gradient(to right, #f97316, #7dd3fc); /* Golden hour sunrise to light sky blue */
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
-}
-
-.track-work {
-  background: linear-gradient(to right, #7dd3fc, #fef08a); /* Sky blue morning into focused light yellow workday */
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.track-day-2 {
-  background: linear-gradient(to right, #fef08a, #ea580c); /* Workday yellow to deep orange sunset */
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
-}
-
-.track-night-2 {
-  background: linear-gradient(to right, #353b75, #1b2a4a); /* Muted twilight indigo to soft dark navy */
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+  background: linear-gradient(
+    to right,
+    #1b2a4a 0%,     /* Midnight */
+    #1b2a4a 18%,    /* Late Night */
+    #2b3e6b 24%,    /* Pre-Dawn */
+    #f97316 28%,    /* Sunrise Glow */
+    #7dd3fc 34%,    /* Morning Sky */
+    #7dd3fc 37.5%,  /* Morning */
+    #fef08a 44%,    /* Midday Workday */
+    #fef08a 70.83%, /* Afternoon Workday */
+    #ea580c 74.5%,  /* Sunset */
+    #353b75 79%,    /* Twilight Purple */
+    #1b2a4a 84%,    /* Night Fall */
+    #1b2a4a 100%    /* Midnight */
+  );
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
 }
 
 /* Transparent Range Slider Overlay */
