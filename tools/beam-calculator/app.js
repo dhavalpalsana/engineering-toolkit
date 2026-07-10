@@ -12,6 +12,20 @@ document.addEventListener("DOMContentLoaded", () => {
   let selfWeightEnabled = true;
   let sectionShape = "rect-solid";
 
+  // Sketched custom shape state
+  let sketchedIz = 33750.0; // cm⁴ (defaults to 150x300 rect)
+  let sketchedD = 300.0; // mm
+  let sketchedA = 450.0; // cm²
+  let sketchedSz = 2250.0; // cm³
+  let sketchedVertices = []; // Saved coordinates array in mm
+
+  // Live Sketcher Canvas drawing state
+  let sketchVertices = []; // Active editor points
+  let isSketchClosed = false;
+  let gridSnap = 10; // Snap resolution in mm
+  let selectedVertexIndex = -1;
+  let mousePos = { x: 0, y: 0 };
+
   // Section shape parameters
   let sectionParams = {
     rectSolid: { b: 150, d: 300 },
@@ -111,12 +125,17 @@ document.addEventListener("DOMContentLoaded", () => {
     sectionShape = e.target.value;
     // Toggle input field displays
     document.querySelectorAll(".shape-input-group").forEach(el => el.classList.add("hidden"));
+    document.getElementById("open-sketcher-btn").classList.add("hidden");
+    
     if (sectionShape === "rect-solid") document.querySelector(".rect-solid-fields").classList.remove("hidden");
     else if (sectionShape === "rect-hollow") document.querySelector(".rect-hollow-fields").classList.remove("hidden");
     else if (sectionShape === "circ-solid") document.querySelector(".circ-solid-fields").classList.remove("hidden");
     else if (sectionShape === "circ-hollow") document.querySelector(".circ-hollow-fields").classList.remove("hidden");
     else if (sectionShape === "i-beam") document.querySelector(".ibeam-fields").classList.remove("hidden");
     else if (sectionShape === "custom") document.querySelector(".custom-fields").classList.remove("hidden");
+    else if (sectionShape === "sketch") {
+      document.getElementById("open-sketcher-btn").classList.remove("hidden");
+    }
     
     recalculate();
   });
@@ -262,6 +281,12 @@ document.addEventListener("DOMContentLoaded", () => {
       d = sectionParams.custom.d / 1000.0;
       A = 0.001; // dummy area if not needed
       Sz = Iz / (d / 2.0);
+    }
+    else if (sectionShape === "sketch") {
+      A = sketchedA * 1e-4; // cm² to m²
+      Iz = sketchedIz * 1e-8; // cm⁴ to m⁴
+      Sz = sketchedSz * 1e-6; // cm³ to m³
+      d = sketchedD / 1000.0; // mm to m
     }
     
     return { A, Iz, Sz, d };
@@ -1169,7 +1194,12 @@ document.addEventListener("DOMContentLoaded", () => {
       sectionShape,
       sectionParams,
       supports,
-      loads
+      loads,
+      sketchedIz,
+      sketchedD,
+      sketchedA,
+      sketchedSz,
+      sketchedVertices
     };
   };
 
@@ -1187,6 +1217,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.sectionParams) sectionParams = state.sectionParams;
     if (state.supports) supports = state.supports;
     if (state.loads) loads = state.loads;
+    
+    sketchedIz = state.sketchedIz || 33750.0;
+    sketchedD = state.sketchedD || 300.0;
+    sketchedA = state.sketchedA || 450.0;
+    sketchedSz = state.sketchedSz || 2250.0;
+    sketchedVertices = state.sketchedVertices || [];
     
     // Sync forms
     beamLengthInput.value = L;
@@ -1322,5 +1358,429 @@ document.addEventListener("DOMContentLoaded", () => {
   
   if (!loadedFromUrl) {
     recalculate(); // Default boot run
+  }
+
+  // ==========================================================================
+  // --- 2D Section Sketcher Code ---
+  // ==========================================================================
+
+  window.openSketcher = () => {
+    // Load existing sketched vertices if any, or default to a simple rectangle template
+    if (sketchedVertices && sketchedVertices.length >= 3) {
+      sketchVertices = [...sketchedVertices];
+      isSketchClosed = true;
+    } else {
+      loadSketchTemplate("rect");
+    }
+    
+    document.getElementById("sketcher-modal").classList.remove("hidden");
+    initSketcherEvents();
+    drawSketchCanvas();
+    updateLiveProperties();
+  };
+
+  window.closeSketcher = () => {
+    document.getElementById("sketcher-modal").classList.add("hidden");
+  };
+
+  window.clearSketchCanvas = () => {
+    sketchVertices = [];
+    isSketchClosed = false;
+    drawSketchCanvas();
+    updateLiveProperties();
+  };
+
+  window.undoSketchPoint = () => {
+    if (isSketchClosed) {
+      isSketchClosed = false;
+    } else {
+      sketchVertices.pop();
+    }
+    drawSketchCanvas();
+    updateLiveProperties();
+  };
+
+  window.changeGridSnap = () => {
+    gridSnap = parseInt(document.getElementById("grid-snap-select").value) || 10;
+    drawSketchCanvas();
+  };
+
+  window.closeSketchShape = () => {
+    if (sketchVertices.length >= 3) {
+      isSketchClosed = true;
+      drawSketchCanvas();
+      updateLiveProperties();
+    } else {
+      alert("Please place at least 3 points before closing the shape.");
+    }
+  };
+
+  window.loadSketchTemplate = (type) => {
+    isSketchClosed = true;
+    if (type === "rect") {
+      // 200x200 rectangle centered on 200,200
+      sketchVertices = [
+        { x: 100, y: 100 },
+        { x: 300, y: 100 },
+        { x: 300, y: 300 },
+        { x: 100, y: 300 }
+      ];
+    } else if (type === "ibeam") {
+      // I-beam shape
+      sketchVertices = [
+        { x: 100, y: 300 },
+        { x: 300, y: 300 },
+        { x: 300, y: 260 },
+        { x: 220, y: 260 },
+        { x: 220, y: 140 },
+        { x: 300, y: 140 },
+        { x: 300, y: 100 },
+        { x: 100, y: 100 },
+        { x: 100, y: 140 },
+        { x: 180, y: 140 },
+        { x: 180, y: 260 },
+        { x: 100, y: 260 }
+      ];
+    } else if (type === "tbeam") {
+      // T-beam shape
+      sketchVertices = [
+        { x: 100, y: 300 },
+        { x: 300, y: 300 },
+        { x: 300, y: 260 },
+        { x: 220, y: 260 },
+        { x: 220, y: 100 },
+        { x: 180, y: 100 },
+        { x: 180, y: 260 },
+        { x: 100, y: 260 }
+      ];
+    } else if (type === "angle") {
+      // L-angle shape
+      sketchVertices = [
+        { x: 100, y: 300 },
+        { x: 140, y: 300 },
+        { x: 140, y: 140 },
+        { x: 300, y: 140 },
+        { x: 300, y: 100 },
+        { x: 100, y: 100 }
+      ];
+    } else if (type === "channel") {
+      // C-channel shape
+      sketchVertices = [
+        { x: 260, y: 300 },
+        { x: 260, y: 260 },
+        { x: 140, y: 260 },
+        { x: 140, y: 140 },
+        { x: 260, y: 140 },
+        { x: 260, y: 100 },
+        { x: 100, y: 100 },
+        { x: 100, y: 300 }
+      ];
+    }
+    drawSketchCanvas();
+    updateLiveProperties();
+  };
+
+  window.applySketchedSection = () => {
+    const props = calculatePolygonProperties(sketchVertices);
+    if (!props || props.A <= 0) return;
+    
+    sketchedA = props.A; // cm²
+    sketchedIz = props.Iz; // cm⁴
+    sketchedSz = props.Sz; // cm³
+    sketchedD = props.height; // mm
+    sketchedVertices = [...sketchVertices];
+    
+    closeSketcher();
+    recalculate();
+  };
+
+  function getMousePos(svg, evt) {
+    const rect = svg.getBoundingClientRect();
+    const x = ((evt.clientX - rect.left) / rect.width) * 400;
+    const y = ((evt.clientY - rect.top) / rect.height) * 400;
+    return { x, y };
+  }
+
+  function snapToGrid(x, y, snap) {
+    return {
+      x: Math.round(x / snap) * snap,
+      y: Math.round(y / snap) * snap
+    };
+  }
+
+  function calculatePolygonProperties(vertices) {
+    const n = vertices.length;
+    if (n < 3) return { A: 0, xc: 0, yc: 0, Iz: 0, Sz: 0, height: 0 };
+    
+    let A = 0;
+    let cx = 0;
+    let cy = 0;
+    let Ixx_origin = 0;
+    
+    let ymin = Infinity;
+    let ymax = -Infinity;
+    
+    for (let i = 0; i < n; i++) {
+      const p = vertices[i];
+      if (p.y < ymin) ymin = p.y;
+      if (p.y > ymax) ymax = p.y;
+    }
+    
+    for (let i = 0; i < n; i++) {
+      const p1 = vertices[i];
+      const p2 = vertices[(i + 1) % n];
+      
+      const factor = (p1.x * p2.y - p2.x * p1.y);
+      A += factor;
+      cx += (p1.x + p2.x) * factor;
+      cy += (p1.y + p2.y) * factor;
+      
+      Ixx_origin += (p1.y * p1.y + p1.y * p2.y + p2.y * p2.y) * factor;
+    }
+    
+    A = A / 2.0;
+    if (Math.abs(A) < 1e-5) return { A: 0, xc: 0, yc: 0, Iz: 0, Sz: 0, height: 0 };
+    
+    cx = cx / (6.0 * A);
+    cy = cy / (6.0 * A);
+    Ixx_origin = Ixx_origin / 12.0;
+    
+    const areaSign = Math.sign(A);
+    const A_abs = Math.abs(A);
+    
+    // Inertia around centroidal x-axis
+    const Iz_centroid = (Ixx_origin * areaSign) - A_abs * cy * cy;
+    
+    const height = ymax - ymin;
+    const y_max_fiber = Math.max(ymax - cy, cy - ymin);
+    const Sz = y_max_fiber === 0 ? 0 : Iz_centroid / y_max_fiber;
+    
+    return {
+      A: A_abs / 100.0, // convert mm² to cm²
+      xc: cx,
+      yc: cy,
+      Iz: Math.max(0.1, Iz_centroid / 10000.0), // mm⁴ to cm⁴
+      Sz: Math.max(0.1, Sz / 1000.0), // mm³ to cm³
+      height: height // mm
+    };
+  }
+
+  function updateLiveProperties() {
+    const props = calculatePolygonProperties(sketchVertices);
+    const applyBtn = document.getElementById("apply-sketch-btn");
+    
+    if (isSketchClosed && props.A > 0) {
+      document.getElementById("sk-area").textContent = `${props.A.toFixed(1)} cm²`;
+      document.getElementById("sk-inertia").textContent = `${props.Iz.toFixed(1)} cm⁴`;
+      document.getElementById("sk-centroid").textContent = `${props.yc.toFixed(1)} mm`;
+      document.getElementById("sk-height").textContent = `${props.height.toFixed(1)} mm`;
+      applyBtn.disabled = false;
+    } else {
+      document.getElementById("sk-area").textContent = "0.0 cm²";
+      document.getElementById("sk-inertia").textContent = "0.0 cm⁴";
+      document.getElementById("sk-centroid").textContent = "0.0 mm";
+      document.getElementById("sk-height").textContent = "0.0 mm";
+      applyBtn.disabled = true;
+    }
+  }
+
+  function drawSketchCanvas(drawCursorLine = false) {
+    const svg = document.getElementById("sketch-canvas-svg");
+    if (!svg) return;
+    svg.innerHTML = "";
+    
+    // Draw grid lines
+    const gSize = gridSnap;
+    for (let i = 0; i <= 400; i += gSize) {
+      // Horizontal grid
+      const hLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      hLine.setAttribute("x1", 0);
+      hLine.setAttribute("y1", i);
+      hLine.setAttribute("x2", 400);
+      hLine.setAttribute("y2", i);
+      hLine.setAttribute("class", "sk-grid-line");
+      svg.appendChild(hLine);
+      
+      // Vertical grid
+      const vLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      vLine.setAttribute("x1", i);
+      vLine.setAttribute("y1", 0);
+      vLine.setAttribute("x2", i);
+      vLine.setAttribute("y2", 400);
+      vLine.setAttribute("class", "sk-grid-line");
+      svg.appendChild(vLine);
+    }
+    
+    // Highlight origin center lines (x=200, y=200)
+    const centerX = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    centerX.setAttribute("x1", 200);
+    centerX.setAttribute("y1", 0);
+    centerX.setAttribute("x2", 200);
+    centerX.setAttribute("y2", 400);
+    centerX.setAttribute("class", "sk-axis-line");
+    svg.appendChild(centerX);
+    
+    const centerY = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    centerY.setAttribute("x1", 0);
+    centerY.setAttribute("y1", 200);
+    centerY.setAttribute("x2", 400);
+    centerY.setAttribute("y2", 200);
+    centerY.setAttribute("class", "sk-axis-line");
+    svg.appendChild(centerY);
+    
+    // Draw polygon / shapes
+    if (sketchVertices.length > 0) {
+      if (isSketchClosed) {
+        // Closed filled polygon
+        let pointsStr = sketchVertices.map(p => `${p.x},${p.y}`).join(" ");
+        const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        poly.setAttribute("points", pointsStr);
+        poly.setAttribute("class", "sk-poly-fill");
+        svg.appendChild(poly);
+        
+        // Draw Centroid Crosshair
+        const props = calculatePolygonProperties(sketchVertices);
+        if (props.A > 0) {
+          const cx = props.xc;
+          const cy = props.yc;
+          
+          const chX = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          chX.setAttribute("x1", cx - 12);
+          chX.setAttribute("y1", cy);
+          chX.setAttribute("x2", cx + 12);
+          chX.setAttribute("y2", cy);
+          chX.setAttribute("class", "sk-centroid-cross");
+          svg.appendChild(chX);
+          
+          const chY = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          chY.setAttribute("x1", cx);
+          chY.setAttribute("y1", cy - 12);
+          chY.setAttribute("x2", cx);
+          chY.setAttribute("y2", cy + 12);
+          chY.setAttribute("class", "sk-centroid-cross");
+          svg.appendChild(chY);
+          
+          const chLbl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          chLbl.setAttribute("x", cx + 6);
+          chLbl.setAttribute("y", cy - 6);
+          chLbl.setAttribute("fill", "#ef4444");
+          chLbl.setAttribute("font-size", "10px");
+          chLbl.setAttribute("font-family", "var(--font-mono)");
+          chLbl.textContent = "N.A. (ȳ)";
+          svg.appendChild(chLbl);
+        }
+      } else {
+        // Open outline polyline
+        let pointsStr = sketchVertices.map(p => `${p.x},${p.y}`).join(" ");
+        const poly = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+        poly.setAttribute("points", pointsStr);
+        poly.setAttribute("class", "sk-line-active");
+        svg.appendChild(poly);
+        
+        // Dash cursor line to show next segment preview
+        if (drawCursorLine && mousePos) {
+          const last = sketchVertices[sketchVertices.length - 1];
+          const previewLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          previewLine.setAttribute("x1", last.x);
+          previewLine.setAttribute("y1", last.y);
+          previewLine.setAttribute("x2", mousePos.x);
+          previewLine.setAttribute("y2", mousePos.y);
+          previewLine.setAttribute("stroke", "var(--accent-primary)");
+          previewLine.setAttribute("stroke-width", "1.5");
+          previewLine.setAttribute("stroke-dasharray", "4,4");
+          svg.appendChild(previewLine);
+        }
+      }
+      
+      // Draw handles for vertex dragging
+      sketchVertices.forEach((pt, idx) => {
+        const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        handle.setAttribute("cx", pt.x);
+        handle.setAttribute("cy", pt.y);
+        handle.setAttribute("r", "5");
+        handle.setAttribute("class", "sk-handle");
+        handle.setAttribute("data-index", idx);
+        svg.appendChild(handle);
+      });
+    }
+  }
+
+  let eventsBound = false;
+  function initSketcherEvents() {
+    if (eventsBound) return;
+    
+    const svg = document.getElementById("sketch-canvas-svg");
+    if (!svg) return;
+    
+    svg.addEventListener("mousedown", (e) => {
+      if (e.target.classList.contains("sk-handle")) {
+        selectedVertexIndex = parseInt(e.target.getAttribute("data-index"));
+        return;
+      }
+      
+      if (isSketchClosed) return;
+      
+      const pos = getMousePos(svg, e);
+      const snapped = snapToGrid(pos.x, pos.y, gridSnap);
+      
+      // If clicking near first point, close loop
+      if (sketchVertices.length >= 3) {
+        const start = sketchVertices[0];
+        const dist = Math.hypot(snapped.x - start.x, snapped.y - start.y);
+        if (dist < 15) {
+          isSketchClosed = true;
+          drawSketchCanvas();
+          updateLiveProperties();
+          return;
+        }
+      }
+      
+      sketchVertices.push(snapped);
+      drawSketchCanvas();
+      updateLiveProperties();
+    });
+    
+    svg.addEventListener("mousemove", (e) => {
+      const pos = getMousePos(svg, e);
+      const snapped = snapToGrid(pos.x, pos.y, gridSnap);
+      
+      if (selectedVertexIndex !== -1) {
+        sketchVertices[selectedVertexIndex] = snapped;
+        drawSketchCanvas();
+        updateLiveProperties();
+      } else {
+        mousePos = snapped;
+        if (!isSketchClosed && sketchVertices.length > 0) {
+          drawSketchCanvas(true);
+        }
+      }
+    });
+    
+    // Support mobile touch dragging
+    svg.addEventListener("touchstart", (e) => {
+      if (e.target.classList.contains("sk-handle")) {
+        selectedVertexIndex = parseInt(e.target.getAttribute("data-index"));
+        e.preventDefault();
+      }
+    }, { passive: false });
+    
+    svg.addEventListener("touchmove", (e) => {
+      if (selectedVertexIndex !== -1 && e.touches.length > 0) {
+        const pos = getMousePos(svg, e.touches[0]);
+        const snapped = snapToGrid(pos.x, pos.y, gridSnap);
+        sketchVertices[selectedVertexIndex] = snapped;
+        drawSketchCanvas();
+        updateLiveProperties();
+        e.preventDefault();
+      }
+    }, { passive: false });
+    
+    const onRelease = () => {
+      selectedVertexIndex = -1;
+    };
+    window.addEventListener("mouseup", onRelease);
+    window.addEventListener("touchend", onRelease);
+    
+    eventsBound = true;
   }
 });

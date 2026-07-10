@@ -121,8 +121,12 @@
                 <option value="circ-hollow">Hollow Round Tube / Pipe</option>
                 <option value="i-beam">I-Beam (Standard W-Shape)</option>
                 <option value="custom">Custom Properties (Direct Input)</option>
+                <option value="sketch">Sketch 2D Custom Section</option>
               </select>
             </div>
+            <button id="open-sketcher-btn" class="add-row-btn full-width hidden" style="grid-column: span 2; margin-top: 4px;" onclick="openSketcher()">
+              <i data-lucide="edit-3"></i> Open 2D Sketcher
+            </button>
             
             <!-- Shape specific inputs (toggled in JS) -->
             <div class="shape-input-group rect-solid-fields">
@@ -367,6 +371,84 @@
       
     </div>
   </main>
+
+  <!-- 2D Section Sketcher Modal -->
+  <div id="sketcher-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>2D Section Builder & Sketcher</h3>
+        <button class="close-modal-btn" onclick="closeSketcher()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="sketcher-layout">
+          <!-- Left: SVG Drawing Canvas -->
+          <div class="canvas-wrapper">
+            <svg id="sketch-canvas-svg" width="400" height="400" viewBox="0 0 400 400"></svg>
+          </div>
+          
+          <!-- Right: Controls and Live Properties -->
+          <div class="sketcher-sidebar">
+            <!-- Shape templates -->
+            <div class="sidebar-section">
+              <h4>Load Template</h4>
+              <div class="template-buttons">
+                <button onclick="loadSketchTemplate('rect')">Rectangle</button>
+                <button onclick="loadSketchTemplate('ibeam')">I-Beam</button>
+                <button onclick="loadSketchTemplate('tbeam')">T-Beam</button>
+                <button onclick="loadSketchTemplate('angle')">L-Angle</button>
+                <button onclick="loadSketchTemplate('channel')">C-Channel</button>
+              </div>
+            </div>
+            
+            <!-- Controls -->
+            <div class="sidebar-section">
+              <h4>Editor Tools</h4>
+              <div class="action-buttons">
+                <button id="close-shape-btn" onclick="closeSketchShape()">Close Shape</button>
+                <button onclick="clearSketchCanvas()">Clear Canvas</button>
+                <button id="undo-btn" onclick="undoSketchPoint()">Undo</button>
+              </div>
+              <div class="grid-controls">
+                <label for="grid-snap-select">Grid Snap</label>
+                <select id="grid-snap-select" onchange="changeGridSnap()">
+                  <option value="5">5 mm</option>
+                  <option value="10" selected>10 mm</option>
+                  <option value="20">20 mm</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Live properties -->
+            <div class="sidebar-section">
+              <h4>Live Calculated Properties</h4>
+              <div class="calculated-telemetry">
+                <div class="tel-item">
+                  <span>Area (A):</span>
+                  <span id="sk-area">0.0 cm²</span>
+                </div>
+                <div class="tel-item">
+                  <span>Inertia (Iz):</span>
+                  <span id="sk-inertia">0.0 cm⁴</span>
+                </div>
+                <div class="tel-item">
+                  <span>Centroid (ȳ):</span>
+                  <span id="sk-centroid">0.0 mm</span>
+                </div>
+                <div class="tel-item">
+                  <span>Height (d):</span>
+                  <span id="sk-height">0.0 mm</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="hdr-btn" onclick="closeSketcher()">Cancel</button>
+        <button class="add-row-btn" id="apply-sketch-btn" onclick="applySketchedSection()" disabled>Apply Custom Section</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Firebase Scripts -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>

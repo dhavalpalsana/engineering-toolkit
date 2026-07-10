@@ -537,3 +537,207 @@ body::before {
 .hidden {
   display: none !important;
 }
+
+/* Modal Overlay styling */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+}
+
+.modal-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  width: 95%;
+  max-width: 760px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  position: relative;
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.close-modal-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+
+.close-modal-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Sketcher Layout */
+.sketcher-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 680px) {
+  .sketcher-layout {
+    grid-template-columns: 400px 1fr;
+  }
+}
+
+.canvas-wrapper {
+  width: 400px;
+  height: 400px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+#sketch-canvas-svg {
+  cursor: crosshair;
+  user-select: none;
+}
+
+.sketcher-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebar-section h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.template-buttons, .action-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.template-buttons button, .action-buttons button {
+  background: var(--bg-interactive);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.template-buttons button:hover, .action-buttons button:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+
+.grid-controls {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.grid-controls label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.grid-controls select {
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-interactive);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  outline: none;
+  font-size: 13px;
+}
+
+/* SVG grid lines and drawing classes */
+.sk-grid-line {
+  stroke: var(--border-color);
+  stroke-width: 0.5;
+  opacity: 0.4;
+}
+
+.sk-axis-line {
+  stroke: var(--text-secondary);
+  stroke-width: 1.2;
+  opacity: 0.6;
+}
+
+.sk-poly-fill {
+  fill: var(--accent-primary-glow);
+  stroke: var(--accent-primary);
+  stroke-width: 2.5;
+  opacity: 0.65;
+}
+
+.sk-line-active {
+  stroke: var(--accent-primary);
+  stroke-width: 2.5;
+  stroke-dasharray: 4,4;
+  fill: none;
+}
+
+.sk-handle {
+  fill: var(--bg-primary);
+  stroke: var(--accent-primary);
+  stroke-width: 2.5;
+  cursor: move;
+  transition: r var(--transition-fast);
+}
+
+.sk-handle:hover {
+  r: 8;
+}
+
+.sk-centroid-cross {
+  stroke: #ef4444;
+  stroke-width: 1.5;
+}
+
