@@ -9,6 +9,7 @@
 // ==========================================================================
 
 let systemGlobals = {
+  standard: "IEC",
   voltage: 400,          // V (3-Phase)
   frequency: 50,         // Hz
   pfTarget: 0.85
@@ -75,6 +76,49 @@ const ALUMINUM_AMPACITIES = [
   { size: 185, ampacity: 266 },
   { size: 240, ampacity: 315 },
   { size: 300, ampacity: 363 }
+];
+
+// NEC Table 310.16 Ampacities (Copper, 75C termination rating)
+const NEC_COPPER_AMPACITIES = [
+  { size: "14 AWG", ampacity: 15, area: 2.08 },
+  { size: "12 AWG", ampacity: 20, area: 3.31 },
+  { size: "10 AWG", ampacity: 30, area: 5.26 },
+  { size: "8 AWG", ampacity: 50, area: 8.37 },
+  { size: "6 AWG", ampacity: 65, area: 13.3 },
+  { size: "4 AWG", ampacity: 85, area: 21.15 },
+  { size: "3 AWG", ampacity: 100, area: 26.67 },
+  { size: "2 AWG", ampacity: 115, area: 33.62 },
+  { size: "1 AWG", ampacity: 130, area: 42.41 },
+  { size: "1/0 AWG", ampacity: 150, area: 53.49 },
+  { size: "2/0 AWG", ampacity: 175, area: 67.43 },
+  { size: "3/0 AWG", ampacity: 200, area: 85.01 },
+  { size: "4/0 AWG", ampacity: 230, area: 107.2 },
+  { size: "250 kcmil", ampacity: 255, area: 126.7 },
+  { size: "300 kcmil", ampacity: 285, area: 152.0 },
+  { size: "350 kcmil", ampacity: 310, area: 177.3 },
+  { size: "400 kcmil", ampacity: 335, area: 202.7 },
+  { size: "500 kcmil", ampacity: 380, area: 253.4 }
+];
+
+// NEC Table 310.16 Ampacities (Aluminum, 75C termination rating)
+const NEC_ALUMINUM_AMPACITIES = [
+  { size: "12 AWG", ampacity: 15, area: 3.31 },
+  { size: "10 AWG", ampacity: 25, area: 5.26 },
+  { size: "8 AWG", ampacity: 40, area: 8.37 },
+  { size: "6 AWG", ampacity: 50, area: 13.3 },
+  { size: "4 AWG", ampacity: 65, area: 21.15 },
+  { size: "3 AWG", ampacity: 75, area: 26.67 },
+  { size: "2 AWG", ampacity: 90, area: 33.62 },
+  { size: "1 AWG", ampacity: 100, area: 42.41 },
+  { size: "1/0 AWG", ampacity: 120, area: 53.49 },
+  { size: "2/0 AWG", ampacity: 135, area: 67.43 },
+  { size: "3/0 AWG", ampacity: 155, area: 85.01 },
+  { size: "4/0 AWG", ampacity: 180, area: 107.2 },
+  { size: "250 kcmil", ampacity: 205, area: 126.7 },
+  { size: "300 kcmil", ampacity: 230, area: 152.0 },
+  { size: "350 kcmil", ampacity: 250, area: 177.3 },
+  { size: "400 kcmil", ampacity: 270, area: 202.7 },
+  { size: "500 kcmil", ampacity: 310, area: 253.4 }
 ];
 
 // Standard Breaker Frame/Trip ratings
@@ -911,6 +955,12 @@ function showInspector(id, type) {
     titleEl.textContent = "Feeder Cable";
     badgeEl.textContent = "CABLE";
     
+    const isNEC = systemGlobals.standard === "NEC";
+    const list = isNEC
+      ? (wire.params.material === "Cu" ? NEC_COPPER_AMPACITIES : NEC_ALUMINUM_AMPACITIES)
+      : (wire.params.material === "Cu" ? COPPER_AMPACITIES : ALUMINUM_AMPACITIES);
+    const parallelRuns = wire.params.parallelRuns || 1;
+    
     // Core parameters form
     let formHTML = `
       <div class="form-group">
@@ -918,6 +968,15 @@ function showInspector(id, type) {
         <select onchange="updateWireParam('${wire.id}', 'material', this.value)">
           <option value="Cu" ${wire.params.material === 'Cu' ? 'selected' : ''}>Copper (Cu)</option>
           <option value="Al" ${wire.params.material === 'Al' ? 'selected' : ''}>Aluminum (Al)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Parallel Runs</label>
+        <select onchange="updateWireParam('${wire.id}', 'parallelRuns', parseInt(this.value))">
+          <option value="1" ${parallelRuns === 1 ? 'selected' : ''}>1 Conductor/Phase</option>
+          <option value="2" ${parallelRuns === 2 ? 'selected' : ''}>2 Parallel Runs</option>
+          <option value="3" ${parallelRuns === 3 ? 'selected' : ''}>3 Parallel Runs</option>
+          <option value="4" ${parallelRuns === 4 ? 'selected' : ''}>4 Parallel Runs</option>
         </select>
       </div>
       <div class="form-group">
@@ -955,9 +1014,12 @@ function showInspector(id, type) {
             <option value="Manual" ${wire.params.selectedSize !== 'Auto' ? 'selected' : ''}>Manual</option>
           </select>
           <select id="wire-manual-size" onchange="updateWireParam('${wire.id}', 'selectedSize', this.value)" ${wire.params.selectedSize === 'Auto' ? 'disabled' : ''} style="flex:1;">
-            ${(wire.params.material === 'Cu' ? COPPER_AMPACITIES : ALUMINUM_AMPACITIES).map(a => 
-              `<option value="${a.size}" ${parseFloat(wire.params.selectedSize) === a.size ? 'selected' : ''}>${a.size} mm²</option>`
-            ).join('')}
+            ${list.map(a => {
+              const selected = wire.params.selectedSize === "Auto" 
+                ? false 
+                : (isNEC ? wire.params.selectedSize === a.size : parseFloat(wire.params.selectedSize) === a.size);
+              return `<option value="${a.size}" ${selected ? 'selected' : ''}>${a.size}${isNEC ? '' : ' mm²'}</option>`;
+            }).join('')}
           </select>
         </div>
       </div>
@@ -994,19 +1056,19 @@ function showInspector(id, type) {
         <span class="result-val">${calc.deratingFactor.toFixed(2)}</span>
       </div>
       <div class="result-row">
-        <span class="result-label">Minimum Raw Capacity Req:</span>
-        <span class="result-val">${calc.minBaseAmpacity.toFixed(1)} A</span>
+        <span class="result-label">Min Raw Capacity Req (per conductor):</span>
+        <span class="result-val">${(calc.minBaseAmpacity / calc.parallelRuns).toFixed(1)} A</span>
       </div>
       <div class="result-row">
         <span class="result-label">Recommended Cable Size:</span>
-        <span class="result-val ${sizeStatusClass}">${calc.resolvedSize} mm²</span>
+        <span class="result-val ${sizeStatusClass}">${calc.resolvedSize}${isNEC ? '' : ' mm²'}${calc.parallelRuns > 1 ? ' (' + calc.parallelRuns + 'x parallel)' : ''}</span>
       </div>
       <div class="result-row">
         <span class="result-label">Selected Size Ampacity (base):</span>
         <span class="result-val">${calc.baseAmpacity} A</span>
       </div>
       <div class="result-row">
-        <span class="result-label">Selected Size Ampacity (derated):</span>
+        <span class="result-label">Total Bundle Ampacity (derated):</span>
         <span class="result-val">${calc.deratedAmpacity.toFixed(1)} A</span>
       </div>
       <div class="result-row">
@@ -1091,18 +1153,53 @@ function toggleWireAutosize(wireId, val) {
 // 8. Engineering Calculations & Solvers
 // ==========================================================================
 
-function calculateMotorFLA(motor) {
-  let powerkW = motor.params.power;
-  if (motor.params.unit === "HP") {
-    powerkW = powerkW * 0.7457; // HP to kW
-  }
+function getNECMotorFLA(hp, voltage) {
+  // Table values for 460V, 3-Phase induction motors:
+  const hpTable = {
+    0.5: 1.1, 0.75: 1.6, 1: 2.1, 1.5: 3.0, 2: 3.4, 3: 4.8, 5: 7.6,
+    7.5: 11.0, 10: 14.0, 15: 21.0, 20: 27.0, 25: 34.0, 30: 40.0,
+    40: 52.0, 50: 65.0, 60: 77.0, 75: 96.0, 100: 124.0, 125: 156.0,
+    150: 180.0, 200: 240.0
+  };
   
+  // Find closest match or linear scaling
+  let baseFLA = 2.1; // default for 1 HP
+  const hps = Object.keys(hpTable).map(Number).sort((a,b)=>a-b);
+  if (hpTable[hp]) {
+    baseFLA = hpTable[hp];
+  } else {
+    // Find closest match
+    let closest = hps[0];
+    for (const h of hps) {
+      if (Math.abs(h - hp) < Math.abs(closest - hp)) {
+        closest = h;
+      }
+    }
+    baseFLA = hpTable[closest] * (hp / closest); // scaling
+  }
+  // Scale by voltage (inverse ratio relative to 460V)
+  return baseFLA * (460 / voltage);
+}
+
+function calculateMotorFLA(motor) {
   const eff = motor.params.efficiency / 100;
   const pf = motor.params.pf;
   const V = systemGlobals.voltage;
   
-  // 3-Phase motor current formula
-  return (powerkW * 1000) / (Math.sqrt(3) * V * eff * pf);
+  if (systemGlobals.standard === "NEC") {
+    let hp = motor.params.power;
+    if (motor.params.unit === "kW") {
+      hp = hp / 0.7457; // convert kW to HP for NEC lookup
+    }
+    return getNECMotorFLA(hp, V);
+  } else {
+    // IEC standard
+    let powerkW = motor.params.power;
+    if (motor.params.unit === "HP") {
+      powerkW = powerkW * 0.7457; // HP to kW
+    }
+    return (powerkW * 1000) / (Math.sqrt(3) * V * eff * pf);
+  }
 }
 
 // Find downstream statistics (motors, total FLA) for a node
@@ -1182,8 +1279,9 @@ function calculateWireSizing(wire) {
   const stats = getConnectedBranchStats(wire.toNode);
   const loadCurrent = stats.totalFLA;
   
-  // 2. Continuous load sizing multiplier (NEC requires 1.25)
+  // 2. Continuous load sizing multiplier (1.25x load)
   const reqCurrent = loadCurrent * 1.25;
+  const parallelRuns = wire.params.parallelRuns || 1;
   
   // 3. Compute derating factors
   // Temperature derating: ambient temp reference is 30C
@@ -1198,42 +1296,60 @@ function calculateWireSizing(wire) {
   const grouping = wire.params.groupingFactor || 1.0;
   const deratingFactor = tempFactor * grouping;
   
-  // Base current required in clean conditions (30C)
-  const minBaseAmpacity = reqCurrent / deratingFactor;
+  // Required ampacity per conductor under standard conditions
+  const minBaseAmpacityPerConductor = (reqCurrent / parallelRuns) / deratingFactor;
   
-  // 4. Select conductor size
-  const list = wire.params.material === "Cu" ? COPPER_AMPACITIES : ALUMINUM_AMPACITIES;
-  let resolvedSize = 1.5;
-  let baseAmpacity = 17.5;
+  // 4. Select conductor size list based on standard
+  const isNEC = systemGlobals.standard === "NEC";
+  const list = isNEC
+    ? (wire.params.material === "Cu" ? NEC_COPPER_AMPACITIES : NEC_ALUMINUM_AMPACITIES)
+    : (wire.params.material === "Cu" ? COPPER_AMPACITIES : ALUMINUM_AMPACITIES);
+    
+  let resolvedSize = isNEC ? list[0].size : list[0].size;
+  let baseAmpacity = list[0].ampacity;
+  let wireArea = isNEC ? list[0].area : list[0].size;
   let sizingError = false;
   
   if (wire.params.selectedSize === "Auto") {
-    // Find smallest size that matches the base ampacity requirement
     let found = false;
     for (const item of list) {
-      if (item.ampacity >= minBaseAmpacity) {
+      if (item.ampacity >= minBaseAmpacityPerConductor) {
         resolvedSize = item.size;
         baseAmpacity = item.ampacity;
+        wireArea = isNEC ? item.area : item.size;
         found = true;
         break;
       }
     }
     
-    // If even the largest size is too small, use largest
     if (!found) {
       const largest = list[list.length - 1];
       resolvedSize = largest.size;
       baseAmpacity = largest.ampacity;
+      wireArea = isNEC ? largest.area : largest.size;
       sizingError = true;
     }
   } else {
     // Manual size selection
-    resolvedSize = parseFloat(wire.params.selectedSize);
-    const item = list.find(x => x.size === resolvedSize);
-    baseAmpacity = item ? item.ampacity : 17.5;
+    const manualVal = wire.params.selectedSize;
+    let item = null;
+    if (isNEC) {
+      item = list.find(x => x.size === manualVal);
+    } else {
+      item = list.find(x => x.size === parseFloat(manualVal));
+    }
+    if (item) {
+      resolvedSize = item.size;
+      baseAmpacity = item.ampacity;
+      wireArea = isNEC ? item.area : item.size;
+    } else {
+      resolvedSize = list[0].size;
+      baseAmpacity = list[0].ampacity;
+      wireArea = isNEC ? list[0].area : list[0].size;
+    }
   }
   
-  const deratedAmpacity = baseAmpacity * deratingFactor;
+  const deratedAmpacity = baseAmpacity * deratingFactor * parallelRuns;
   if (deratedAmpacity < reqCurrent) {
     sizingError = true;
   }
@@ -1242,10 +1358,10 @@ function calculateWireSizing(wire) {
   // Resistivity at standard operating temperature (~75°C)
   // Cu = 0.0225 ohm.mm2/m, Al = 0.036 ohm.mm2/m
   const rho = wire.params.material === "Cu" ? 0.0225 : 0.036;
-  const R = (rho * wire.params.length) / resolvedSize; // Ohm
+  const R = ((rho * wire.params.length) / wireArea) / parallelRuns; // Ohm per phase
   
   // Approximate reactance per phase for multicore cables (typically 0.08 ohm/km = 0.00008 ohm/m)
-  const X = 0.00008 * wire.params.length; // Ohm
+  const X = (0.00008 * wire.params.length) / parallelRuns; // Ohm per phase
   
   // Use average motor power factor (approx 0.85 if no motor is connected, otherwise search for motor)
   let pf = 0.85;
@@ -1262,13 +1378,15 @@ function calculateWireSizing(wire) {
   return {
     loadCurrent,
     deratingFactor,
-    minBaseAmpacity,
+    minBaseAmpacity: minBaseAmpacityPerConductor * parallelRuns,
     resolvedSize,
     baseAmpacity,
     deratedAmpacity,
     vdVolt,
     vdPct,
-    sizingError
+    sizingError,
+    parallelRuns,
+    wireArea
   };
 }
 
@@ -1352,7 +1470,9 @@ function renderCanvas() {
       textEl.setAttribute("font-family", "var(--font-mono)");
       textEl.setAttribute("text-anchor", "middle");
       
-      const sizeStr = w.calculated ? w.calculated.resolvedSize + " mm²" : "";
+      const isNEC = systemGlobals.standard === "NEC";
+      const runsStr = (w.calculated && w.calculated.parallelRuns > 1) ? `${w.calculated.parallelRuns}x ` : "";
+      const sizeStr = w.calculated ? runsStr + w.calculated.resolvedSize + (isNEC ? "" : " mm²") : "";
       const lenStr = w.params.length + "m";
       textEl.textContent = `${sizeStr} (${lenStr})`;
       
@@ -1606,6 +1726,9 @@ function loadInitialState() {
         wires = decoded.wires;
         
         // Sync UI inputs
+        const stdEl = document.getElementById("sys-standard");
+        if (stdEl) stdEl.value = systemGlobals.standard || "IEC";
+        
         document.getElementById("sys-voltage").value = systemGlobals.voltage;
         document.getElementById("sys-freq").value = systemGlobals.frequency;
         document.getElementById("sys-pf-target").value = systemGlobals.pfTarget;
@@ -1652,11 +1775,237 @@ function loadInitialState() {
         routing: "Tray",
         ambientTemp: 30,
         groupingFactor: 1.0,
-        selectedSize: "Auto"
+        selectedSize: "Auto",
+        parallelRuns: 1
       }
     }
   ];
   
   recalculateSystem();
   renderCanvas();
+}
+
+// ==========================================================================
+// 11. Advanced Features: Standards (IEC/NEC) & Thermal Stack Sizing
+// ==========================================================================
+
+function onStandardChange() {
+  const std = document.getElementById("sys-standard").value;
+  systemGlobals.standard = std;
+  
+  const voltSelect = document.getElementById("sys-voltage");
+  voltSelect.innerHTML = "";
+  
+  if (std === "NEC") {
+    // Standard NEC / NEMA 3-Phase voltages
+    const options = [
+      { val: "460", text: "460 V (3Ø)", sel: true },
+      { val: "480", text: "480 V (3Ø)" },
+      { val: "208", text: "208 V (3Ø)" },
+      { val: "230", text: "230 V (3Ø)" },
+      { val: "575", text: "575 V (3Ø)" }
+    ];
+    options.forEach(opt => {
+      const el = document.createElement("option");
+      el.value = opt.val;
+      el.textContent = opt.text;
+      if (opt.sel) el.selected = true;
+      voltSelect.appendChild(el);
+    });
+    
+    // Auto-update motor units to HP in NEC mode
+    nodes.forEach(n => {
+      if (n.type === "motor" && n.params.unit === "kW") {
+        n.params.unit = "HP";
+        n.params.power = Math.round((n.params.power / 0.7457) * 10) / 10;
+      }
+    });
+    
+    systemGlobals.voltage = 460;
+  } else {
+    // Standard IEC metric voltages
+    const options = [
+      { val: "400", text: "400 V (3Ø)", sel: true },
+      { val: "415", text: "415 V (3Ø)" },
+      { val: "230", text: "230 V (3Ø)" },
+      { val: "690", text: "690 V (3Ø)" }
+    ];
+    options.forEach(opt => {
+      const el = document.createElement("option");
+      el.value = opt.val;
+      el.textContent = opt.text;
+      if (opt.sel) el.selected = true;
+      voltSelect.appendChild(el);
+    });
+    
+    // Auto-update motor units to kW in IEC mode
+    nodes.forEach(n => {
+      if (n.type === "motor" && n.params.unit === "HP") {
+        n.params.unit = "kW";
+        n.params.power = Math.round((n.params.power * 0.7457) * 10) / 10;
+      }
+    });
+    
+    systemGlobals.voltage = 400;
+  }
+  
+  updateGlobals();
+}
+
+function openThermalModal() {
+  const modal = document.getElementById("thermal-modal");
+  if (modal) {
+    modal.classList.remove("hidden");
+    recalculateThermal();
+  }
+}
+
+function closeThermalModal() {
+  const modal = document.getElementById("thermal-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+}
+
+function recalculateThermal() {
+  const ambient = parseFloat(document.getElementById("enc-ambient").value) || 35;
+  const maxTemp = parseFloat(document.getElementById("enc-max-temp").value) || 45;
+  
+  let tempRise = maxTemp - ambient;
+  if (tempRise < 2) tempRise = 2; // Avoid division by zero
+  
+  let totalLossWatts = 0;
+  let activeControllers = [];
+  
+  // Calculate individual component losses
+  nodes.forEach(n => {
+    let loss = 0;
+    let label = n.name;
+    
+    if (n.type === "vfd") {
+      const stats = getConnectedBranchStats(n.id);
+      const loadAmps = stats.totalFLA;
+      const vfdSize = n.params.autoSize ? selectVfdSize(loadAmps) : n.params.ratedCurrent;
+      loss = calculateVfdLoss(vfdSize, loadAmps);
+      activeControllers.push({ name: label, type: "VFD Drive", loss });
+    } else if (n.type === "softstarter") {
+      const stats = getConnectedBranchStats(n.id);
+      const motorKw = stats.totalFLA * systemGlobals.voltage * Math.sqrt(3) * 0.85 / 1000;
+      loss = motorKw * 1000 * 0.01 + 10; 
+      activeControllers.push({ name: label, type: "Soft Starter", loss });
+    } else if (n.type === "dol") {
+      const stats = getConnectedBranchStats(n.id);
+      loss = stats.totalFLA > 0 ? 25 : 5;
+      activeControllers.push({ name: label, type: "DOL Starter", loss });
+    } else if (n.type === "breaker") {
+      const stats = getConnectedBranchStats(n.id);
+      loss = stats.totalFLA > 0 ? 12 : 2;
+      activeControllers.push({ name: label, type: "MCCB Feeder", loss });
+    } else if (n.type === "busbar") {
+      const stats = getConnectedBranchStats(n.id);
+      const totalPowerKw = (Math.sqrt(3) * systemGlobals.voltage * stats.totalFLA * systemGlobals.pfTarget) / 1000;
+      loss = totalPowerKw * 1000 * 0.01;
+    }
+    
+    totalLossWatts += loss;
+  });
+  
+  // 1. Calculate Required CFM Ventilation Flow Rate
+  // CFM = (3.16 * Watts) / TempRise_F
+  const tempRiseF = tempRise * 1.8;
+  const cfm = (3.16 * totalLossWatts) / tempRiseF;
+  
+  // 2. Calculate Air Conditioning requirement in BTU/hr
+  const btuHr = totalLossWatts * 3.412;
+  const tons = btuHr / 12000;
+  
+  // Render results panel
+  const resultsContainer = document.getElementById("thermal-results-content");
+  if (resultsContainer) {
+    let coolingType = "Fan Ventilation";
+    let coolingColor = "status-ok";
+    let coolingAction = "";
+    
+    if (totalLossWatts > 1500 || cfm > 400) {
+      coolingType = "Air Conditioning (AC)";
+      coolingColor = "status-warning";
+      coolingAction = "Heat load is high. Air Conditioning is recommended to maintain dust-free positive pressure sealing.";
+    } else if (totalLossWatts > 4000) {
+      coolingType = "High Capacity AC Cooling";
+      coolingColor = "status-fail";
+      coolingAction = "Critical thermal load! Specialized split air conditioning unit required for enclosure.";
+    }
+    
+    resultsContainer.innerHTML = `
+      <div class="result-row">
+        <span class="result-label">Total Cabinet Heat Dissipation:</span>
+        <span class="result-val">${totalLossWatts.toFixed(0)} W</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Allowable Temperature Rise (ΔT):</span>
+        <span class="result-val">${tempRise.toFixed(1)} °C (${tempRiseF.toFixed(1)} °F)</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Required Enclosure Fan Flow Rate:</span>
+        <span class="result-val">${cfm.toFixed(1)} CFM</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Required Air Conditioning Load:</span>
+        <span class="result-val">${btuHr.toFixed(0)} BTU/hr (${tons.toFixed(2)} Tons)</span>
+      </div>
+      <div class="result-row" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+        <span class="result-label">Recommended Cooling Method:</span>
+        <span class="result-val ${coolingColor}" style="font-weight: bold;">${coolingType}</span>
+      </div>
+      ${coolingAction ? `<p style="font-size:11px; color:var(--text-muted); margin: 6px 0 0 0; line-height: 1.3;">⚠️ ${coolingAction}</p>` : ''}
+    `;
+  }
+  
+  // Render physical stacked visual drawers
+  const drawersContainer = document.getElementById("cabinet-drawers-container");
+  if (drawersContainer) {
+    drawersContainer.innerHTML = "";
+    
+    // Add Main incoming breaker / busbar at the top
+    const mainEl = document.createElement("div");
+    mainEl.className = "cabinet-drawer drawer-main";
+    mainEl.innerHTML = `
+      <span class="drawer-label">⚡ MAIN LUGS & BUSBAR</span>
+      <span class="drawer-loss">System Bus</span>
+    `;
+    drawersContainer.appendChild(mainEl);
+    
+    // Loop through active controllers on canvas and render drawers
+    activeControllers.forEach(ctrl => {
+      const drawerEl = document.createElement("div");
+      
+      let hotClass = "";
+      if (ctrl.loss > 150) {
+        hotClass = "drawer-hot";
+      } else if (ctrl.loss > 20) {
+        hotClass = "drawer-warm";
+      }
+      
+      drawerEl.className = `cabinet-drawer ${hotClass}`;
+      drawerEl.innerHTML = `
+        <span class="drawer-label">${ctrl.name}</span>
+        <span class="drawer-loss">${ctrl.loss.toFixed(0)} W</span>
+      `;
+      
+      drawersContainer.appendChild(drawerEl);
+    });
+    
+    // Fill remaining empty drawer space up to 6 drawers
+    const maxDrawers = 6;
+    const currentDrawers = activeControllers.length + 1; // including main
+    
+    for (let i = currentDrawers; i < maxDrawers; i++) {
+      const emptyEl = document.createElement("div");
+      emptyEl.className = "cabinet-drawer drawer-empty";
+      emptyEl.innerHTML = `
+        <span class="drawer-label">— Empty Space Slot —</span>
+      `;
+      drawersContainer.appendChild(emptyEl);
+    }
+  }
 }

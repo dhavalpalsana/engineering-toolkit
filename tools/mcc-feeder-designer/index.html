@@ -196,9 +196,15 @@
         <div class="panel-section system-globals">
           <h3>System Settings</h3>
           <div class="form-group">
+            <label for="sys-standard">Sizing Standard</label>
+            <select id="sys-standard" onchange="onStandardChange()">
+              <option value="IEC" selected>IEC (Metric)</option>
+              <option value="NEC">NEC / NEMA (US)</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label for="sys-voltage">System Voltage</label>
             <select id="sys-voltage" onchange="updateGlobals()">
-              <option value="480">480 V (3Ø)</option>
               <option value="400" selected>400 V (3Ø)</option>
               <option value="415">415 V (3Ø)</option>
               <option value="230">230 V (3Ø)</option>
@@ -238,6 +244,8 @@
             <span class="canvas-status" id="canvas-status">Status: Ready</span>
           </div>
           <div class="toolbar-right">
+            <button class="btn" onclick="openThermalModal()" title="View MCC Cabinet Heat Load & Layout" style="background: var(--bg-interactive); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 12px; height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: all var(--transition-fast);"><i data-lucide="thermometer" style="width: 16px; height: 16px; color: var(--accent-primary);"></i> MCC Thermal Stack</button>
+            <div class="tlb-divider"></div>
             <button class="icon-btn" onclick="zoomCanvas(1.1)" title="Zoom In"><i data-lucide="zoom-in"></i></button>
             <button class="icon-btn" onclick="zoomCanvas(0.9)" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
             <button class="icon-btn" onclick="resetZoom()" title="Reset Zoom"><i data-lucide="maximize-2"></i></button>
@@ -306,6 +314,50 @@
 
     </div>
   </main>
+
+  <!-- MCC Thermal & Enclosure Modal -->
+  <div id="thermal-modal" class="modal-backdrop hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>MCC Enclosure Thermal & Layout Calculator</h2>
+        <button class="close-btn" onclick="closeThermalModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-grid">
+          <!-- Left: Physical Stack Visual -->
+          <div class="cabinet-visual-container">
+            <h3>MCC Enclosure Stack</h3>
+            <div class="cabinet-frame">
+              <div class="cabinet-wireway">Vertical Wireway</div>
+              <div class="cabinet-drawers" id="cabinet-drawers-container">
+                <!-- Drawers rendered dynamically in JS -->
+              </div>
+            </div>
+          </div>
+          
+          <!-- Right: Thermal sizing parameters & results -->
+          <div class="cabinet-params-container">
+            <h3>Thermal Design Settings</h3>
+            <div class="form-group">
+              <label for="enc-ambient">Max Ambient Room Temp (°C)</label>
+              <input type="number" id="enc-ambient" value="35" min="15" max="50" onchange="recalculateThermal()">
+            </div>
+            <div class="form-group">
+              <label for="enc-max-temp">Max Allowable Enclosure Temp (°C)</label>
+              <input type="number" id="enc-max-temp" value="45" min="30" max="60" onchange="recalculateThermal()">
+            </div>
+            
+            <div class="sizing-results-card thermal-results">
+              <h3>Heat Sizing Summary</h3>
+              <div id="thermal-results-content">
+                <!-- Populated dynamically in JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Firebase & Project Helpers -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>

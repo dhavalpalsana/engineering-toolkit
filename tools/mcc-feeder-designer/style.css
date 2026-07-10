@@ -646,3 +646,218 @@ body::before {
   margin-left: 8px;
   font-weight: var(--font-weight-bold);
 }
+
+/* ── Modal Dialogs ────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalScaleUp var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--text-primary);
+}
+
+@keyframes modalScaleUp {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.close-btn {
+  font-size: 28px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: color var(--transition-fast);
+}
+
+.close-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.modal-grid {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── MCC Cabinet Visual ────────────────────────────────────── */
+.cabinet-visual-container h3,
+.cabinet-params-container h3 {
+  margin: 0 0 16px 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+}
+
+.cabinet-frame {
+  background: #090d16;
+  border: 4px solid #334155;
+  border-radius: var(--radius-lg);
+  display: flex;
+  padding: 12px;
+  gap: 12px;
+  height: 400px;
+  box-sizing: border-box;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+}
+
+.cabinet-wireway {
+  width: 44px;
+  background: #1e293b;
+  border: 1px dashed #475569;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  writing-mode: vertical-lr;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-family: var(--font-mono);
+  box-sizing: border-box;
+}
+
+.cabinet-drawers {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+  box-sizing: border-box;
+}
+
+.cabinet-drawer {
+  background: #1e293b;
+  border: 2px solid #334155;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #e2e8f0;
+  transition: all var(--transition-fast);
+  font-size: 11px;
+  height: 44px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.cabinet-drawer:hover {
+  border-color: var(--accent-primary);
+  background: #24334a;
+  transform: translateX(2px);
+}
+
+.drawer-label {
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-loss {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.cabinet-drawer.drawer-hot {
+  border-color: var(--color-error);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.cabinet-drawer.drawer-hot .drawer-loss {
+  color: var(--color-error);
+  font-weight: bold;
+}
+
+.cabinet-drawer.drawer-warm {
+  border-color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.cabinet-drawer.drawer-warm .drawer-loss {
+  color: var(--color-warning);
+  font-weight: bold;
+}
+
+.cabinet-drawer.drawer-main {
+  background: #334155;
+  border-color: #475569;
+}
+
+.cabinet-drawer.drawer-main .drawer-loss {
+  color: #cbd5e1;
+}
+
+.cabinet-drawer.drawer-empty {
+  border-style: dashed;
+  border-color: #1e293b;
+  background: transparent;
+  color: #475569;
+  justify-content: center;
+  cursor: default;
+}
+
+.cabinet-drawer.drawer-empty:hover {
+  transform: none;
+  background: transparent;
+}
