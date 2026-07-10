@@ -257,26 +257,55 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     let dxf = "  0\nSECTION\n  2\nENTITIES\n";
+
+    const addDxfLine = (x1, y1, x2, y2, layer) => {
+      dxf += "  0\nLINE\n  8\n" + layer + "\n";
+      dxf += ` 10\n${x1}\n 20\n${y1}\n 30\n0.0\n`;
+      dxf += ` 11\n${x2}\n 21\n${y2}\n 31\n0.0\n`;
+    };
+
+    const addDxfCircle = (cx, cy, r, layer) => {
+      dxf += "  0\nCIRCLE\n  8\n" + layer + "\n";
+      dxf += ` 10\n${cx}\n 20\n${cy}\n 30\n0.0\n 40\n${r}\n`;
+    };
+
+    // Draw boundary lines
     const n = sketchVertices.length;
     const limit = isSketchClosed ? n : n - 1;
-    
-    // Draw boundary lines
     for (let i = 0; i < limit; i++) {
       const p1 = sketchVertices[i];
       const p2 = sketchVertices[(i + 1) % n];
-      dxf += "  0\nLINE\n  8\nPROFILE_OUTLINE\n";
-      dxf += ` 10\n${p1.x}\n 20\n${p1.y}\n 30\n0.0\n`;
-      dxf += ` 11\n${p2.x}\n 21\n${p2.y}\n 31\n0.0\n`;
+      addDxfLine(p1.x, p1.y, p2.x, p2.y, "PROFILE_OUTLINE");
     }
 
     // Draw circle holes
     sketchCircles.forEach(c => {
-      dxf += "  0\nCIRCLE\n  8\nHoles\n";
-      dxf += ` 10\n${c.cx}\n 20\n${c.cy}\n 30\n0.0\n 40\n${c.r}\n`;
+      addDxfCircle(c.cx, c.cy, c.r, c.construction ? "CONSTRUCTION" : "HOLES");
     });
 
+    // Draw Sheet Format borders & title block on separate layer (Phase 6)
+    // Outer border
+    addDxfLine(0, 0, sheetWidth, 0, "SHEET_FORMAT");
+    addDxfLine(sheetWidth, 0, sheetWidth, sheetHeight, "SHEET_FORMAT");
+    addDxfLine(sheetWidth, sheetHeight, 0, sheetHeight, "SHEET_FORMAT");
+    addDxfLine(0, sheetHeight, 0, 0, "SHEET_FORMAT");
+    // Inner border
+    addDxfLine(10, 10, sheetWidth - 10, 10, "SHEET_FORMAT");
+    addDxfLine(sheetWidth - 10, 10, sheetWidth - 10, sheetHeight - 10, "SHEET_FORMAT");
+    addDxfLine(sheetWidth - 10, sheetHeight - 10, 10, sheetHeight - 10, "SHEET_FORMAT");
+    addDxfLine(10, sheetHeight - 10, 10, 10, "SHEET_FORMAT");
+    // Title block lines
+    const tx = sheetWidth - 110;
+    const ty = sheetHeight - 40;
+    const tw = 100;
+    const th = 30;
+    addDxfLine(tx, ty, tx + tw, ty, "SHEET_FORMAT");
+    addDxfLine(tx, ty + 10, tx + tw, ty + 10, "SHEET_FORMAT");
+    addDxfLine(tx, ty + 20, tx + tw, ty + 20, "SHEET_FORMAT");
+    addDxfLine(tx + 60, ty + 10, tx + 60, ty + 30, "SHEET_FORMAT");
+
     dxf += "  0\nENDSEC\n  0\nEOF\n";
-    
+
     const blob = new Blob([dxf], { type: "application/dxf" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
