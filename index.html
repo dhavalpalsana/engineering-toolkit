@@ -93,7 +93,18 @@
           <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
         <input type="text" id="search-input" class="search-input" placeholder="Search tools (e.g., wire, torque, copper)..." autocomplete="off" autofocus>
-        <span class="search-keyboard-shortcut">Ctrl+K</span>
+      </div>
+
+      <div class="search-filters-row">
+        <select id="sort-select" class="form-select" title="Sort tools grid">
+          <option value="default">Default Sort Order</option>
+          <option value="popularity">Most Popular (Global Uses)</option>
+          <option value="alphabetical">Alphabetical (A-Z)</option>
+        </select>
+        
+        <button id="filter-fav-btn" class="filter-fav-btn" title="Show only favorited tools">
+          <i data-lucide="star"></i> Favorites Only
+        </button>
       </div>
 
       <div class="stats-row">

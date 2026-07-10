@@ -734,3 +734,101 @@ footer {
     gap: 16px;
   }
 }
+
+/* ==========================================================================
+   Dashboard Sorting and Favorites
+   ========================================================================== */
+.search-filters-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  max-width: 580px;
+  margin: -12px auto 24px;
+}
+
+.search-filters-row .form-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  height: 38px;
+  min-width: 180px;
+  box-sizing: border-box;
+}
+
+.search-filters-row .form-select:hover {
+  border-color: var(--accent-teal);
+}
+
+.filter-fav-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+}
+
+.filter-fav-btn:hover {
+  border-color: var(--accent-teal);
+  color: var(--text-primary);
+}
+
+.filter-fav-btn.active {
+  background: var(--accent-teal-glow);
+  border-color: var(--accent-teal);
+  color: var(--accent-teal);
+}
+
+.tool-fav-star-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+}
+
+.tool-fav-star-btn:hover {
+  background: rgba(234, 179, 8, 0.1);
+  color: #eab308;
+}
+
+.tool-fav-star-btn.favorited {
+  color: #eab308 !important;
+}
+
+.tool-fav-star-btn.favorited svg {
+  fill: #eab308;
+}
+
+@media (max-width: 580px) {
+  .search-filters-row {
+    flex-direction: column;
+    width: 100%;
+    margin-bottom: 20px;
+  }
+  .search-filters-row .form-select,
+  .filter-fav-btn {
+    width: 100%;
+  }
+}

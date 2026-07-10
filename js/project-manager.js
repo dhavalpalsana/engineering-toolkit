@@ -7,6 +7,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const isHomepage = !config;
   const fb = window.fbHelper;
 
+  // Auto-increment global tool popularity statistics
+  if (config && config.toolId) {
+    const toolId = config.toolId;
+    // Check if Firebase is fully initialized
+    if (window.firebase && firebase.apps.length > 0) {
+      firebase.firestore().collection("tool_stats").doc(toolId).set({
+        uses: firebase.firestore.FieldValue.increment(1),
+        lastUsed: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(err => console.warn("Analytics write failed:", err));
+    }
+  }
+
   // Inject Styles for Drawer, Toolbar, Modal and Toast
   const style = document.createElement("style");
   style.textContent = `
