@@ -2106,6 +2106,51 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("mouseup", onRelease);
     window.addEventListener("touchend", onRelease);
     
+    // Double click to close the shape outline in draw mode
+    svg.addEventListener("dblclick", (e) => {
+      if (editorMode === "draw" && !isSketchClosed && sketchVertices.length >= 3) {
+        isSketchClosed = true;
+        drawSketchCanvas();
+        updateLiveProperties();
+      }
+    });
+    
+    // Right click to stop drawing or close outline
+    svg.addEventListener("contextmenu", (e) => {
+      e.preventDefault(); // Prevent standard browser menu
+      if (editorMode === "draw" && !isSketchClosed) {
+        if (sketchVertices.length >= 3) {
+          isSketchClosed = true;
+        } else {
+          sketchVertices = []; // Cancel current points
+        }
+        drawSketchCanvas();
+        updateLiveProperties();
+      }
+    });
+    
+    // ESC key to cancel active tools or close shape outline
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        const modal = document.getElementById("sketcher-modal");
+        if (!modal || modal.classList.contains("hidden")) return;
+        
+        if (editorMode === "draw" && !isSketchClosed) {
+          if (sketchVertices.length >= 3) {
+            isSketchClosed = true;
+          } else {
+            sketchVertices = []; // Reset outline
+          }
+        } else {
+          // Reset dimension or measure modes back to default draw mode
+          setEditorMode("draw");
+        }
+        drawSketchCanvas();
+        updateLiveProperties();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    
     eventsBound = true;
   }
 
