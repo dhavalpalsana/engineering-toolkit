@@ -89,12 +89,23 @@
       <!-- Left: SVG Drawing Canvas Area -->
       <div class="canvas-wrapper">
         <div class="sketcher-toolbar">
-          <button id="tool-draw-btn" class="tool-btn active" title="Profile / Polyline Tool" onclick="setEditorMode('draw')">
+          <!-- Drawing Tools -->
+          <button id="tool-draw-btn" class="tool-btn active" title="Line / Polyline Tool" onclick="setEditorMode('draw')">
             <i data-lucide="pen-tool"></i>
           </button>
-          <button id="tool-circle-btn" class="tool-btn" title="Circle Tool (Click Center, Drag Radius)" onclick="setEditorMode('circle')">
+          <button id="tool-circle-btn" class="tool-btn" title="Circle Tool" onclick="setEditorMode('circle')">
             <i data-lucide="circle"></i>
           </button>
+          <button id="tool-rect-btn" class="tool-btn" title="Rectangle Tool" onclick="setEditorMode('rect')">
+            <i data-lucide="square"></i>
+          </button>
+          <button id="tool-poly-btn" class="tool-btn" title="Poly Shape Tool" onclick="setEditorMode('poly')">
+            <i data-lucide="hexagon"></i>
+          </button>
+          
+          <div style="width: 24px; height: 1px; background: var(--border-color); margin: 4px auto; opacity: 0.5;"></div>
+          
+          <!-- Modification / Inspection Tools -->
           <button id="tool-fillet-btn" class="tool-btn" title="Fillet Corner" onclick="setEditorMode('fillet')">
             <i data-lucide="corner-down-right"></i>
           </button>
@@ -212,7 +223,7 @@
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
   <script id="project-manager-script" src="../../js/project-manager.js"></script>
-  <script src="app.js?v=2.0.2"></script>
+  <script src="app.js?v=2.0.3"></script>
 
   <script>
     lucide.createIcons();

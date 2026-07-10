@@ -24,6 +24,11 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeCircleCenter = null;
   let activeCircleRadius = 0;
 
+  // Rect & Poly drawing state
+  let polySides = 3;
+  let activeRectStart = null;
+  let activePolyCenter = null;
+
   // Selection & snapping
   let selectedEntity = null; // { type: 'line'|'circle'|'vertex', index: number }
   let hoveredSnapTarget = null; // { x, y, type: 'endpoint'|'midpoint'|'center' }
@@ -48,8 +53,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function getMousePos(svgCanvas, evt) {
     const rect = svgCanvas.getBoundingClientRect();
-    const sx = ((evt.clientX - rect.left) / rect.width) * 500;
-    const sy = ((evt.clientY - rect.top) / rect.height) * 500;
+    const w = rect.width;
+    const h = rect.height;
+    
+    let scale, padX, padY;
+    if (w / h > 1.0) {
+      // Widescreen pillarbox (horizontal centering offset)
+      scale = h / 500;
+      padX = (w - h) / 2;
+      padY = 0;
+    } else {
+      // Tall screen letterbox (vertical centering offset)
+      scale = w / 500;
+      padX = 0;
+      padY = (h - w) / 2;
+    }
+    
+    const sx = (evt.clientX - rect.left - padX) / scale;
+    const sy = (evt.clientY - rect.top - padY) / scale;
+    
     return {
       x: (sx - panOffset.x) / zoomLevel,
       y: (sy - panOffset.y) / zoomLevel
@@ -484,6 +506,36 @@ document.addEventListener("DOMContentLoaded", () => {
       cGuide.setAttribute("r", r);
       cGuide.setAttribute("class", "sk-polyline");
       svg.appendChild(cGuide);
+    }
+
+    // Draw active rectangle guide during placement
+    if (editorMode === "rect" && activeRectStart && mousePos) {
+      const rGuide = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      const pts = [
+        `${activeRectStart.x},${activeRectStart.y}`,
+        `${mousePos.x},${activeRectStart.y}`,
+        `${mousePos.x},${mousePos.y}`,
+        `${activeRectStart.x},${mousePos.y}`
+      ].join(" ");
+      rGuide.setAttribute("points", pts);
+      rGuide.setAttribute("class", "sk-polyline");
+      svg.appendChild(rGuide);
+    }
+
+    // Draw active polygon guide during placement
+    if (editorMode === "poly" && activePolyCenter && mousePos) {
+      const pGuide = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      const radius = Math.hypot(mousePos.x - activePolyCenter.x, mousePos.y - activePolyCenter.y);
+      const angleStep = (2 * Math.PI) / polySides;
+      const startAngle = Math.atan2(mousePos.y - activePolyCenter.y, mousePos.x - activePolyCenter.x);
+      const pts = [];
+      for (let i = 0; i < polySides; i++) {
+        const angle = startAngle + i * angleStep;
+        pts.push(`${Math.round(activePolyCenter.x + radius * Math.cos(angle))},${Math.round(activePolyCenter.y + radius * Math.sin(angle))}`);
+      }
+      pGuide.setAttribute("points", pts.join(" "));
+      pGuide.setAttribute("class", "sk-polyline");
+      svg.appendChild(pGuide);
     }
     
     // Draw Custom Dimensions
@@ -1023,6 +1075,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // ── RECTANGLE DRAWING MODE ──
+      if (editorMode === "rect") {
+        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
+        activeRectStart = snapPt;
+        return;
+      }
+
+      // ── POLYGON DRAWING MODE ──
+      if (editorMode === "poly") {
+        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
+        activePolyCenter = snapPt;
+        return;
+      }
+
       // ── POLYLINE DRAWING MODE ──
       if (editorMode === "draw") {
         if (targetVertexIndex !== null) {
@@ -1108,6 +1174,14 @@ document.addEventListener("DOMContentLoaded", () => {
         mousePos = finalSnapped;
         drawSketchCanvas();
       }
+      else if (editorMode === "rect" && activeRectStart) {
+        mousePos = finalSnapped;
+        drawSketchCanvas();
+      }
+      else if (editorMode === "poly" && activePolyCenter) {
+        mousePos = finalSnapped;
+        drawSketchCanvas();
+      }
       else if (editorMode === "measure" && isMeasuring) {
         mousePos = finalSnapped;
         drawSketchCanvas();
@@ -1134,6 +1208,41 @@ document.addEventListener("DOMContentLoaded", () => {
           });
         }
         activeCircleCenter = null;
+        drawSketchCanvas();
+        updateLiveProperties();
+      }
+      else if (editorMode === "rect" && activeRectStart) {
+        const radiusX = Math.abs(snapPt.x - activeRectStart.x);
+        const radiusY = Math.abs(snapPt.y - activeRectStart.y);
+        if (radiusX > 2 && radiusY > 2) {
+          sketchVertices = [
+            { x: activeRectStart.x, y: activeRectStart.y },
+            { x: snapPt.x, y: activeRectStart.y },
+            { x: snapPt.x, y: snapPt.y },
+            { x: activeRectStart.x, y: snapPt.y }
+          ];
+          isSketchClosed = true;
+        }
+        activeRectStart = null;
+        drawSketchCanvas();
+        updateLiveProperties();
+      }
+      else if (editorMode === "poly" && activePolyCenter) {
+        const radius = Math.round(Math.hypot(snapPt.x - activePolyCenter.x, snapPt.y - activePolyCenter.y));
+        if (radius > 4) {
+          const angleStep = (2 * Math.PI) / polySides;
+          const startAngle = Math.atan2(snapPt.y - activePolyCenter.y, snapPt.x - activePolyCenter.x);
+          sketchVertices = [];
+          for (let i = 0; i < polySides; i++) {
+            const angle = startAngle + i * angleStep;
+            sketchVertices.push({
+              x: Math.round(activePolyCenter.x + radius * Math.cos(angle)),
+              y: Math.round(activePolyCenter.y + radius * Math.sin(angle))
+            });
+          }
+          isSketchClosed = true;
+        }
+        activePolyCenter = null;
         drawSketchCanvas();
         updateLiveProperties();
       }
@@ -1200,6 +1309,15 @@ document.addEventListener("DOMContentLoaded", () => {
     
     if (mode === "draw") document.getElementById("tool-draw-btn").classList.add("active");
     else if (mode === "circle") document.getElementById("tool-circle-btn").classList.add("active");
+    else if (mode === "rect") document.getElementById("tool-rect-btn").classList.add("active");
+    else if (mode === "poly") {
+      document.getElementById("tool-poly-btn").classList.add("active");
+      const input = prompt("Enter number of polygon sides:", polySides);
+      const parsed = parseInt(input);
+      if (!isNaN(parsed) && parsed >= 3 && parsed <= 20) {
+        polySides = parsed;
+      }
+    }
     else if (mode === "fillet") document.getElementById("tool-fillet-btn").classList.add("active");
     else if (mode === "offset") document.getElementById("tool-offset-btn").classList.add("active");
     else if (mode === "dimension") document.getElementById("tool-dimension-btn").classList.add("active");
@@ -1225,6 +1343,12 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (mode === "circle") {
       instr.textContent = "Circle Mode: Click center point, drag outward, and release to place circular cutout.";
       statusText.textContent = "Status: Circle / Hole Creator";
+    } else if (mode === "rect") {
+      instr.textContent = "Rectangle Mode: Click first corner, drag diagonal, and release to draw a rectangle.";
+      statusText.textContent = "Status: Rectangle Creator";
+    } else if (mode === "poly") {
+      instr.textContent = `Polygon Mode (${polySides}-sided): Click center point, drag outward, and release to place.`;
+      statusText.textContent = `Status: Drawing ${polySides}-sided Polygon`;
     } else if (mode === "fillet") {
       instr.textContent = "Fillet Mode: Click any corner node handle on the canvas to round it.";
       statusText.textContent = "Status: Fillet / Round Modifier";
