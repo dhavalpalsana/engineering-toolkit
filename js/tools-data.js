@@ -84,7 +84,7 @@ const TOOLS_DATA = [
     tags: ["mechanical", "civil", "structural", "beam", "mechanics", "fea"],
     icon: "activity",
     path: "./tools/beam-calculator/index.html",
-    status: "active"
+    status: "beta"
   },
   {
     id: "heatsink-simulator",
