@@ -84,7 +84,7 @@ const TOOLS_DATA = [
     tags: ["mechanical", "civil", "cad", "drafting", "vector", "blueprint"],
     icon: "ruler",
     path: "./tools/drafting-board/index.html",
-    status: "active"
+    status: "beta"
   },
   {
     id: "beam-calculator",
