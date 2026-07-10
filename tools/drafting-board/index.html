@@ -180,6 +180,19 @@
               <option value="A3">ISO A3 (420 x 297 mm)</option>
             </select>
           </div>
+          
+          <div class="grid-controls-row" style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="toggle-projections-cb" checked onchange="toggleProjectedViews()" style="width: 16px; height: 16px; cursor: pointer;" />
+            <label for="toggle-projections-cb" style="margin: 0; cursor: pointer; font-weight: 500;">Show Orthographic Projections</label>
+          </div>
+
+          <div class="grid-controls-row" id="extrusion-thickness-row" style="margin-top: 10px;">
+            <label for="extrusion-thickness-input">Part Extrusion Thickness</label>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="number" id="extrusion-thickness-input" class="form-select" value="12" min="2" max="100" onchange="changeExtrusionThickness()" style="width: 80px;" />
+              <span style="font-size: 12px; color: var(--text-muted);">mm</span>
+            </div>
+          </div>
         </div>
 
         <!-- Vector Exports -->
@@ -230,7 +243,7 @@
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
   <script id="project-manager-script" src="../../js/project-manager.js"></script>
-  <script src="app.js?v=2.0.4"></script>
+  <script src="app.js?v=2.0.5"></script>
 
   <script>
     lucide.createIcons();
