@@ -35,6 +35,11 @@ document.addEventListener("DOMContentLoaded", () => {
   
   let shiftPressed = false;
 
+  // Sheet layout format config (A4 landscape is default)
+  let sheetSize = "A4";
+  let sheetWidth = 297;
+  let sheetHeight = 210;
+
   // Viewport Zoom & Pan state
   let zoomLevel = 1.0;
   let panOffset = { x: 0, y: 0 };
@@ -56,17 +61,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const w = rect.width;
     const h = rect.height;
     
+    const aspect = sheetWidth / sheetHeight;
     let scale, padX, padY;
-    if (w / h > 1.0) {
+    if (w / h > aspect) {
       // Widescreen pillarbox (horizontal centering offset)
-      scale = h / 500;
-      padX = (w - h) / 2;
+      scale = h / sheetHeight;
+      padX = (w - h * aspect) / 2;
       padY = 0;
     } else {
       // Tall screen letterbox (vertical centering offset)
-      scale = w / 500;
+      scale = w / sheetWidth;
       padX = 0;
-      padY = (h - w) / 2;
+      padY = (h - w / aspect) / 2;
     }
     
     const sx = (evt.clientX - rect.left - padX) / scale;
@@ -375,9 +381,128 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // --- Drawing Sheet Format Background Overlay ---
+  function drawSheetFormat(svgElement) {
+    // 1. Draw Paper background rectangle (white sheet)
+    const paper = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    paper.setAttribute("x", 0);
+    paper.setAttribute("y", 0);
+    paper.setAttribute("width", sheetWidth);
+    paper.setAttribute("height", sheetHeight);
+    paper.setAttribute("fill", "#ffffff");
+    paper.setAttribute("stroke", "var(--border-color)");
+    paper.setAttribute("stroke-width", 2);
+    svgElement.appendChild(paper);
+
+    // 2. Draw Outer Margin border (10mm indent)
+    const border = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    border.setAttribute("x", 10);
+    border.setAttribute("y", 10);
+    border.setAttribute("width", sheetWidth - 20);
+    border.setAttribute("height", sheetHeight - 20);
+    border.setAttribute("fill", "none");
+    border.setAttribute("stroke", "var(--text-primary)");
+    border.setAttribute("stroke-width", 1.5);
+    svgElement.appendChild(border);
+
+    // 3. Draw standard zone subdivisions ticks and labels (A-D, 1-4)
+    // Horizontal zones (1, 2, 3, 4)
+    const zonesX = 4;
+    const zoneW = (sheetWidth - 20) / zonesX;
+    for (let i = 1; i < zonesX; i++) {
+      const x = 10 + i * zoneW;
+      const tickTop = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      tickTop.setAttribute("x1", x); tickTop.setAttribute("y1", 10);
+      tickTop.setAttribute("x2", x); tickTop.setAttribute("y2", 14);
+      tickTop.setAttribute("stroke", "var(--text-primary)");
+      svgElement.appendChild(tickTop);
+
+      const tickBot = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      tickBot.setAttribute("x1", x); tickBot.setAttribute("y1", sheetHeight - 10);
+      tickBot.setAttribute("x2", x); tickBot.setAttribute("y2", sheetHeight - 14);
+      tickBot.setAttribute("stroke", "var(--text-primary)");
+      svgElement.appendChild(tickBot);
+    }
+
+    // Vertical zones (A, B, C, D)
+    const zonesY = 4;
+    const zoneH = (sheetHeight - 20) / zonesY;
+    for (let i = 1; i < zonesY; i++) {
+      const y = 10 + i * zoneH;
+      const tickLeft = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      tickLeft.setAttribute("x1", 10); tickLeft.setAttribute("y1", y);
+      tickLeft.setAttribute("x2", 14); tickLeft.setAttribute("y2", y);
+      tickLeft.setAttribute("stroke", "var(--text-primary)");
+      svgElement.appendChild(tickLeft);
+
+      const tickRight = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      tickRight.setAttribute("x1", sheetWidth - 10); tickRight.setAttribute("y1", y);
+      tickRight.setAttribute("x2", sheetWidth - 14); tickRight.setAttribute("y2", y);
+      tickRight.setAttribute("stroke", "var(--text-primary)");
+      svgElement.appendChild(tickRight);
+    }
+
+    // 4. Draw standard Title Block (bottom-right)
+    // Box dimensions: width 100mm, height 30mm
+    const tx = sheetWidth - 110;
+    const ty = sheetHeight - 40;
+    const tw = 100;
+    const th = 30;
+
+    const tbOuter = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    tbOuter.setAttribute("x", tx);
+    tbOuter.setAttribute("y", ty);
+    tbOuter.setAttribute("width", tw);
+    tbOuter.setAttribute("height", th);
+    tbOuter.setAttribute("fill", "var(--bg-secondary)");
+    tbOuter.setAttribute("stroke", "var(--text-primary)");
+    tbOuter.setAttribute("stroke-width", 1.5);
+    svgElement.appendChild(tbOuter);
+
+    // Divisions inside title block
+    const divH1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    divH1.setAttribute("x1", tx); divH1.setAttribute("y1", ty + 10);
+    divH1.setAttribute("x2", tx + tw); divH1.setAttribute("y2", ty + 10);
+    divH1.setAttribute("stroke", "var(--text-primary)");
+    svgElement.appendChild(divH1);
+
+    const divH2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    divH2.setAttribute("x1", tx); divH2.setAttribute("y1", ty + 20);
+    divH2.setAttribute("x2", tx + tw); divH2.setAttribute("y2", ty + 20);
+    divH2.setAttribute("stroke", "var(--text-primary)");
+    svgElement.appendChild(divH2);
+
+    const divV1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    divV1.setAttribute("x1", tx + 60); divV1.setAttribute("y1", ty + 10);
+    divV1.setAttribute("x2", tx + 60); divV1.setAttribute("y2", ty + 30);
+    divV1.setAttribute("stroke", "var(--text-primary)");
+    svgElement.appendChild(divV1);
+
+    // Add Texts
+    const addText = (text, x, y, size, weight = "normal", anchor = "start") => {
+      const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      txt.setAttribute("x", x);
+      txt.setAttribute("y", y);
+      txt.setAttribute("font-size", size);
+      txt.setAttribute("font-family", "var(--font-sans)");
+      txt.setAttribute("font-weight", weight);
+      txt.setAttribute("text-anchor", anchor);
+      txt.setAttribute("fill", "var(--text-primary)");
+      txt.textContent = text;
+      svgElement.appendChild(txt);
+    };
+
+    addText("ENGINEERING TOOLKIT CAD", tx + 5, ty + 7, 5, "bold");
+    addText("DWG NO: ET-DRAFT-001", tx + 5, ty + 16, 4);
+    addText(`SCALE: 1:1`, tx + 65, ty + 16, 4);
+    addText(`SIZE: ${sheetSize}  SHEET 1 OF 1`, tx + 5, ty + 26, 4);
+    addText("APPROVED", tx + 65, ty + 26, 4, "bold");
+  }
+
   // --- SVG Viewport Rendering ---
   function drawSketchCanvas(drawCursorLine = false) {
     if (!svg) return;
+    svg.setAttribute("viewBox", `0 0 ${sheetWidth} ${sheetHeight}`);
     svg.innerHTML = `
       <defs>
         <marker id="arrow-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -398,23 +523,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderToViewport(svg, drawCursorLine) {
     
-    // Draw Grid Lines (10px increments)
-    for (let x = 20; x < 500; x += 20) {
+    // --- 1. Draw Paper Sheet Format (Borders, Title block, Subdivisions) ---
+    drawSheetFormat(svg);
+
+    // --- 2. Draw Bounded Grid Lines (avoiding title block) ---
+    const majorStep = 50;
+    const minorStep = 10;
+    const margin = 10;
+
+    for (let x = margin + minorStep; x < sheetWidth - margin; x += minorStep) {
+      const isInsideTitleBlockX = (x > sheetWidth - 110);
       const lineX = document.createElementNS("http://www.w3.org/2000/svg", "line");
       lineX.setAttribute("x1", x);
-      lineX.setAttribute("y1", 0);
+      lineX.setAttribute("y1", margin);
       lineX.setAttribute("x2", x);
-      lineX.setAttribute("y2", 500);
-      lineX.setAttribute("class", x % 100 === 0 ? "sk-grid-major" : "sk-grid-minor");
+      lineX.setAttribute("y2", isInsideTitleBlockX ? sheetHeight - 40 : sheetHeight - margin);
+      lineX.setAttribute("class", x % majorStep === 0 ? "sk-grid-major" : "sk-grid-minor");
       svg.appendChild(lineX);
     }
-    for (let y = 20; y < 500; y += 20) {
+    
+    for (let y = margin + minorStep; y < sheetHeight - margin; y += minorStep) {
+      const isInsideTitleBlockY = (y > sheetHeight - 40);
       const lineY = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      lineY.setAttribute("x1", 0);
+      lineY.setAttribute("x1", margin);
       lineY.setAttribute("y1", y);
-      lineY.setAttribute("x2", 500);
+      lineY.setAttribute("x2", isInsideTitleBlockY ? sheetWidth - 110 : sheetWidth - margin);
       lineY.setAttribute("y2", y);
-      lineY.setAttribute("class", y % 100 === 0 ? "sk-grid-major" : "sk-grid-minor");
+      lineY.setAttribute("class", y % majorStep === 0 ? "sk-grid-major" : "sk-grid-minor");
       svg.appendChild(lineY);
     }
     
@@ -1299,6 +1434,20 @@ document.addEventListener("DOMContentLoaded", () => {
     zoomLevel = 1.0;
     panOffset = { x: 0, y: 0 };
     drawSketchCanvas();
+  };
+
+  window.changeSheetSize = () => {
+    const select = document.getElementById("sheet-size-select");
+    if (!select) return;
+    sheetSize = select.value;
+    if (sheetSize === "A4") {
+      sheetWidth = 297;
+      sheetHeight = 210;
+    } else if (sheetSize === "A3") {
+      sheetWidth = 420;
+      sheetHeight = 297;
+    }
+    resetViewport();
   };
 
   // --- CAD Editor Toolbar Switcher ---

@@ -173,6 +173,13 @@
               <option value="50">50 mm</option>
             </select>
           </div>
+          <div class="grid-controls-row">
+            <label for="sheet-size-select">Drawing Sheet Size</label>
+            <select id="sheet-size-select" class="form-select" onchange="changeSheetSize()">
+              <option value="A4" selected>ISO A4 (297 x 210 mm)</option>
+              <option value="A3">ISO A3 (420 x 297 mm)</option>
+            </select>
+          </div>
         </div>
 
         <!-- Vector Exports -->
@@ -223,7 +230,7 @@
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
   <script id="project-manager-script" src="../../js/project-manager.js"></script>
-  <script src="app.js?v=2.0.3"></script>
+  <script src="app.js?v=2.0.4"></script>
 
   <script>
     lucide.createIcons();
