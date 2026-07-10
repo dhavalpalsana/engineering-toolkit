@@ -825,36 +825,40 @@ body::before {
   font-style: italic;
 }
 
-/* CAD Toolbar and Mode buttons */
+/* CAD Toolbar and Mode buttons (floating) */
 .sketcher-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  z-index: 10;
 }
 
 .tool-btn {
-  background: var(--bg-interactive);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(6px);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 8px 16px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-md);
-  font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   transition: all var(--transition-fast);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25);
 }
 
 .tool-btn:hover {
   border-color: var(--accent-primary);
-  background: var(--bg-tertiary);
+  background: rgba(30, 41, 59, 0.9);
 }
 
 .tool-btn.active {
   background: var(--accent-primary);
-  color: var(--bg-primary);
+  color: #000 !important;
   border-color: var(--accent-primary);
 }
 

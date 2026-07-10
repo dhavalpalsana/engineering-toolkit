@@ -1602,7 +1602,6 @@ document.addEventListener("DOMContentLoaded", () => {
       applyBtn.disabled = true;
     }
     
-    updateSegmentsList();
     updateCustomDimensionsList();
   }
 
@@ -2110,114 +2109,7 @@ document.addEventListener("DOMContentLoaded", () => {
     eventsBound = true;
   }
 
-  function updateSegmentsList() {
-    const container = document.getElementById("segments-list");
-    if (!container) return;
-    container.innerHTML = "";
-    
-    const n = sketchVertices.length;
-    if (n < 2) {
-      container.innerHTML = "<p class='no-segments-lbl'>Sketch lines to see dimensions...</p>";
-      return;
-    }
-    
-    const limit = isSketchClosed ? n : n - 1;
-    for (let i = 0; i < limit; i++) {
-      const p1 = sketchVertices[i];
-      const p2 = sketchVertices[(i + 1) % n];
-      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      
-      let orientation = "Diagonal";
-      if (Math.abs(p1.x - p2.x) < 0.5) orientation = "Horizontal"; // wait, if dx = 0, dy != 0, it's vertical!
-      else if (Math.abs(p1.y - p2.y) < 0.5) orientation = "Vertical"; // wait, if dy = 0, dx != 0, it's horizontal!
-      // Ah! Let's fix that!
-      // If x is constant (dx = 0), the line goes up/down, which is Vertical.
-      // If y is constant (dy = 0), the line goes left/right, which is Horizontal.
-      // So:
-      // if Math.abs(p1.x - p2.x) < 0.5 -> Vertical
-      // if Math.abs(p1.y - p2.y) < 0.5 -> Horizontal
-      if (Math.abs(p1.x - p2.x) < 0.5) orientation = "Vertical";
-      else if (Math.abs(p1.y - p2.y) < 0.5) orientation = "Horizontal";
-      
-      const item = document.createElement("div");
-      item.className = "segment-item";
-      item.dataset.index = i;
-      item.innerHTML = `
-        <div class="seg-info">
-          <span class="seg-name">Line ${i + 1} (${orientation})</span>
-          <span class="seg-length">${Math.round(len)} mm</span>
-        </div>
-        <button class="edit-seg-btn" onclick="editSegmentLength(${i})">
-          <i data-lucide="edit-2"></i> Edit
-        </button>
-      `;
-      
-      item.addEventListener("mouseenter", () => {
-        hoveredSegmentIndex = i;
-        drawSketchCanvas();
-      });
-      item.addEventListener("mouseleave", () => {
-        hoveredSegmentIndex = -1;
-        drawSketchCanvas();
-      });
-      
-      container.appendChild(item);
-    }
-    
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
-  }
 
-  window.editSegmentLength = (idx) => {
-    const n = sketchVertices.length;
-    if (n < 2) return;
-    
-    const i1 = idx;
-    const i2 = (idx + 1) % n;
-    
-    const p1 = sketchVertices[i1];
-    const p2 = sketchVertices[i2];
-    
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const len = Math.hypot(dx, dy);
-    
-    if (len < 0.1) return;
-    
-    const promptVal = prompt(`Enter new length for Line ${idx + 1} in mm (current: ${Math.round(len)} mm):`, Math.round(len));
-    if (promptVal === null) return;
-    
-    const newLen = parseFloat(promptVal);
-    if (isNaN(newLen) || newLen <= 0) {
-      alert("Please enter a valid positive length.");
-      return;
-    }
-    
-    const ratio = newLen / len;
-    
-    if (idx === n - 1) {
-      // Last segment: shift p1 (which is index i1) relative to p2
-      const newPX = p2.x - dx * ratio;
-      const newPY = p2.y - dy * ratio;
-      sketchVertices[i1].x = Math.round(newPX);
-      sketchVertices[i1].y = Math.round(newPY);
-    } else {
-      // Normal segment: move p2 and shift all downstream nodes
-      const targetX = p1.x + dx * ratio;
-      const targetY = p1.y + dy * ratio;
-      const shiftX = targetX - p2.x;
-      const shiftY = targetY - p2.y;
-      
-      for (let j = i2; j < n; j++) {
-        sketchVertices[j].x = Math.round(sketchVertices[j].x + shiftX);
-        sketchVertices[j].y = Math.round(sketchVertices[j].y + shiftY);
-      }
-    }
-    
-    drawSketchCanvas();
-    updateLiveProperties();
-  };
 
   window.setEditorMode = (mode) => {
     editorMode = mode;

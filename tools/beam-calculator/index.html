@@ -380,25 +380,24 @@
         <button class="close-modal-btn" onclick="closeSketcher()">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="sketcher-toolbar">
-          <button id="tool-draw-btn" class="tool-btn active" onclick="setEditorMode('draw')">
-            <i data-lucide="pen-tool"></i> Draw Shape
-          </button>
-          <button id="tool-dimension-btn" class="tool-btn" onclick="setEditorMode('dimension')">
-            <i data-lucide="ruler"></i> Add Dimension
-          </button>
-          <button id="tool-measure-btn" class="tool-btn" onclick="setEditorMode('measure')">
-            <i data-lucide="compass"></i> Measure Ruler
-          </button>
-        </div>
-        
         <div id="sketcher-instruction" class="sketcher-instruction">
           Click on the grid to place vertices. Click the starting node (or 'Close Shape') to close the loop.
         </div>
         
         <div class="sketcher-layout">
           <!-- Left: SVG Drawing Canvas -->
-          <div class="canvas-wrapper">
+          <div class="canvas-wrapper" style="position: relative;">
+            <div class="sketcher-toolbar" style="position: absolute; top: 12px; left: 12px; z-index: 10; margin-bottom: 0;">
+              <button id="tool-draw-btn" class="tool-btn active" title="Draw Shape (Plot vertices)" onclick="setEditorMode('draw')">
+                <i data-lucide="pen-tool"></i>
+              </button>
+              <button id="tool-dimension-btn" class="tool-btn" title="Add Custom Dimension (Select 2 nodes)" onclick="setEditorMode('dimension')">
+                <i data-lucide="ruler"></i>
+              </button>
+              <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (Click any 2 points)" onclick="setEditorMode('measure')">
+                <i data-lucide="compass"></i>
+              </button>
+            </div>
             <svg id="sketch-canvas-svg" width="400" height="400" viewBox="0 0 400 400"></svg>
           </div>
           
@@ -431,14 +430,6 @@
                   <option value="10" selected>10 mm</option>
                   <option value="20">20 mm</option>
                 </select>
-              </div>
-            </div>
-            
-            <!-- Segment list -->
-            <div class="sidebar-section">
-              <h4>Segment Dimensions</h4>
-              <div id="segments-list" class="segments-list" style="max-height: 140px; overflow-y: auto; padding-right: 4px;">
-                <p class="no-segments-lbl">Sketch lines to see dimensions...</p>
               </div>
             </div>
 
