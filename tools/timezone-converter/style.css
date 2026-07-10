@@ -314,18 +314,18 @@ body::before {
   overflow: hidden;
   background: linear-gradient(
     to right,
-    #1b2a4a 0%,     /* Midnight */
-    #1b2a4a 18%,    /* Late Night */
-    #2b3e6b 24%,    /* Pre-Dawn */
+    #2c3b5e 0%,     /* Midnight */
+    #2c3b5e 18%,    /* Late Night */
+    #435585 24%,    /* Pre-Dawn */
     #f97316 28%,    /* Sunrise Glow */
     #7dd3fc 34%,    /* Morning Sky */
     #7dd3fc 37.5%,  /* Morning */
     #fef08a 44%,    /* Midday Workday */
     #fef08a 70.83%, /* Afternoon Workday */
     #ea580c 74.5%,  /* Sunset */
-    #353b75 79%,    /* Twilight Purple */
-    #1b2a4a 84%,    /* Night Fall */
-    #1b2a4a 100%    /* Midnight */
+    #4a55a2 79%,    /* Twilight Purple */
+    #2c3b5e 84%,    /* Night Fall */
+    #2c3b5e 100%    /* Midnight */
   );
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
 }
