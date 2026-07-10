@@ -825,3 +825,75 @@ body::before {
   font-style: italic;
 }
 
+/* CAD Toolbar and Mode buttons */
+.sketcher-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tool-btn {
+  background: var(--bg-interactive);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+
+.tool-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+
+.tool-btn.active {
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  border-color: var(--accent-primary);
+}
+
+.sketcher-instruction {
+  background: var(--accent-primary-glow);
+  border: 1px solid var(--accent-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  font-family: var(--font-sans);
+}
+
+.custom-dimensions-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Highlighted handle inside CAD Dimension Mode */
+.sk-handle-selected {
+  fill: #f97316 !important;
+  stroke: #ea580c !important;
+  r: 8 !important;
+}
+
+.sk-measure-line {
+  stroke: #22c55e;
+  stroke-width: 1.5;
+  stroke-dasharray: 4,4;
+}
+
+.sk-measure-lbl {
+  fill: #22c55e;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+

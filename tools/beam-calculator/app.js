@@ -27,6 +27,15 @@ document.addEventListener("DOMContentLoaded", () => {
   let mousePos = { x: 0, y: 0 };
   let hoveredSegmentIndex = -1; // Index of segment currently hovered in list
 
+  // Interactive CAD modes variables
+  let editorMode = "draw"; // "draw", "dimension", "measure"
+  let customDimensions = []; // [{ v1: index1, v2: index2 }]
+  let selectedVertexA = -1; // Vertex A for custom dimension selection
+  let selectedVertexB = -1; // Vertex B for custom dimension selection
+  let measureStartPos = null; // Ruler start coordinate
+  let measureEndPos = null; // Ruler end coordinate
+  let isMeasuring = false;
+
   // Section shape parameters
   let sectionParams = {
     rectSolid: { b: 150, d: 300 },
@@ -1200,7 +1209,8 @@ document.addEventListener("DOMContentLoaded", () => {
       sketchedD,
       sketchedA,
       sketchedSz,
-      sketchedVertices
+      sketchedVertices,
+      customDimensions
     };
   };
 
@@ -1224,6 +1234,7 @@ document.addEventListener("DOMContentLoaded", () => {
     sketchedA = state.sketchedA || 450.0;
     sketchedSz = state.sketchedSz || 2250.0;
     sketchedVertices = state.sketchedVertices || [];
+    customDimensions = state.customDimensions || [];
     
     // Sync forms
     beamLengthInput.value = L;
@@ -1374,6 +1385,9 @@ document.addEventListener("DOMContentLoaded", () => {
       loadSketchTemplate("rect");
     }
     
+    // Set default editor mode to "draw" on startup
+    setEditorMode("draw");
+    
     document.getElementById("sketcher-modal").classList.remove("hidden");
     initSketcherEvents();
     drawSketchCanvas();
@@ -1387,6 +1401,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.clearSketchCanvas = () => {
     sketchVertices = [];
     isSketchClosed = false;
+    customDimensions = []; // Clear custom dimensions
     drawSketchCanvas();
     updateLiveProperties();
   };
@@ -1397,6 +1412,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       sketchVertices.pop();
     }
+    // Prune custom dimensions that reference removed vertices
+    customDimensions = customDimensions.filter(d => d.v1 < sketchVertices.length && d.v2 < sketchVertices.length);
     drawSketchCanvas();
     updateLiveProperties();
   };
@@ -1418,6 +1435,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.loadSketchTemplate = (type) => {
     isSketchClosed = true;
+    customDimensions = []; // Clear custom dimensions since shape structure changes
     if (type === "rect") {
       // 200x200 rectangle centered on 200,200
       sketchVertices = [
@@ -1585,6 +1603,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     updateSegmentsList();
+    updateCustomDimensionsList();
   }
 
   function drawSketchCanvas(drawCursorLine = false) {
@@ -1790,6 +1809,153 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       
+      // Draw selected vertex A highlight in dimension mode
+      if (editorMode === "dimension" && selectedVertexA !== -1) {
+        const pt = sketchVertices[selectedVertexA];
+        if (pt) {
+          const highlight = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          highlight.setAttribute("cx", pt.x);
+          highlight.setAttribute("cy", pt.y);
+          highlight.setAttribute("r", "8");
+          highlight.setAttribute("class", "sk-handle-selected");
+          svg.appendChild(highlight);
+        }
+      }
+      
+      // Draw all custom dimensions
+      customDimensions.forEach((dim, dimIdx) => {
+        const p1 = sketchVertices[dim.v1];
+        const p2 = sketchVertices[dim.v2];
+        if (!p1 || !p2) return;
+        
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        
+        if (len > 0.1) {
+          const mx = (p1.x + p2.x) / 2;
+          const my = (p1.y + p2.y) / 2;
+          
+          const theta = Math.atan2(dy, dx);
+          const normalAngle = theta - Math.PI / 2;
+          
+          // Nest dimension offsets to avoid overlaps
+          const offsetDist = 32 + (dimIdx * 18); 
+          
+          const o1x = p1.x + offsetDist * Math.cos(normalAngle);
+          const o1y = p1.y + offsetDist * Math.sin(normalAngle);
+          const o2x = p2.x + offsetDist * Math.cos(normalAngle);
+          const o2y = p2.y + offsetDist * Math.sin(normalAngle);
+          const midx = mx + offsetDist * Math.cos(normalAngle);
+          const midy = my + offsetDist * Math.sin(normalAngle);
+          
+          // Extension lines
+          const ext1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ext1.setAttribute("x1", p1.x);
+          ext1.setAttribute("y1", p1.y);
+          ext1.setAttribute("x2", o1x);
+          ext1.setAttribute("y2", o1y);
+          ext1.setAttribute("class", "sk-dim-ext");
+          svg.appendChild(ext1);
+          
+          const ext2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          ext2.setAttribute("x1", p2.x);
+          ext2.setAttribute("y1", p2.y);
+          ext2.setAttribute("x2", o2x);
+          ext2.setAttribute("y2", o2y);
+          ext2.setAttribute("class", "sk-dim-ext");
+          svg.appendChild(ext2);
+          
+          // Dimension line
+          const dimLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          dimLine.setAttribute("x1", o1x);
+          dimLine.setAttribute("y1", o1y);
+          dimLine.setAttribute("x2", o2x);
+          dimLine.setAttribute("y2", o2y);
+          dimLine.setAttribute("class", "sk-dim-line");
+          svg.appendChild(dimLine);
+          
+          // Solid background pill behind text
+          const txtBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          txtBg.setAttribute("x", midx - 22);
+          txtBg.setAttribute("y", midy - 8);
+          txtBg.setAttribute("width", 44);
+          txtBg.setAttribute("height", 16);
+          txtBg.setAttribute("rx", 3);
+          txtBg.setAttribute("fill", "var(--bg-secondary)");
+          txtBg.setAttribute("stroke", "var(--border-color)");
+          txtBg.setAttribute("stroke-width", "0.5");
+          svg.appendChild(txtBg);
+          
+          // Dimension text
+          const dimTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          dimTxt.setAttribute("x", midx);
+          dimTxt.setAttribute("y", midy + 4);
+          dimTxt.setAttribute("class", "sk-dim-lbl");
+          dimTxt.textContent = `${Math.round(len)}mm`;
+          svg.appendChild(dimTxt);
+        }
+      });
+
+      // Draw measure tool ruler lines
+      if (editorMode === "measure" && measureStartPos) {
+        const dotStart = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dotStart.setAttribute("cx", measureStartPos.x);
+        dotStart.setAttribute("cy", measureStartPos.y);
+        dotStart.setAttribute("r", "4");
+        dotStart.setAttribute("fill", "#22c55e");
+        svg.appendChild(dotStart);
+        
+        let targetPos = null;
+        if (isMeasuring && mousePos) {
+          targetPos = mousePos;
+        } else if (!isMeasuring && measureEndPos) {
+          targetPos = measureEndPos;
+          
+          const dotEnd = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          dotEnd.setAttribute("cx", measureEndPos.x);
+          dotEnd.setAttribute("cy", measureEndPos.y);
+          dotEnd.setAttribute("r", "4");
+          dotEnd.setAttribute("fill", "#22c55e");
+          svg.appendChild(dotEnd);
+        }
+        
+        if (targetPos) {
+          const dx = targetPos.x - measureStartPos.x;
+          const dy = targetPos.y - measureStartPos.y;
+          const dist = Math.hypot(dx, dy);
+          
+          const mLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          mLine.setAttribute("x1", measureStartPos.x);
+          mLine.setAttribute("y1", measureStartPos.y);
+          mLine.setAttribute("x2", targetPos.x);
+          mLine.setAttribute("y2", targetPos.y);
+          mLine.setAttribute("class", "sk-measure-line");
+          svg.appendChild(mLine);
+          
+          const midX = (measureStartPos.x + targetPos.x) / 2;
+          const midY = (measureStartPos.y + targetPos.y) / 2;
+          
+          const txtBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          txtBg.setAttribute("x", midX - 30);
+          txtBg.setAttribute("y", midY - 9);
+          txtBg.setAttribute("width", 60);
+          txtBg.setAttribute("height", 18);
+          txtBg.setAttribute("rx", 3);
+          txtBg.setAttribute("fill", "var(--bg-secondary)");
+          txtBg.setAttribute("stroke", "#22c55e");
+          txtBg.setAttribute("stroke-width", "0.8");
+          svg.appendChild(txtBg);
+          
+          const mTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          mTxt.setAttribute("x", midX);
+          mTxt.setAttribute("y", midY + 4);
+          mTxt.setAttribute("class", "sk-measure-lbl");
+          mTxt.textContent = `${Math.round(dist)} mm`;
+          svg.appendChild(mTxt);
+        }
+      }
+      
       // Draw handles for vertex dragging
       sketchVertices.forEach((pt, idx) => {
         const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -1811,59 +1977,121 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!svg) return;
     
     svg.addEventListener("mousedown", (e) => {
-      if (e.target.classList.contains("sk-handle")) {
-        selectedVertexIndex = parseInt(e.target.getAttribute("data-index"));
-        return;
-      }
-      
-      if (isSketchClosed) return;
-      
-      const pos = getMousePos(svg, e);
-      const snapped = snapToGrid(pos.x, pos.y, gridSnap);
-      
-      // If clicking near first point, close loop
-      if (sketchVertices.length >= 3) {
-        const start = sketchVertices[0];
-        const dist = Math.hypot(snapped.x - start.x, snapped.y - start.y);
-        if (dist < 15) {
-          isSketchClosed = true;
-          drawSketchCanvas();
-          updateLiveProperties();
+      if (editorMode === "draw") {
+        if (e.target.classList.contains("sk-handle")) {
+          selectedVertexIndex = parseInt(e.target.getAttribute("data-index"));
           return;
         }
+        
+        if (isSketchClosed) return;
+        
+        const pos = getMousePos(svg, e);
+        const snapped = snapToGrid(pos.x, pos.y, gridSnap);
+        
+        // If clicking near first point, close loop
+        if (sketchVertices.length >= 3) {
+          const start = sketchVertices[0];
+          const dist = Math.hypot(snapped.x - start.x, snapped.y - start.y);
+          if (dist < 15) {
+            isSketchClosed = true;
+            drawSketchCanvas();
+            updateLiveProperties();
+            return;
+          }
+        }
+        
+        sketchVertices.push(snapped);
+        drawSketchCanvas();
+        updateLiveProperties();
+      } 
+      else if (editorMode === "dimension") {
+        const pos = getMousePos(svg, e);
+        // Find if clicked near an existing vertex
+        let clickedIdx = -1;
+        for (let i = 0; i < sketchVertices.length; i++) {
+          const v = sketchVertices[i];
+          if (Math.hypot(pos.x - v.x, pos.y - v.y) < 15) {
+            clickedIdx = i;
+            break;
+          }
+        }
+        
+        if (clickedIdx !== -1) {
+          if (selectedVertexA === -1) {
+            selectedVertexA = clickedIdx;
+            document.getElementById("sketcher-instruction").textContent = "Click the second vertex.";
+          } else {
+            selectedVertexB = clickedIdx;
+            if (selectedVertexA !== selectedVertexB) {
+              const exists = customDimensions.some(d => 
+                (d.v1 === selectedVertexA && d.v2 === selectedVertexB) ||
+                (d.v1 === selectedVertexB && d.v2 === selectedVertexA)
+              );
+              if (!exists) {
+                customDimensions.push({ v1: selectedVertexA, v2: selectedVertexB });
+              }
+            }
+            selectedVertexA = -1;
+            selectedVertexB = -1;
+            document.getElementById("sketcher-instruction").textContent = "Add Dimension Mode: Click the first vertex.";
+          }
+          drawSketchCanvas();
+          updateCustomDimensionsList();
+        }
+      } 
+      else if (editorMode === "measure") {
+        const pos = getMousePos(svg, e);
+        const snapped = snapToGrid(pos.x, pos.y, gridSnap);
+        
+        if (!isMeasuring) {
+          measureStartPos = snapped;
+          measureEndPos = null;
+          isMeasuring = true;
+          document.getElementById("sketcher-instruction").textContent = "Move mouse and click to end measurement.";
+        } else {
+          measureEndPos = snapped;
+          isMeasuring = false;
+          const dist = Math.round(Math.hypot(measureEndPos.x - measureStartPos.x, measureEndPos.y - measureStartPos.y));
+          document.getElementById("sketcher-instruction").textContent = `Measured Distance: ${dist} mm. Click grid to measure again.`;
+        }
+        drawSketchCanvas();
       }
-      
-      sketchVertices.push(snapped);
-      drawSketchCanvas();
-      updateLiveProperties();
     });
     
     svg.addEventListener("mousemove", (e) => {
       const pos = getMousePos(svg, e);
       const snapped = snapToGrid(pos.x, pos.y, gridSnap);
       
-      if (selectedVertexIndex !== -1) {
-        sketchVertices[selectedVertexIndex] = snapped;
-        drawSketchCanvas();
-        updateLiveProperties();
-      } else {
+      if (editorMode === "draw") {
+        if (selectedVertexIndex !== -1) {
+          sketchVertices[selectedVertexIndex] = snapped;
+          drawSketchCanvas();
+          updateLiveProperties();
+        } else {
+          mousePos = snapped;
+          if (!isSketchClosed && sketchVertices.length > 0) {
+            drawSketchCanvas(true);
+          }
+        }
+      } 
+      else if (editorMode === "measure") {
         mousePos = snapped;
-        if (!isSketchClosed && sketchVertices.length > 0) {
-          drawSketchCanvas(true);
+        if (isMeasuring) {
+          drawSketchCanvas();
         }
       }
     });
     
     // Support mobile touch dragging
     svg.addEventListener("touchstart", (e) => {
-      if (e.target.classList.contains("sk-handle")) {
+      if (editorMode === "draw" && e.target.classList.contains("sk-handle")) {
         selectedVertexIndex = parseInt(e.target.getAttribute("data-index"));
         e.preventDefault();
       }
     }, { passive: false });
     
     svg.addEventListener("touchmove", (e) => {
-      if (selectedVertexIndex !== -1 && e.touches.length > 0) {
+      if (editorMode === "draw" && selectedVertexIndex !== -1 && e.touches.length > 0) {
         const pos = getMousePos(svg, e.touches[0]);
         const snapped = snapToGrid(pos.x, pos.y, gridSnap);
         sketchVertices[selectedVertexIndex] = snapped;
@@ -1989,5 +2217,73 @@ document.addEventListener("DOMContentLoaded", () => {
     
     drawSketchCanvas();
     updateLiveProperties();
+  };
+
+  window.setEditorMode = (mode) => {
+    editorMode = mode;
+    
+    // Toggle active state classes on toolbar buttons
+    document.querySelectorAll(".tool-btn").forEach(btn => btn.classList.remove("active"));
+    if (mode === "draw") document.getElementById("tool-draw-btn").classList.add("active");
+    else if (mode === "dimension") document.getElementById("tool-dimension-btn").classList.add("active");
+    else if (mode === "measure") document.getElementById("tool-measure-btn").classList.add("active");
+    
+    // Reset selections and measurements
+    selectedVertexA = -1;
+    selectedVertexB = -1;
+    measureStartPos = null;
+    measureEndPos = null;
+    isMeasuring = false;
+    
+    // Update active instructions banner text
+    const instr = document.getElementById("sketcher-instruction");
+    if (mode === "draw") {
+      instr.textContent = "Click on the grid to place vertices. Click the starting node (or 'Close Shape') to close the loop.";
+    } else if (mode === "dimension") {
+      instr.textContent = "Add Dimension Mode: Click the first vertex of the distance you wish to dimension.";
+    } else if (mode === "measure") {
+      instr.textContent = "Measure Mode: Click any point on the grid to start measuring.";
+    }
+    
+    drawSketchCanvas();
+  };
+
+  function updateCustomDimensionsList() {
+    const container = document.getElementById("custom-dimensions-list");
+    if (!container) return;
+    container.innerHTML = "";
+    
+    if (customDimensions.length === 0) {
+      container.innerHTML = "<p class='no-segments-lbl'>No custom dimensions added.</p>";
+      return;
+    }
+    
+    customDimensions.forEach((dim, idx) => {
+      const p1 = sketchVertices[dim.v1];
+      const p2 = sketchVertices[dim.v2];
+      if (!p1 || !p2) return;
+      
+      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      
+      const item = document.createElement("div");
+      item.className = "segment-item";
+      item.innerHTML = `
+        <div class="seg-info">
+          <span class="seg-name">Dim ${idx + 1} (Vertex ${dim.v1 + 1} ↔ Vertex ${dim.v2 + 1})</span>
+          <span class="seg-length">${Math.round(len)} mm</span>
+        </div>
+        <button class="edit-seg-btn" style="background: rgba(239, 68, 68, 0.12); border-color: #ef4444; color: #ef4444;" onclick="deleteCustomDimension(${idx})">
+          Remove
+        </button>
+      `;
+      
+      container.appendChild(item);
+    });
+  }
+
+  window.deleteCustomDimension = (idx) => {
+    customDimensions.splice(idx, 1);
+    drawSketchCanvas();
+    updateCustomDimensionsList();
   };
 });
