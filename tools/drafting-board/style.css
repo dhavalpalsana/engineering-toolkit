@@ -78,22 +78,21 @@ body::before {
 /* Canvas Wrapper */
 .canvas-wrapper {
   position: relative;
-  background: var(--bg-secondary);
+  background: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: var(--shadow-md);
-  aspect-ratio: 1 / 1;
   width: 100%;
-  max-width: 600px;
+  height: 650px; /* Expansive CAD viewport height */
   margin: 0 auto;
 }
 
 #sketch-canvas-svg {
   display: block;
   width: 100%;
-  height: 100%;
-  background: #090d16;
+  height: calc(100% - 31px); /* Leaves space for bottom coordinate bar */
+  background: #ffffff;
   cursor: crosshair;
 }
 
@@ -140,12 +139,12 @@ body::before {
 
 /* SVG Vector Styles */
 .sk-grid-minor {
-  stroke: rgba(255, 255, 255, 0.04);
+  stroke: rgba(0, 0, 0, 0.05); /* Light grey minor grid lines */
   stroke-width: 0.8;
 }
 
 .sk-grid-major {
-  stroke: rgba(255, 255, 255, 0.09);
+  stroke: rgba(0, 0, 0, 0.12); /* Darker grey major grid divisions */
   stroke-width: 1.2;
 }
 
