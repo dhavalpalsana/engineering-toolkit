@@ -1602,7 +1602,6 @@ document.addEventListener("DOMContentLoaded", () => {
       applyBtn.disabled = true;
     }
     
-    updateCustomDimensionsList();
   }
 
   function drawSketchCanvas(drawCursorLine = false) {
@@ -2035,7 +2034,6 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("sketcher-instruction").textContent = "Add Dimension Mode: Click the first vertex.";
           }
           drawSketchCanvas();
-          updateCustomDimensionsList();
         }
       } 
       else if (editorMode === "measure") {
@@ -2106,8 +2104,45 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("mouseup", onRelease);
     window.addEventListener("touchend", onRelease);
     
-    // Double click to close the shape outline in draw mode
+    // Double click to close the shape outline in draw mode or edit custom dimensions
     svg.addEventListener("dblclick", (e) => {
+      const pos = getMousePos(svg, e);
+      
+      // Check if double-clicked close to any custom dimension text label center
+      let clickedDimIdx = -1;
+      customDimensions.forEach((dim, idx) => {
+        const p1 = sketchVertices[dim.v1];
+        const p2 = sketchVertices[dim.v2];
+        if (!p1 || !p2) return;
+        
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 0.1) return;
+        
+        const mx = (p1.x + p2.x) / 2;
+        const my = (p1.y + p2.y) / 2;
+        
+        const theta = Math.atan2(dy, dx);
+        const normalAngle = theta - Math.PI / 2;
+        
+        // Calculate where the text pill is drawn (offsetDist = 32 + idx * 18)
+        const offsetDist = 32 + (idx * 18);
+        const midx = mx + offsetDist * Math.cos(normalAngle);
+        const midy = my + offsetDist * Math.sin(normalAngle);
+        
+        const distToLabel = Math.hypot(pos.x - midx, pos.y - midy);
+        if (distToLabel < 22) {
+          clickedDimIdx = idx;
+        }
+      });
+      
+      if (clickedDimIdx !== -1) {
+        // Edit dimension length directly
+        editCustomDimensionLength(clickedDimIdx);
+        return;
+      }
+      
       if (editorMode === "draw" && !isSketchClosed && sketchVertices.length >= 3) {
         isSketchClosed = true;
         drawSketchCanvas();
@@ -2154,8 +2189,6 @@ document.addEventListener("DOMContentLoaded", () => {
     eventsBound = true;
   }
 
-
-
   window.setEditorMode = (mode) => {
     editorMode = mode;
     
@@ -2185,42 +2218,43 @@ document.addEventListener("DOMContentLoaded", () => {
     drawSketchCanvas();
   };
 
-  function updateCustomDimensionsList() {
-    const container = document.getElementById("custom-dimensions-list");
-    if (!container) return;
-    container.innerHTML = "";
+  window.editCustomDimensionLength = (idx) => {
+    const dim = customDimensions[idx];
+    if (!dim) return;
     
-    if (customDimensions.length === 0) {
-      container.innerHTML = "<p class='no-segments-lbl'>No custom dimensions added.</p>";
+    const p1 = sketchVertices[dim.v1];
+    const p2 = sketchVertices[dim.v2];
+    if (!p1 || !p2) return;
+    
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.1) return;
+    
+    const promptVal = prompt(`Enter new length for this dimension in mm (current: ${Math.round(len)} mm):`, Math.round(len));
+    if (promptVal === null) return;
+    
+    const newLen = parseFloat(promptVal);
+    if (isNaN(newLen) || newLen <= 0) {
+      alert("Please enter a valid positive length.");
       return;
     }
     
-    customDimensions.forEach((dim, idx) => {
-      const p1 = sketchVertices[dim.v1];
-      const p2 = sketchVertices[dim.v2];
-      if (!p1 || !p2) return;
-      
-      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      
-      const item = document.createElement("div");
-      item.className = "segment-item";
-      item.innerHTML = `
-        <div class="seg-info">
-          <span class="seg-name">Dim ${idx + 1} (Vertex ${dim.v1 + 1} ↔ Vertex ${dim.v2 + 1})</span>
-          <span class="seg-length">${Math.round(len)} mm</span>
-        </div>
-        <button class="edit-seg-btn" style="background: rgba(239, 68, 68, 0.12); border-color: #ef4444; color: #ef4444;" onclick="deleteCustomDimension(${idx})">
-          Remove
-        </button>
-      `;
-      
-      container.appendChild(item);
-    });
-  }
-
-  window.deleteCustomDimension = (idx) => {
-    customDimensions.splice(idx, 1);
+    const ratio = newLen / len;
+    
+    // Push/pull translation: move p2 and shift subsequent nodes downstream to scale dimension
+    const targetX = p1.x + dx * ratio;
+    const targetY = p1.y + dy * ratio;
+    const shiftX = targetX - p2.x;
+    const shiftY = targetY - p2.y;
+    
+    const startIdx = dim.v2;
+    for (let j = startIdx; j < sketchVertices.length; j++) {
+      sketchVertices[j].x = Math.round(sketchVertices[j].x + shiftX);
+      sketchVertices[j].y = Math.round(sketchVertices[j].y + shiftY);
+    }
+    
     drawSketchCanvas();
-    updateCustomDimensionsList();
+    updateLiveProperties();
   };
 });
