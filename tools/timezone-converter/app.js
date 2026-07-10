@@ -333,13 +333,40 @@ document.addEventListener("DOMContentLoaded", () => {
         // Convert local minutes to UTC
         const offset = getTimezoneOffsetMinutes(anchorDate, tz);
         
-        // Zero-out anchorDate time in UTC
-        const newDate = new Date(anchorDate);
-        newDate.setUTCHours(0, 0, 0, 0);
+        // Get the exact local date components for this timezone so we don't jump days
+        let year, month, day;
+        if (tz === "Local Time") {
+          year = anchorDate.getFullYear();
+          month = anchorDate.getMonth();
+          day = anchorDate.getDate();
+        } else {
+          try {
+            const formatter = new Intl.DateTimeFormat("en-US", {
+              timeZone: tz,
+              year: "numeric",
+              month: "numeric",
+              day: "numeric"
+            });
+            const parts = formatter.formatToParts(anchorDate);
+            const d = {};
+            parts.forEach(p => { d[p.type] = p.value; });
+            year = parseInt(d.year);
+            month = parseInt(d.month) - 1;
+            day = parseInt(d.day);
+          } catch (err) {
+            // Fallback to local browser date
+            year = anchorDate.getFullYear();
+            month = anchorDate.getMonth();
+            day = anchorDate.getDate();
+          }
+        }
+        
+        // Construct the start of that local day (00:00) in UTC
+        const newDate = new Date(Date.UTC(year, month, day, 0, 0, 0));
         
         // Subtract timezone offset and add target local minutes to get new UTC timestamp
         const utcMinutes = targetLocalMinutes - offset;
-        newDate.setUTCMinutes(utcMinutes);
+        newDate.setUTCMinutes(newDate.getUTCMinutes() + utcMinutes);
         
         anchorDate = newDate;
         updateAllInputs();
