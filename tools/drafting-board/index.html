@@ -89,29 +89,46 @@
       <!-- Left: SVG Drawing Canvas Area -->
       <div class="canvas-wrapper">
         <div class="sketcher-toolbar">
-          <button id="tool-draw-btn" class="tool-btn active" title="Draw Shape (Plot vertices)" onclick="setEditorMode('draw')">
+          <button id="tool-draw-btn" class="tool-btn active" title="Profile / Polyline Tool" onclick="setEditorMode('draw')">
             <i data-lucide="pen-tool"></i>
           </button>
-          <button id="tool-dimension-btn" class="tool-btn" title="Add Custom Dimension (Select 2 nodes)" onclick="setEditorMode('dimension')">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
-              <line x1="4" y1="6" x2="4" y2="18"></line>
-              <line x1="20" y1="6" x2="20" y2="18"></line>
-              <line x1="4" y1="12" x2="20" y2="12"></line>
-              <polyline points="8 8 4 12 8 16"></polyline>
-              <polyline points="16 8 20 12 16 16"></polyline>
-            </svg>
+          <button id="tool-circle-btn" class="tool-btn" title="Circle Tool (Click Center, Drag Radius)" onclick="setEditorMode('circle')">
+            <i data-lucide="circle"></i>
           </button>
-          <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (Click any 2 points)" onclick="setEditorMode('measure')">
+          <button id="tool-fillet-btn" class="tool-btn" title="Fillet Corner" onclick="setEditorMode('fillet')">
+            <i data-lucide="corner-down-right"></i>
+          </button>
+          <button id="tool-offset-btn" class="tool-btn" title="Offset Part Profile" onclick="setEditorMode('offset')">
+            <i data-lucide="layers"></i>
+          </button>
+          <button id="tool-dimension-btn" class="tool-btn" title="Smart Dimension" onclick="setEditorMode('dimension')">
+            <i data-lucide="scaling"></i>
+          </button>
+          <button id="tool-measure-btn" class="tool-btn" title="Measure Ruler" onclick="setEditorMode('measure')">
             <i data-lucide="ruler"></i>
           </button>
         </div>
         
         <!-- Large high-fidelity 500x500 Grid SVG -->
         <svg id="sketch-canvas-svg" width="500" height="500" viewBox="0 0 500 500"></svg>
+        
+        <!-- CAD Status Bar -->
+        <div class="cad-status-bar" style="background: rgba(15,23,42,0.9); padding: 8px 16px; display: flex; justify-content: space-between; font-size: 11px; font-family: var(--font-mono); border-top: 1px solid var(--border-color); color: var(--text-muted); box-sizing: border-box;">
+          <span id="coords-display">X: 0.0 | Y: 0.0 mm</span>
+          <span id="cad-status-text">Status: Drawing Profile</span>
+        </div>
       </div>
 
       <!-- Right: Blueprint Sidebar Controls & Live Telemetry -->
       <div class="drafting-sidebar">
+        <!-- Entity Editor Inspector Panel -->
+        <div class="sidebar-section hidden" id="sidebar-inspector-section">
+          <h3>Entity Inspector</h3>
+          <div id="inspector-fields-container">
+            <!-- Dynamic inspector fields -->
+          </div>
+        </div>
+
         <!-- Load Shape Templates -->
         <div class="sidebar-section">
           <h3>Load Profile Preset</h3>

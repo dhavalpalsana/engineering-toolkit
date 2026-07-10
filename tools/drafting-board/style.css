@@ -384,3 +384,131 @@ body::before {
   font-weight: 700;
   color: var(--accent-primary);
 }
+
+/* ── Snap Indicators & Selection States ─────────────────── */
+.sk-snap-indicator {
+  fill: none;
+  stroke-width: 1.8;
+  pointer-events: none;
+}
+.sk-snap-endpoint {
+  stroke: #22c55e; /* Green */
+}
+.sk-snap-midpoint {
+  stroke: #eab308; /* Yellow */
+}
+.sk-snap-center {
+  stroke: #3b82f6; /* Blue */
+}
+
+.sk-circle {
+  fill: rgba(59, 130, 246, 0.08);
+  stroke: var(--accent-primary);
+  stroke-width: 2.2;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+.sk-circle:hover {
+  fill: rgba(59, 130, 246, 0.16);
+  stroke-width: 2.8;
+}
+.sk-circle.selected {
+  stroke: #f97316 !important;
+  fill: rgba(249, 115, 22, 0.15);
+}
+
+.sk-line-segment {
+  stroke: var(--accent-primary);
+  stroke-width: 3.5;
+  cursor: pointer;
+  fill: none;
+  transition: stroke var(--transition-fast);
+}
+.sk-line-segment:hover {
+  stroke: var(--accent-primary-hover);
+}
+.sk-line-segment.selected {
+  stroke: #f97316 !important;
+  stroke-width: 4.5;
+}
+
+.sk-construction {
+  stroke-dasharray: 4 4 !important;
+  stroke: var(--text-muted) !important;
+  fill: none !important;
+}
+
+/* ── Interactive Inspector Controls ────────────────────── */
+.inspector-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.inspector-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #f97316;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.inspector-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.inspector-row label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.inspector-row input {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  height: 32px;
+  width: 90px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+}
+.inspector-row input:focus {
+  border-color: var(--accent-primary);
+}
+.inspector-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.inspector-checkbox-row label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.inspector-checkbox-row input {
+  cursor: pointer;
+}
+.inspector-delete-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+.inspector-delete-btn:hover {
+  background: #ef4444;
+  color: #000;
+  border-color: #ef4444;
+}
