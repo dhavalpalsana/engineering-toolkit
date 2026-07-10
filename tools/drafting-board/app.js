@@ -33,6 +33,21 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Theme/UI Boot ---
   const svg = document.getElementById("sketch-canvas-svg");
 
+  function snapToGrid(x, y, snap) {
+    return {
+      x: Math.round(x / snap) * snap,
+      y: Math.round(y / snap) * snap
+    };
+  }
+
+  function getMousePos(svgCanvas, evt) {
+    const rect = svgCanvas.getBoundingClientRect();
+    return {
+      x: ((evt.clientX - rect.left) / rect.width) * 500,
+      y: ((evt.clientY - rect.top) / rect.height) * 500
+    };
+  }
+
   // Track shift key for Ortho Lock
   window.addEventListener("keydown", (e) => {
     if (e.key === "Shift") shiftPressed = true;
