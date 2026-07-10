@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Structural Beam Solver & Designer | Engineering Toolkit</title>
+  
+  <!-- Shared compliance styles -->
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  
+  <!-- Local calculator styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Standardized Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <!-- Back Button -->
+        <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        
+        <!-- Tool-Specific Icon -->
+        <div class="hdr-icon">
+          <i data-lucide="activity"></i>
+        </div>
+        
+        <!-- Titles -->
+        <div class="hdr-titles">
+          <h1>Structural Beam Solver</h1>
+          <p>Multi-span finite element beam analyzer with shear, bending, stress, and deflection solvers</p>
+        </div>
+      </div>
+      
+      <div class="hdr-right">
+        <!-- Action Buttons -->
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <i data-lucide="share-2"></i> Share Link
+        </button>
+        <button onclick="exportJSON()" class="hdr-btn" title="Export design to JSON file">
+          <i data-lucide="download"></i> Export JSON
+        </button>
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import design from JSON file">
+          <i data-lucide="upload"></i> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" />
+        
+        <div class="hdr-divider"></div>
+        
+        <!-- Auth Button -->
+        <button id="auth-btn" title="Sign In">
+          <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+        </button>
+        
+        <!-- Theme Toggle -->
+        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+          <i data-lucide="moon" class="moon-icon"></i>
+          <i data-lucide="sun" class="sun-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout Wrapper -->
+  <main class="container page-content">
+    <div class="workspace-grid">
+      
+      <!-- Control Panel (Inputs) -->
+      <section class="control-panel">
+        
+        <!-- Card 1: Beam & Material Properties -->
+        <div class="input-card">
+          <h2><i data-lucide="box"></i> Beam & Material</h2>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="beam-length">Beam Length (L) [m]</label>
+              <input type="number" id="beam-length" min="0.5" max="50" step="0.1" value="6.0">
+            </div>
+            <div class="form-group">
+              <label for="material-preset">Material Preset</label>
+              <select id="material-preset">
+                <option value="steel">Structural Steel (S235)</option>
+                <option value="aluminum">Aluminium 6061-T6</option>
+                <option value="timber">Douglas Fir (Timber)</option>
+                <option value="concrete">Concrete (C30)</option>
+                <option value="custom">Custom Material</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="material-e">Elastic Modulus (E) [GPa]</label>
+              <input type="number" id="material-e" min="1" max="1000" step="1" value="200">
+            </div>
+            <div class="form-group">
+              <label for="material-yield">Yield Strength (σy) [MPa]</label>
+              <input type="number" id="material-yield" min="1" max="2000" step="5" value="250">
+            </div>
+            <div class="form-group">
+              <label for="material-density">Density (ρ) [kg/m³]</label>
+              <input type="number" id="material-density" min="100" max="20000" step="50" value="7850">
+            </div>
+            <div class="form-group flex-row-toggle">
+              <label for="toggle-self-weight">Consider Self-Weight</label>
+              <input type="checkbox" id="toggle-self-weight" checked>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Section Dimensions -->
+        <div class="input-card">
+          <h2><i data-lucide="layers"></i> Cross-Section</h2>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="section-shape">Shape Profile</label>
+              <select id="section-shape">
+                <option value="rect-solid">Solid Rectangle</option>
+                <option value="rect-hollow">Hollow Rectangle / Box Section</option>
+                <option value="circ-solid">Solid Round Bar</option>
+                <option value="circ-hollow">Hollow Round Tube / Pipe</option>
+                <option value="i-beam">I-Beam (Standard W-Shape)</option>
+                <option value="custom">Custom Properties (Direct Input)</option>
+              </select>
+            </div>
+            
+            <!-- Shape specific inputs (toggled in JS) -->
+            <div class="shape-input-group rect-solid-fields">
+              <div class="form-group">
+                <label for="rect-b">Width (b) [mm]</label>
+                <input type="number" id="rect-b" min="1" max="2000" value="150">
+              </div>
+              <div class="form-group">
+                <label for="rect-d">Height (d) [mm]</label>
+                <input type="number" id="rect-d" min="1" max="2000" value="300">
+              </div>
+            </div>
+            
+            <div class="shape-input-group rect-hollow-fields hidden">
+              <div class="form-group">
+                <label for="box-b">Width (b) [mm]</label>
+                <input type="number" id="box-b" min="1" max="2000" value="150">
+              </div>
+              <div class="form-group">
+                <label for="box-d">Height (d) [mm]</label>
+                <input type="number" id="box-d" min="1" max="2000" value="300">
+              </div>
+              <div class="form-group">
+                <label for="box-t">Thickness (t) [mm]</label>
+                <input type="number" id="box-t" min="1" max="100" value="10">
+              </div>
+            </div>
+
+            <div class="shape-input-group circ-solid-fields hidden">
+              <div class="form-group">
+                <label for="circ-d">Diameter (d) [mm]</label>
+                <input type="number" id="circ-d" min="1" max="2000" value="150">
+              </div>
+            </div>
+
+            <div class="shape-input-group circ-hollow-fields hidden">
+              <div class="form-group">
+                <label for="pipe-d">Outer Diameter (d) [mm]</label>
+                <input type="number" id="pipe-d" min="1" max="2000" value="168">
+              </div>
+              <div class="form-group">
+                <label for="pipe-t">Wall Thickness (t) [mm]</label>
+                <input type="number" id="pipe-t" min="1" max="100" value="8">
+              </div>
+            </div>
+
+            <div class="shape-input-group ibeam-fields hidden">
+              <div class="form-group">
+                <label for="ib-d">Total Depth (d) [mm]</label>
+                <input type="number" id="ib-d" min="1" max="2000" value="300">
+              </div>
+              <div class="form-group">
+                <label for="ib-b">Flange Width (bf) [mm]</label>
+                <input type="number" id="ib-b" min="1" max="2000" value="150">
+              </div>
+              <div class="form-group">
+                <label for="ib-tf">Flange Thickness (tf) [mm]</label>
+                <input type="number" id="ib-tf" min="1" max="100" value="12">
+              </div>
+              <div class="form-group">
+                <label for="ib-tw">Web Thickness (tw) [mm]</label>
+                <input type="number" id="ib-tw" min="1" max="100" value="8">
+              </div>
+            </div>
+
+            <div class="shape-input-group custom-fields hidden">
+              <div class="form-group">
+                <label for="cust-i">Moment of Inertia (Iz) [cm⁴]</label>
+                <input type="number" id="cust-i" min="0.1" value="8500">
+              </div>
+              <div class="form-group">
+                <label for="cust-d">Outer Height (d) [mm]</label>
+                <input type="number" id="cust-d" min="1" value="300">
+              </div>
+            </div>
+            
+            <!-- Calculated values read-out -->
+            <div class="calculated-telemetry full-width">
+              <div class="tel-item">
+                <span class="tel-label">Cross-Section Area (A)</span>
+                <span class="tel-val" id="area-calc">450.0 cm²</span>
+              </div>
+              <div class="tel-item">
+                <span class="tel-label">Inertia (Iz)</span>
+                <span class="tel-val" id="inertia-calc">33,750.0 cm⁴</span>
+              </div>
+              <div class="tel-item">
+                <span class="tel-label">Section Modulus (Sz)</span>
+                <span class="tel-val" id="modulus-calc">2,250.0 cm³</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Supports Configurations -->
+        <div class="input-card">
+          <div class="card-header-actions">
+            <h2><i data-lucide="anchor"></i> Supports</h2>
+            <select id="support-presets" class="small-select">
+              <option value="">-- Apply Preset --</option>
+              <option value="simply-supported">Simply Supported</option>
+              <option value="cantilever">Cantilever (Left Fixed)</option>
+              <option value="fixed-fixed">Fixed - Fixed</option>
+              <option value="fixed-pinned">Fixed - Pinned</option>
+              <option value="double-overhang">Double Overhang</option>
+            </select>
+          </div>
+          <div class="support-list-wrapper">
+            <table class="data-table" id="supports-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Position (x) [m]</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="supports-body">
+                <!-- Injected in JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="table-add-bar">
+            <select id="add-support-type">
+              <option value="pinned">Pinned / Pin</option>
+              <option value="roller">Roller</option>
+              <option value="fixed">Fixed</option>
+            </select>
+            <input type="number" id="add-support-x" min="0" max="6" step="0.1" value="0.0" placeholder="Pos x">
+            <button class="add-row-btn" onclick="addNewSupport()"><i data-lucide="plus"></i> Add</button>
+          </div>
+        </div>
+
+        <!-- Card 4: Load Applications -->
+        <div class="input-card">
+          <h2><i data-lucide="download-cloud"></i> Applied Loads</h2>
+          <div class="load-list-wrapper">
+            <table class="data-table" id="loads-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Force / Value</th>
+                  <th>Pos x₁ [m]</th>
+                  <th>Pos x₂ [m]</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="loads-body">
+                <!-- Injected in JS -->
+              </tbody>
+            </table>
+          </div>
+          <div class="table-add-bar grid-add-bar">
+            <select id="add-load-type" onchange="toggleLoadInputFields()">
+              <option value="point">Point Load (P) [kN]</option>
+              <option value="udl">Uniform Distributed (w) [kN/m]</option>
+              <option value="moment">Concentrated Moment (M) [kN·m]</option>
+            </select>
+            <input type="number" id="add-load-value" value="-10" placeholder="Magnitude">
+            <input type="number" id="add-load-x1" min="0" max="6" step="0.1" value="3.0" placeholder="x₁ [m]">
+            <input type="number" id="add-load-x2" min="0" max="6" step="0.1" value="6.0" placeholder="x₂ [m]" class="hidden">
+            <button class="add-row-btn" onclick="addNewLoad()"><i data-lucide="plus"></i> Add</button>
+          </div>
+        </div>
+      </section>
+      
+      <!-- Results Panel (Graphics & Output) -->
+      <section class="results-panel">
+        
+        <!-- Real-time Physical Schematic -->
+        <div class="output-card schematic-card">
+          <h2><i data-lucide="eye"></i> Beam Schematic & Loads</h2>
+          <div class="svg-container">
+            <svg id="beam-schematic-svg" viewBox="0 0 1000 240"></svg>
+          </div>
+        </div>
+
+        <!-- Dashboard Stat Cards & Check Compliance -->
+        <div class="results-summary-grid">
+          <div class="result-tile status-tile flex-col-center" id="safety-status-tile">
+            <span class="tile-label">Structural Validation</span>
+            <span class="tile-large-val" id="compliance-badge">PENDING</span>
+            <span class="tile-desc" id="safety-factor-text">F.O.S: --</span>
+          </div>
+          <div class="result-tile">
+            <span class="tile-label">Max Deflection</span>
+            <span class="tile-large-val" id="max-deflection-val">0.00 mm</span>
+            <span class="tile-desc" id="span-ratio-text">Ratio: L/--</span>
+          </div>
+          <div class="result-tile">
+            <span class="tile-label">Max Bending Moment</span>
+            <span class="tile-large-val" id="max-moment-val">0.00 kN·m</span>
+            <span class="tile-desc" id="max-moment-loc">At x = --m</span>
+          </div>
+          <div class="result-tile">
+            <span class="tile-label">Max Normal Stress</span>
+            <span class="tile-large-val" id="max-stress-val">0.0 MPa</span>
+            <span class="tile-desc" id="stress-ratio-text">--% of Yield Limit</span>
+          </div>
+        </div>
+
+        <!-- Support Reaction Force Drawer -->
+        <div class="output-card">
+          <h2><i data-lucide="refresh-cw"></i> Support Reaction Forces</h2>
+          <div class="reactions-list" id="reactions-output-list">
+            <!-- Reactions injected by JS -->
+          </div>
+        </div>
+
+        <!-- Shear Force Diagram -->
+        <div class="output-card diagram-card">
+          <div class="card-header-actions">
+            <h2><i data-lucide="trending-up"></i> Shear Force Diagram (SFD)</h2>
+            <span class="diagram-max" id="max-shear-lbl">Vmax = 0.00 kN</span>
+          </div>
+          <div class="svg-container scale-down">
+            <svg id="sfd-svg" viewBox="0 0 1000 220"></svg>
+          </div>
+        </div>
+
+        <!-- Bending Moment Diagram -->
+        <div class="output-card diagram-card">
+          <div class="card-header-actions">
+            <h2><i data-lucide="git-commit"></i> Bending Moment Diagram (BMD)</h2>
+            <span class="diagram-max" id="max-moment-lbl">Mmax = 0.00 kN·m</span>
+          </div>
+          <div class="svg-container scale-down">
+            <svg id="bmd-svg" viewBox="0 0 1000 220"></svg>
+          </div>
+        </div>
+
+        <!-- Deflection Curve -->
+        <div class="output-card diagram-card">
+          <div class="card-header-actions">
+            <h2><i data-lucide="arrow-down-to-line"></i> Deflection Curve</h2>
+            <span class="diagram-max" id="max-deflection-lbl">ymax = 0.00 mm</span>
+          </div>
+          <div class="svg-container scale-down">
+            <svg id="deflection-svg" viewBox="0 0 1000 220"></svg>
+          </div>
+        </div>
+      </section>
+      
+    </div>
+  </main>
+
+  <!-- Firebase Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  
+  <!-- Shared Toolkit Hooks -->
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/project-manager.js"></script>
+  
+  <!-- Lucide SVG Icons -->
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
+  
+  <!-- Main app script -->
+  <script src="app.js"></script>
+</body>
+</html>

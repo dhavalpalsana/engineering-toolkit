@@ -78,6 +78,15 @@ const TOOLS_DATA = [
     status: "active"
   },
   {
+    id: "beam-calculator",
+    name: "Structural Beam Solver & Designer",
+    description: "Analyze simply supported or cantilever beams with custom materials, cross-sections, and loads. Solves for reactions, shear, bending moment, deflection, and stress, with live 2D interactive diagrams.",
+    tags: ["mechanical", "civil", "structural", "beam", "mechanics", "fea"],
+    icon: "activity",
+    path: "./tools/beam-calculator/index.html",
+    status: "active"
+  },
+  {
     id: "heatsink-simulator",
     name: "3D Heat Sink Simulator",
     description: "Design and simulate parametric finned heat sinks in 3D. Define thermal interfaces (TIM), custom materials, heat sources, and run real-time local steady-state or transient simulations.",
