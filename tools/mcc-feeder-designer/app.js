@@ -1,0 +1,1662 @@
+/**
+ * app.js — MCC Feeder & Motor Starter Designer Engine
+ * Handles interactive SVG canvas, dragging, connection wiring,
+ * engineering sizing math, URL sharing, and project manager integration.
+ */
+
+// ==========================================================================
+// 1. Data Models & Constants
+// ==========================================================================
+
+let systemGlobals = {
+  voltage: 400,          // V (3-Phase)
+  frequency: 50,         // Hz
+  pfTarget: 0.85
+};
+
+let nodes = [];
+let wires = [];
+
+let selectedElementId = null; // Can be a node ID or a wire ID
+let selectedElementType = null; // 'node' | 'wire'
+
+// SVG Canvas Zoom & Pan
+let zoomLevel = 1.0;
+let panX = 0;
+let panY = 0;
+let isPanning = false;
+let startPanX = 0;
+let startPanY = 0;
+
+// Drag and Drop Node State
+let draggedNodeId = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+let hasMovedDuringDrag = false;
+
+// Wiring State
+let activeWireStartNode = null;
+let activeWireTerminalType = null; // 'output' (currently we only draw from output to input)
+
+// Standard Copper Ampacity table (Reference: IEC 60364-5-52, Multicore copper in conduit / tray at 30C)
+const COPPER_AMPACITIES = [
+  { size: 1.5, ampacity: 17.5 },
+  { size: 2.5, ampacity: 24 },
+  { size: 4, ampacity: 32 },
+  { size: 6, ampacity: 41 },
+  { size: 10, ampacity: 57 },
+  { size: 16, ampacity: 76 },
+  { size: 25, ampacity: 96 },
+  { size: 35, ampacity: 119 },
+  { size: 50, ampacity: 144 },
+  { size: 70, ampacity: 184 },
+  { size: 95, ampacity: 223 },
+  { size: 120, ampacity: 259 },
+  { size: 150, ampacity: 299 },
+  { size: 185, ampacity: 341 },
+  { size: 240, ampacity: 403 },
+  { size: 300, ampacity: 464 }
+];
+
+// Standard Aluminum Ampacity table
+const ALUMINUM_AMPACITIES = [
+  { size: 2.5, ampacity: 18.5 },
+  { size: 4, ampacity: 25 },
+  { size: 6, ampacity: 32 },
+  { size: 10, ampacity: 44 },
+  { size: 16, ampacity: 59 },
+  { size: 25, ampacity: 75 },
+  { size: 35, ampacity: 93 },
+  { size: 50, ampacity: 112 },
+  { size: 70, ampacity: 143 },
+  { size: 95, ampacity: 174 },
+  { size: 120, ampacity: 202 },
+  { size: 150, ampacity: 233 },
+  { size: 185, ampacity: 266 },
+  { size: 240, ampacity: 315 },
+  { size: 300, ampacity: 363 }
+];
+
+// Standard Breaker Frame/Trip ratings
+const BREAKER_RATINGS = [15, 20, 25, 30, 40, 50, 63, 80, 100, 125, 160, 200, 225, 250, 315, 400, 500, 630, 800];
+
+// Standard VFD Output Current ratings (Typical 400V Class)
+const VFD_RATINGS = [
+  { rating: 4, power: 1.5 },
+  { rating: 7.5, power: 3.0 },
+  { rating: 12, power: 5.5 },
+  { rating: 17, power: 7.5 },
+  { rating: 25, power: 11.0 },
+  { rating: 32, power: 15.0 },
+  { rating: 38, power: 18.5 },
+  { rating: 45, power: 22.0 },
+  { rating: 60, power: 30.0 },
+  { rating: 75, power: 37.0 },
+  { rating: 90, power: 45.0 },
+  { rating: 110, power: 55.0 },
+  { rating: 145, power: 75.0 },
+  { rating: 180, power: 90.0 },
+  { rating: 220, power: 110.0 },
+  { rating: 250, power: 132.0 },
+  { rating: 305, power: 160.0 }
+];
+
+// Standard Contactor Sizing (Typical AC-3 current ratings)
+const CONTACTOR_RATINGS = [9, 12, 18, 25, 32, 40, 50, 65, 80, 95, 115, 150, 185, 225, 265, 330, 400, 500];
+
+// Standard Soft Starter ratings
+const SOFTSTARTER_RATINGS = [18, 30, 45, 60, 72, 85, 105, 145, 170, 210, 250, 300];
+
+// Default configurations for node types
+const NODE_DEFAULTS = {
+  source: {
+    name: "Power Grid Feed",
+    params: { scc: 25 } // Short circuit capacity (kA)
+  },
+  busbar: {
+    name: "Main MCC Busbar",
+    params: { material: "Cu", rating: 800 } // Amps
+  },
+  breaker: {
+    name: "Feeder MCCB",
+    params: { autoSize: true, selectedRating: 32 }
+  },
+  dol: {
+    name: "DOL Starter Pack",
+    params: { contactorRating: 18, overloadMin: 9, overloadMax: 13, setting: 11.5 }
+  },
+  vfd: {
+    name: "VFD Drive",
+    params: { duty: "heavy", autoSize: true, ratedCurrent: 25, freqMax: 50 }
+  },
+  softstarter: {
+    name: "Soft Starter Unit",
+    params: { autoSize: true, currentLimit: 3.5, ratedCurrent: 30 } // Current limit as multiplier of FLA
+  },
+  motor: {
+    name: "Conveyor Motor",
+    params: { power: 11, unit: "kW", efficiency: 89, pf: 0.82 }
+  }
+};
+
+// ==========================================================================
+// 2. Initialization & SVG Setups
+// ==========================================================================
+
+// Register with Global Project Manager (for auth saving/loading)
+window.projectManagerConfig = {
+  toolId: "mcc-feeder-designer",
+  getInputs: () => ({
+    systemGlobals,
+    nodes,
+    wires
+  }),
+  setInputs: (data) => {
+    if (data) {
+      systemGlobals = data.systemGlobals || systemGlobals;
+      nodes = data.nodes || [];
+      wires = data.wires || [];
+      
+      // Sync UI globals input elements
+      const volEl = document.getElementById("sys-voltage");
+      const frqEl = document.getElementById("sys-freq");
+      const pfEl = document.getElementById("sys-pf-target");
+      if (volEl) volEl.value = systemGlobals.voltage;
+      if (frqEl) frqEl.value = systemGlobals.frequency;
+      if (pfEl) pfEl.value = systemGlobals.pfTarget;
+      
+      deselectAll();
+      renderCanvas();
+      updateStatus("Project loaded successfully.");
+    }
+  }
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  initSVGCanvas();
+  setupEventListeners();
+  loadInitialState();
+  
+  // Trigger Lucide icons replacing
+  if (typeof lucide !== "undefined") {
+    lucide.createIcons();
+  }
+});
+
+const svg = document.getElementById("schematic-canvas");
+const viewport = document.getElementById("svg-viewport");
+const contentGroup = document.getElementById("canvas-content-group");
+const wiresLayer = document.getElementById("wires-layer");
+const nodesLayer = document.getElementById("nodes-layer");
+const dragWireLine = document.getElementById("drag-wire-line");
+
+function initSVGCanvas() {
+  // Center grid at start
+  const rect = viewport.getBoundingClientRect();
+  panX = rect.width / 2 - 250;
+  panY = 80;
+  updateTransform();
+}
+
+function updateTransform() {
+  contentGroup.setAttribute("transform", `translate(${panX}, ${panY}) scale(${zoomLevel})`);
+}
+
+function setupEventListeners() {
+  // SVG Workspace panning and dragging
+  viewport.addEventListener("mousedown", onCanvasMouseDown);
+  window.addEventListener("mousemove", onCanvasMouseMove);
+  window.addEventListener("mouseup", onCanvasMouseUp);
+  
+  // Zoom on scroll
+  viewport.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.05 : 0.95;
+    zoomCanvas(zoomFactor);
+  }, { passive: false });
+
+  // Keybindings for Delete
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Delete" || e.key === "Backspace") {
+      // Don't trigger deletion if user is typing inside an input/select
+      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") {
+        return;
+      }
+      deleteSelectedElement();
+    }
+  });
+}
+
+function updateGlobals() {
+  systemGlobals.voltage = parseFloat(document.getElementById("sys-voltage").value) || 400;
+  systemGlobals.frequency = parseFloat(document.getElementById("sys-freq").value) || 50;
+  systemGlobals.pfTarget = parseFloat(document.getElementById("sys-pf-target").value) || 0.85;
+  
+  recalculateSystem();
+  renderCanvas();
+  if (selectedElementId) {
+    showInspector(selectedElementId, selectedElementType);
+  }
+  updateStatus("System configurations updated.");
+}
+
+function updateStatus(text) {
+  const statusEl = document.getElementById("canvas-status");
+  if (statusEl) {
+    statusEl.textContent = "Status: " + text;
+  }
+}
+
+// ==========================================================================
+// 3. Canvas Node/Wire Insertion
+// ==========================================================================
+
+function addNodeToCanvas(type) {
+  const id = "node_" + Math.random().toString(36).substr(2, 9);
+  
+  // Position the node roughly in the visible center of the canvas viewport
+  const rect = viewport.getBoundingClientRect();
+  
+  // Calculate relative coords accounting for pan & zoom
+  const targetX = Math.round(((rect.width / 2) - panX) / zoomLevel / 20) * 20;
+  const targetY = Math.round(((rect.height / 2) - panY) / zoomLevel / 20) * 20;
+
+  const newNode = {
+    id: id,
+    type: type,
+    x: targetX,
+    y: targetY,
+    name: NODE_DEFAULTS[type].name + " " + (nodes.filter(n => n.type === type).length + 1),
+    params: JSON.parse(JSON.stringify(NODE_DEFAULTS[type].params))
+  };
+
+  nodes.push(newNode);
+  
+  recalculateSystem();
+  renderCanvas();
+  selectElement(id, 'node');
+  
+  updateStatus(`Added ${type.toUpperCase()} component.`);
+}
+
+function clearCanvas() {
+  if (confirm("Are you sure you want to clear the entire schematic canvas?")) {
+    nodes = [];
+    wires = [];
+    deselectAll();
+    renderCanvas();
+    updateStatus("Workspace cleared.");
+  }
+}
+
+// ==========================================================================
+// 4. Drag & Drop & Pan Input Handlers
+// ==========================================================================
+
+function getSVGCoords(e) {
+  const rect = svg.getBoundingClientRect();
+  const clientX = e.clientX - rect.left;
+  const clientY = e.clientY - rect.top;
+  // Convert window coords to scaled/panned canvas space
+  const x = (clientX - panX) / zoomLevel;
+  const y = (clientY - panY) / zoomLevel;
+  return { x, y };
+}
+
+function onCanvasMouseDown(e) {
+  const target = e.target;
+  
+  // Case C: Clicked a Terminal Dot (Start drawing a wire) - MUST check first to avoid node-group shadow
+  const terminalEl = target.closest(".terminal-dot");
+  if (terminalEl) {
+    e.stopPropagation();
+    const nodeId = terminalEl.getAttribute("data-node-id");
+    const terminalType = terminalEl.getAttribute("data-type");
+    
+    if (terminalType === "output") {
+      activeWireStartNode = nodeId;
+      activeWireTerminalType = terminalType;
+      
+      const nodeData = nodes.find(n => n.id === nodeId);
+      const startPt = getTerminalPosition(nodeData, "output");
+      
+      dragWireLine.setAttribute("x1", startPt.x);
+      dragWireLine.setAttribute("y1", startPt.y);
+      dragWireLine.setAttribute("x2", startPt.x);
+      dragWireLine.setAttribute("y2", startPt.y);
+      dragWireLine.setAttribute("visibility", "visible");
+    }
+    return;
+  }
+  
+  // Case A: Clicked on a Node group or its children
+  const nodeEl = target.closest(".node-group");
+  if (nodeEl) {
+    e.stopPropagation();
+    const nodeId = nodeEl.getAttribute("data-node-id");
+    draggedNodeId = nodeId;
+    hasMovedDuringDrag = false;
+    
+    const nodeData = nodes.find(n => n.id === nodeId);
+    const coords = getSVGCoords(e);
+    
+    dragOffsetX = coords.x - nodeData.x;
+    dragOffsetY = coords.y - nodeData.y;
+    
+    selectElement(nodeId, 'node');
+    return;
+  }
+  
+  // Case B: Clicked on a Wire
+  const wireEl = target.closest(".wire-path");
+  if (wireEl) {
+    e.stopPropagation();
+    const wireId = wireEl.getAttribute("data-wire-id");
+    selectElement(wireId, 'wire');
+    return;
+  }
+  
+  // Case D: Dragged background - perform Pan
+  if (target.id === "canvas-bg" || target.id === "schematic-canvas" || target.closest("#canvas-bg")) {
+    isPanning = true;
+    startPanX = e.clientX - panX;
+    startPanY = e.clientY - panY;
+    deselectAll();
+  }
+}
+
+function onCanvasMouseMove(e) {
+  // Handle Panning
+  if (isPanning) {
+    panX = e.clientX - startPanX;
+    panY = e.clientY - startPanY;
+    updateTransform();
+    return;
+  }
+
+  // Handle Dragging Node
+  if (draggedNodeId) {
+    hasMovedDuringDrag = true;
+    const coords = getSVGCoords(e);
+    const nodeData = nodes.find(n => n.id === draggedNodeId);
+    
+    // Snap to 20px grid
+    let newX = Math.round((coords.x - dragOffsetX) / 20) * 20;
+    let newY = Math.round((coords.y - dragOffsetY) / 20) * 20;
+    
+    nodeData.x = newX;
+    nodeData.y = newY;
+    
+    renderCanvas();
+    return;
+  }
+
+  // Handle Drawing Wire Line Preview
+  if (activeWireStartNode) {
+    const coords = getSVGCoords(e);
+    dragWireLine.setAttribute("x2", coords.x);
+    dragWireLine.setAttribute("y2", coords.y);
+  }
+}
+
+function onCanvasMouseUp(e) {
+  // End panning
+  if (isPanning) {
+    isPanning = false;
+    return;
+  }
+
+  // End dragging node
+  if (draggedNodeId) {
+    if (hasMovedDuringDrag) {
+      recalculateSystem();
+      renderCanvas();
+      if (selectedElementId === draggedNodeId) {
+        showInspector(draggedNodeId, 'node');
+      }
+    }
+    draggedNodeId = null;
+    return;
+  }
+
+  // End drawing wire
+  if (activeWireStartNode) {
+    const target = e.target;
+    const terminalEl = target.closest(".terminal-dot");
+    
+    if (terminalEl) {
+      const destNodeId = terminalEl.getAttribute("data-node-id");
+      const terminalType = terminalEl.getAttribute("data-type");
+      
+      // If released on the same node's output terminal, we treat it as click-to-click.
+      // Do not clear the active state or hide the preview line.
+      if (destNodeId === activeWireStartNode && terminalType === "output") {
+        updateStatus("Drawing cable... Click an input terminal to connect.");
+        return;
+      }
+      
+      // Connection attempt to input terminal
+      if (terminalType === "input" && destNodeId !== activeWireStartNode) {
+        const alreadyConnected = wires.some(w => w.fromNode === activeWireStartNode && w.toNode === destNodeId);
+        
+        if (!alreadyConnected) {
+          const wireId = "wire_" + Math.random().toString(36).substr(2, 9);
+          
+          wires.push({
+            id: wireId,
+            fromNode: activeWireStartNode,
+            toNode: destNodeId,
+            params: {
+              length: 30, // meters default
+              material: "Cu", // Copper default
+              insulation: "XLPE",
+              routing: "Tray",
+              ambientTemp: 30,
+              groupingFactor: 1.0,
+              selectedSize: "Auto" // Auto-select size
+            }
+          });
+          
+          recalculateSystem();
+          renderCanvas();
+          selectElement(wireId, 'wire');
+          updateStatus("Connected components with a cable.");
+        } else {
+          updateStatus("Connection already exists.");
+        }
+        
+        dragWireLine.setAttribute("visibility", "hidden");
+        activeWireStartNode = null;
+      } else {
+        updateStatus("Invalid connection. Must connect output to input.");
+        dragWireLine.setAttribute("visibility", "hidden");
+        activeWireStartNode = null;
+      }
+    } else {
+      // Released on empty canvas
+      dragWireLine.setAttribute("visibility", "hidden");
+      activeWireStartNode = null;
+      updateStatus("Cable routing cancelled.");
+    }
+  }
+}
+
+function getTerminalPosition(node, type) {
+  // Node standard box: width=80, height=50, centered at (x, y)
+  // Except busbar: width=120, height=12
+  const w = node.type === "busbar" ? 120 : 80;
+  const h = node.type === "busbar" ? 12 : 50;
+  
+  if (type === "input") {
+    return { x: node.x, y: node.y - h / 2 };
+  } else {
+    return { x: node.x, y: node.y + h / 2 };
+  }
+}
+
+// ==========================================================================
+// 5. Canvas Zoom Controls
+// ==========================================================================
+
+function zoomCanvas(factor) {
+  zoomLevel = Math.max(0.3, Math.min(3.0, zoomLevel * factor));
+  updateTransform();
+}
+
+function resetZoom() {
+  zoomLevel = 1.0;
+  initSVGCanvas();
+  updateTransform();
+}
+
+// ==========================================================================
+// 6. Selection & Selection UI Update
+// ==========================================================================
+
+function selectElement(id, type) {
+  deselectAll();
+  selectedElementId = id;
+  selectedElementType = type;
+  
+  if (type === 'node') {
+    const el = document.querySelector(`.node-group[data-node-id="${id}"]`);
+    if (el) el.classList.add("selected");
+  } else if (type === 'wire') {
+    const el = document.querySelector(`.wire-path[data-wire-id="${id}"]`);
+    if (el) el.classList.add("wire-path-selected");
+  }
+  
+  showInspector(id, type);
+}
+
+function deselectAll() {
+  selectedElementId = null;
+  selectedElementType = null;
+  
+  document.querySelectorAll(".node-group").forEach(el => el.classList.remove("selected"));
+  document.querySelectorAll(".wire-path").forEach(el => el.classList.remove("wire-path-selected"));
+  
+  hideInspector();
+}
+
+function deleteSelectedElement() {
+  if (!selectedElementId) return;
+  
+  if (selectedElementType === 'node') {
+    // Delete the node
+    nodes = nodes.filter(n => n.id !== selectedElementId);
+    // Delete any wires connected to this node
+    wires = wires.filter(w => w.fromNode !== selectedElementId && w.toNode !== selectedElementId);
+    updateStatus("Deleted component and connected wires.");
+  } else if (selectedElementType === 'wire') {
+    // Delete the wire
+    wires = wires.filter(w => w.id !== selectedElementId);
+    updateStatus("Deleted feeder cable.");
+  }
+  
+  deselectAll();
+  recalculateSystem();
+  renderCanvas();
+}
+
+// ==========================================================================
+// 7. Inspector Rendering & Forms
+// ==========================================================================
+
+function hideInspector() {
+  document.getElementById("inspector-empty-state").classList.remove("hidden");
+  document.getElementById("inspector-panel-details").classList.add("hidden");
+}
+
+function showInspector(id, type) {
+  document.getElementById("inspector-empty-state").classList.add("hidden");
+  document.getElementById("inspector-panel-details").classList.remove("hidden");
+  
+  const titleEl = document.getElementById("ins-element-title");
+  const badgeEl = document.getElementById("ins-element-badge");
+  const fieldsContainer = document.getElementById("ins-form-fields");
+  const resultsContainer = document.getElementById("ins-results-content");
+  
+  fieldsContainer.innerHTML = "";
+  resultsContainer.innerHTML = "";
+  
+  if (type === 'node') {
+    const node = nodes.find(n => n.id === id);
+    if (!node) return;
+    
+    titleEl.textContent = node.name;
+    badgeEl.textContent = node.type.toUpperCase();
+    
+    // Core parameters form
+    let formHTML = `
+      <div class="form-group">
+        <label>Label Name</label>
+        <input type="text" value="${node.name}" oninput="updateNodeName('${node.id}', this.value)">
+      </div>
+    `;
+    
+    if (node.type === "motor") {
+      formHTML += `
+        <div class="form-group">
+          <label>Power Rating</label>
+          <div style="display:flex; gap:8px;">
+            <input type="number" step="0.1" value="${node.params.power}" onchange="updateNodeParam('${node.id}', 'power', this.value)" style="flex:1;">
+            <select onchange="updateNodeParam('${node.id}', 'unit', this.value)" style="width:70px;">
+              <option value="kW" ${node.params.unit === 'kW' ? 'selected' : ''}>kW</option>
+              <option value="HP" ${node.params.unit === 'HP' ? 'selected' : ''}>HP</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Efficiency (%)</label>
+          <input type="number" min="50" max="99" value="${node.params.efficiency}" onchange="updateNodeParam('${node.id}', 'efficiency', this.value)">
+        </div>
+        <div class="form-group">
+          <label>Power Factor (cos φ)</label>
+          <input type="number" min="0.5" max="1" step="0.01" value="${node.params.pf}" onchange="updateNodeParam('${node.id}', 'pf', this.value)">
+        </div>
+      `;
+      
+      // Calculations display
+      const fla = calculateMotorFLA(node);
+      const activeKw = node.params.unit === 'kW' ? node.params.power : node.params.power * 0.746;
+      
+      let resHTML = `
+        <div class="result-row">
+          <span class="result-label">Full Load Current (FLA):</span>
+          <span class="result-val">${fla.toFixed(2)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Active Power (kW):</span>
+          <span class="result-val">${activeKw.toFixed(1)} kW</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Apparent Power (kVA):</span>
+          <span class="result-val">${(activeKw / (node.params.pf * (node.params.efficiency/100))).toFixed(1)} kVA</span>
+        </div>
+      `;
+      resultsContainer.innerHTML = resHTML;
+      
+    } else if (node.type === "vfd") {
+      formHTML += `
+        <div class="form-group">
+          <label>Duty Rating</label>
+          <select onchange="updateNodeParam('${node.id}', 'duty', this.value)">
+            <option value="normal" ${node.params.duty === 'normal' ? 'selected' : ''}>Normal Duty (Pumps/Fans)</option>
+            <option value="heavy" ${node.params.duty === 'heavy' ? 'selected' : ''}>Heavy Duty (Conveyor/Crusher)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>VFD Output Current Selection</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="vfd-autosize-sel" onchange="toggleNodeAutosize('${node.id}', this.value)" style="width:100px;">
+              <option value="auto" ${node.params.autoSize ? 'selected' : ''}>Auto-Size</option>
+              <option value="manual" ${!node.params.autoSize ? 'selected' : ''}>Manual</option>
+            </select>
+            <input type="number" value="${node.params.ratedCurrent}" ${node.params.autoSize ? 'disabled' : ''} onchange="updateNodeParam('${node.id}', 'ratedCurrent', this.value)" style="flex:1;">
+            <span>A</span>
+          </div>
+        </div>
+      `;
+      
+      // Calculate drive load requirement
+      const stats = getConnectedBranchStats(node.id);
+      const reqCurrent = stats.totalFLA;
+      const vfdSize = node.params.autoSize ? selectVfdSize(reqCurrent) : node.params.ratedCurrent;
+      
+      const thermalLoss = calculateVfdLoss(vfdSize, reqCurrent);
+      
+      let statusClass = "status-ok";
+      let statusText = "Compliant";
+      if (vfdSize < reqCurrent) {
+        statusClass = "status-fail";
+        statusText = "Undersized VFD";
+      }
+      
+      let resHTML = `
+        <div class="result-row">
+          <span class="result-label">Branch Motor Load (FLA):</span>
+          <span class="result-val">${reqCurrent.toFixed(2)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Recommended VFD Current:</span>
+          <span class="result-val">${(reqCurrent * 1.0).toFixed(1)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Assigned VFD Capacity:</span>
+          <span class="result-val">${vfdSize} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Estimated Heat Loss (W):</span>
+          <span class="result-val">${thermalLoss.toFixed(0)} W</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">VFD Sizing Status:</span>
+          <span class="result-val ${statusClass}">${statusText}</span>
+        </div>
+      `;
+      resultsContainer.innerHTML = resHTML;
+      
+    } else if (node.type === "dol") {
+      // Direct-On-Line Contactor & Overload selection
+      const stats = getConnectedBranchStats(node.id);
+      const reqCurrent = stats.totalFLA;
+      const contactorRating = selectContactorSize(reqCurrent);
+      
+      let resHTML = `
+        <div class="result-row">
+          <span class="result-label">Contactor AC-3 Rating:</span>
+          <span class="result-val">${contactorRating} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Overload Relay Range:</span>
+          <span class="result-val">${(reqCurrent * 0.9).toFixed(1)} - ${(reqCurrent * 1.15).toFixed(1)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Thermal Overload Setting:</span>
+          <span class="result-val">${reqCurrent.toFixed(2)} A</span>
+        </div>
+      `;
+      resultsContainer.innerHTML = resHTML;
+      
+    } else if (node.type === "softstarter") {
+      formHTML += `
+        <div class="form-group">
+          <label>Starting Current Limit</label>
+          <input type="number" step="0.5" min="1.5" max="5.0" value="${node.params.currentLimit}" onchange="updateNodeParam('${node.id}', 'currentLimit', this.value)">
+          <span class="section-desc">Times motor full load current (FLA)</span>
+        </div>
+        <div class="form-group">
+          <label>Soft Starter Sizing</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="ss-autosize-sel" onchange="toggleNodeAutosize('${node.id}', this.value)" style="width:100px;">
+              <option value="auto" ${node.params.autoSize ? 'selected' : ''}>Auto-Size</option>
+              <option value="manual" ${!node.params.autoSize ? 'selected' : ''}>Manual</option>
+            </select>
+            <input type="number" value="${node.params.ratedCurrent}" ${node.params.autoSize ? 'disabled' : ''} onchange="updateNodeParam('${node.id}', 'ratedCurrent', this.value)" style="flex:1;">
+            <span>A</span>
+          </div>
+        </div>
+      `;
+      
+      const stats = getConnectedBranchStats(node.id);
+      const reqCurrent = stats.totalFLA;
+      const ssSize = node.params.autoSize ? selectSoftStarterSize(reqCurrent) : node.params.ratedCurrent;
+      
+      let statusClass = "status-ok";
+      let statusText = "Compliant";
+      if (ssSize < reqCurrent) {
+        statusClass = "status-fail";
+        statusText = "Undersized Starter";
+      }
+
+      let resHTML = `
+        <div class="result-row">
+          <span class="result-label">Branch Motor Load (FLA):</span>
+          <span class="result-val">${reqCurrent.toFixed(2)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Assigned SS Capacity:</span>
+          <span class="result-val">${ssSize} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Peak Inrush Current:</span>
+          <span class="result-val">${(reqCurrent * node.params.currentLimit).toFixed(1)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Status:</span>
+          <span class="result-val ${statusClass}">${statusText}</span>
+        </div>
+      `;
+      resultsContainer.innerHTML = resHTML;
+
+    } else if (node.type === "breaker") {
+      formHTML += `
+        <div class="form-group">
+          <label>Breaker Trip Capacity Selection</label>
+          <div style="display:flex; gap:8px;">
+            <select id="cb-autosize-sel" onchange="toggleNodeAutosize('${node.id}', this.value)" style="width:100px;">
+              <option value="auto" ${node.params.autoSize ? 'selected' : ''}>Auto-Size</option>
+              <option value="manual" ${!node.params.autoSize ? 'selected' : ''}>Manual</option>
+            </select>
+            <select onchange="updateNodeParam('${node.id}', 'selectedRating', this.value)" ${node.params.autoSize ? 'disabled' : ''} style="flex:1;">
+              ${BREAKER_RATINGS.map(r => `<option value="${r}" ${node.params.selectedRating === r ? 'selected' : ''}>${r} A</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      `;
+      
+      const stats = getConnectedBranchStats(node.id);
+      const reqCurrent = stats.totalFLA;
+      // Breaker sized at 1.25x load
+      const minBreakerRating = reqCurrent * 1.25;
+      const autoBreakerRating = selectBreakerSize(minBreakerRating);
+      const finalBreakerRating = node.params.autoSize ? autoBreakerRating : node.params.selectedRating;
+      
+      let statusClass = "status-ok";
+      let statusText = "Compliant";
+      if (finalBreakerRating < reqCurrent) {
+        statusClass = "status-fail";
+        statusText = "Overloaded (Rating < Load)";
+      } else if (finalBreakerRating < minBreakerRating) {
+        statusClass = "status-warning";
+        statusText = "Marginal (Less than 1.25x FLA)";
+      }
+
+      let resHTML = `
+        <div class="result-row">
+          <span class="result-label">Branch Motor Load (FLA):</span>
+          <span class="result-val">${reqCurrent.toFixed(2)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Continuous Current Req:</span>
+          <span class="result-val">${minBreakerRating.toFixed(1)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Assigned Breaker Rating:</span>
+          <span class="result-val">${finalBreakerRating} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Magnetic Trip (Short Circuit):</span>
+          <span class="result-val">${(finalBreakerRating * 10).toFixed(0)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Breaker Status:</span>
+          <span class="result-val ${statusClass}">${statusText}</span>
+        </div>
+      `;
+      resultsContainer.innerHTML = resHTML;
+      
+    } else if (node.type === "busbar") {
+      formHTML += `
+        <div class="form-group">
+          <label>Conductor Material</label>
+          <select onchange="updateNodeParam('${node.id}', 'material', this.value)">
+            <option value="Cu" ${node.params.material === 'Cu' ? 'selected' : ''}>Copper (Cu)</option>
+            <option value="Al" ${node.params.material === 'Al' ? 'selected' : ''}>Aluminum (Al)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Main Busbar Capacity (A)</label>
+          <input type="number" step="100" value="${node.params.rating}" onchange="updateNodeParam('${node.id}', 'rating', this.value)">
+        </div>
+      `;
+      
+      const stats = getConnectedBranchStats(node.id);
+      const totalLoad = stats.totalFLA;
+      
+      let statusClass = "status-ok";
+      let statusText = "Compliant";
+      if (node.params.rating < totalLoad) {
+        statusClass = "status-fail";
+        statusText = "Busbar Overloaded!";
+      }
+
+      let resHTML = `
+        <div class="result-row">
+          <span class="result-label">Total Connected FLA:</span>
+          <span class="result-val">${totalLoad.toFixed(1)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Rated Busbar Ampacity:</span>
+          <span class="result-val">${node.params.rating} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Diversity / Load Factor:</span>
+          <span class="result-val">100%</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Thermal Margin:</span>
+          <span class="result-val">${(node.params.rating - totalLoad).toFixed(1)} A</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Busbar Status:</span>
+          <span class="result-val ${statusClass}">${statusText}</span>
+        </div>
+      `;
+      resultsContainer.innerHTML = resHTML;
+      
+    } else if (node.type === "source") {
+      formHTML += `
+        <div class="form-group">
+          <label>Short Circuit Capacity (kA)</label>
+          <input type="number" step="1" value="${node.params.scc}" onchange="updateNodeParam('${node.id}', 'scc', this.value)">
+        </div>
+      `;
+      
+      const stats = getConnectedBranchStats(node.id);
+      let resHTML = `
+        <div class="result-row">
+          <span class="result-label">Available Fault Level:</span>
+          <span class="result-val">${node.params.scc} kA</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Total Downstream Motors:</span>
+          <span class="result-val">${stats.motorCount}</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Total Cumulative FLA:</span>
+          <span class="result-val">${stats.totalFLA.toFixed(1)} A</span>
+        </div>
+      `;
+      resultsContainer.innerHTML = resHTML;
+    }
+    
+    fieldsContainer.innerHTML = formHTML;
+    
+  } else if (type === 'wire') {
+    const wire = wires.find(w => w.id === id);
+    if (!wire) return;
+    
+    titleEl.textContent = "Feeder Cable";
+    badgeEl.textContent = "CABLE";
+    
+    // Core parameters form
+    let formHTML = `
+      <div class="form-group">
+        <label>Conductor Material</label>
+        <select onchange="updateWireParam('${wire.id}', 'material', this.value)">
+          <option value="Cu" ${wire.params.material === 'Cu' ? 'selected' : ''}>Copper (Cu)</option>
+          <option value="Al" ${wire.params.material === 'Al' ? 'selected' : ''}>Aluminum (Al)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Insulation Type</label>
+        <select onchange="updateWireParam('${wire.id}', 'insulation', this.value)">
+          <option value="XLPE" ${wire.params.insulation === 'XLPE' ? 'selected' : ''}>XLPE (90°C Rated)</option>
+          <option value="PVC" ${wire.params.insulation === 'PVC' ? 'selected' : ''}>PVC (70°C Rated)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cable Routing Installation</label>
+        <select onchange="updateWireParam('${wire.id}', 'routing', this.value)">
+          <option value="Tray" ${wire.params.routing === 'Tray' ? 'selected' : ''}>Perforated Cable Tray</option>
+          <option value="Conduit" ${wire.params.routing === 'Conduit' ? 'selected' : ''}>Conduit in Wall/Ground</option>
+          <option value="Air" ${wire.params.routing === 'Air' ? 'selected' : ''}>Free Air / Bracket</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cable Length (meters)</label>
+        <input type="number" min="1" max="1000" value="${wire.params.length}" onchange="updateWireParam('${wire.id}', 'length', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Ambient Temperature (°C)</label>
+        <input type="number" min="10" max="60" value="${wire.params.ambientTemp}" onchange="updateWireParam('${wire.id}', 'ambientTemp', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Grouping Derating Factor</label>
+        <input type="number" step="0.05" min="0.1" max="1.0" value="${wire.params.groupingFactor}" onchange="updateWireParam('${wire.id}', 'groupingFactor', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Conductor Area Sizing</label>
+        <div style="display:flex; gap:8px;">
+          <select id="wire-sizing-mode" onchange="toggleWireAutosize('${wire.id}', this.value)" style="width:100px;">
+            <option value="Auto" ${wire.params.selectedSize === 'Auto' ? 'selected' : ''}>Auto-Size</option>
+            <option value="Manual" ${wire.params.selectedSize !== 'Auto' ? 'selected' : ''}>Manual</option>
+          </select>
+          <select id="wire-manual-size" onchange="updateWireParam('${wire.id}', 'selectedSize', this.value)" ${wire.params.selectedSize === 'Auto' ? 'disabled' : ''} style="flex:1;">
+            ${(wire.params.material === 'Cu' ? COPPER_AMPACITIES : ALUMINUM_AMPACITIES).map(a => 
+              `<option value="${a.size}" ${parseFloat(wire.params.selectedSize) === a.size ? 'selected' : ''}>${a.size} mm²</option>`
+            ).join('')}
+          </select>
+        </div>
+      </div>
+    `;
+    
+    fieldsContainer.innerHTML = formHTML;
+    
+    // Run wire sizing and voltage drop calculation
+    const calc = calculateWireSizing(wire);
+    
+    let sizeStatusClass = "status-ok";
+    if (calc.sizingError) {
+      sizeStatusClass = "status-fail";
+    }
+    
+    let vdStatusClass = "status-ok";
+    if (calc.vdPct > 3.0) {
+      vdStatusClass = "status-fail";
+    } else if (calc.vdPct > 2.0) {
+      vdStatusClass = "status-warning";
+    }
+
+    let resHTML = `
+      <div class="result-row">
+        <span class="result-label">Continuous Load Current:</span>
+        <span class="result-val">${calc.loadCurrent.toFixed(2)} A</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Continuous Design Req (1.25x):</span>
+        <span class="result-val">${(calc.loadCurrent * 1.25).toFixed(2)} A</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Derating multiplier (Temp/Group):</span>
+        <span class="result-val">${calc.deratingFactor.toFixed(2)}</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Minimum Raw Capacity Req:</span>
+        <span class="result-val">${calc.minBaseAmpacity.toFixed(1)} A</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Recommended Cable Size:</span>
+        <span class="result-val ${sizeStatusClass}">${calc.resolvedSize} mm²</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Selected Size Ampacity (base):</span>
+        <span class="result-val">${calc.baseAmpacity} A</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Selected Size Ampacity (derated):</span>
+        <span class="result-val">${calc.deratedAmpacity.toFixed(1)} A</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Voltage Drop:</span>
+        <span class="result-val">${calc.vdVolt.toFixed(2)} V</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Voltage Drop Percentage:</span>
+        <span class="result-val ${vdStatusClass}">${calc.vdPct.toFixed(2)} %</span>
+      </div>
+    `;
+    resultsContainer.innerHTML = resHTML;
+  }
+}
+
+function updateNodeName(nodeId, newName) {
+  const node = nodes.find(n => n.id === nodeId);
+  if (node) {
+    node.name = newName;
+    
+    // Update node label inside SVG
+    const textEl = document.querySelector(`.node-group[data-node-id="${nodeId}"] text.node-label`);
+    if (textEl) {
+      textEl.textContent = newName;
+    }
+  }
+}
+
+function updateNodeParam(nodeId, paramKey, val) {
+  const node = nodes.find(n => n.id === nodeId);
+  if (node) {
+    // Convert numeric strings to numbers
+    const numVal = parseFloat(val);
+    node.params[paramKey] = isNaN(numVal) ? val : numVal;
+    
+    recalculateSystem();
+    renderCanvas();
+    showInspector(nodeId, 'node');
+  }
+}
+
+function toggleNodeAutosize(nodeId, val) {
+  const node = nodes.find(n => n.id === nodeId);
+  if (node) {
+    node.params.autoSize = (val === "auto");
+    
+    recalculateSystem();
+    renderCanvas();
+    showInspector(nodeId, 'node');
+  }
+}
+
+function updateWireParam(wireId, paramKey, val) {
+  const wire = wires.find(w => w.id === wireId);
+  if (wire) {
+    // Convert numeric strings to numbers
+    const numVal = parseFloat(val);
+    wire.params[paramKey] = isNaN(numVal) ? val : numVal;
+    
+    recalculateSystem();
+    renderCanvas();
+    showInspector(wireId, 'wire');
+  }
+}
+
+function toggleWireAutosize(wireId, val) {
+  const wire = wires.find(w => w.id === wireId);
+  if (wire) {
+    if (val === "Auto") {
+      wire.params.selectedSize = "Auto";
+    } else {
+      wire.params.selectedSize = "4"; // Default fallback manual size
+    }
+    
+    recalculateSystem();
+    renderCanvas();
+    showInspector(wireId, 'wire');
+  }
+}
+
+// ==========================================================================
+// 8. Engineering Calculations & Solvers
+// ==========================================================================
+
+function calculateMotorFLA(motor) {
+  let powerkW = motor.params.power;
+  if (motor.params.unit === "HP") {
+    powerkW = powerkW * 0.7457; // HP to kW
+  }
+  
+  const eff = motor.params.efficiency / 100;
+  const pf = motor.params.pf;
+  const V = systemGlobals.voltage;
+  
+  // 3-Phase motor current formula
+  return (powerkW * 1000) / (Math.sqrt(3) * V * eff * pf);
+}
+
+// Find downstream statistics (motors, total FLA) for a node
+function getConnectedBranchStats(startNodeId) {
+  let visited = new Set();
+  let queue = [startNodeId];
+  let totalFLA = 0;
+  let motorCount = 0;
+  
+  while (queue.length > 0) {
+    const currId = queue.shift();
+    if (visited.has(currId)) continue;
+    visited.add(currId);
+    
+    const node = nodes.find(n => n.id === currId);
+    if (!node) continue;
+    
+    if (node.type === "motor") {
+      totalFLA += calculateMotorFLA(node);
+      motorCount++;
+    }
+    
+    // Find all outgoing wires from this node
+    const downstreamWires = wires.filter(w => w.fromNode === currId);
+    for (const w of downstreamWires) {
+      if (!visited.has(w.toNode)) {
+        queue.push(w.toNode);
+      }
+    }
+  }
+  
+  return {
+    totalFLA,
+    motorCount
+  };
+}
+
+// Standard sizing lookups
+function selectVfdSize(amps) {
+  for (const v of VFD_RATINGS) {
+    if (v.rating >= amps) return v.rating;
+  }
+  return VFD_RATINGS[VFD_RATINGS.length - 1].rating; // fallback to max
+}
+
+function calculateVfdLoss(vfdAmps, loadAmps) {
+  // Approximate VFD losses as 2.5% of running load capacity plus static losses
+  const pf = systemGlobals.pfTarget;
+  const v = systemGlobals.voltage;
+  const kw = (Math.sqrt(3) * v * loadAmps * pf) / 1000;
+  return kw * 1000 * 0.025 + 50; // W
+}
+
+function selectContactorSize(amps) {
+  for (const c of CONTACTOR_RATINGS) {
+    if (c >= amps) return c;
+  }
+  return CONTACTOR_RATINGS[CONTACTOR_RATINGS.length - 1];
+}
+
+function selectSoftStarterSize(amps) {
+  for (const s of SOFTSTARTER_RATINGS) {
+    if (s >= amps) return s;
+  }
+  return SOFTSTARTER_RATINGS[SOFTSTARTER_RATINGS.length - 1];
+}
+
+function selectBreakerSize(amps) {
+  for (const b of BREAKER_RATINGS) {
+    if (b >= amps) return b;
+  }
+  return BREAKER_RATINGS[BREAKER_RATINGS.length - 1];
+}
+
+function calculateWireSizing(wire) {
+  // 1. Get downstream motor load
+  const stats = getConnectedBranchStats(wire.toNode);
+  const loadCurrent = stats.totalFLA;
+  
+  // 2. Continuous load sizing multiplier (NEC requires 1.25)
+  const reqCurrent = loadCurrent * 1.25;
+  
+  // 3. Compute derating factors
+  // Temperature derating: ambient temp reference is 30C
+  // XLPE max temp is 90C. PVC max temp is 70C
+  const maxTemp = wire.params.insulation === "XLPE" ? 90 : 70;
+  let tempFactor = 1.0;
+  if (wire.params.ambientTemp > 30) {
+    tempFactor = Math.sqrt((maxTemp - wire.params.ambientTemp) / (maxTemp - 30));
+    if (isNaN(tempFactor) || tempFactor < 0.1) tempFactor = 0.1;
+  }
+  
+  const grouping = wire.params.groupingFactor || 1.0;
+  const deratingFactor = tempFactor * grouping;
+  
+  // Base current required in clean conditions (30C)
+  const minBaseAmpacity = reqCurrent / deratingFactor;
+  
+  // 4. Select conductor size
+  const list = wire.params.material === "Cu" ? COPPER_AMPACITIES : ALUMINUM_AMPACITIES;
+  let resolvedSize = 1.5;
+  let baseAmpacity = 17.5;
+  let sizingError = false;
+  
+  if (wire.params.selectedSize === "Auto") {
+    // Find smallest size that matches the base ampacity requirement
+    let found = false;
+    for (const item of list) {
+      if (item.ampacity >= minBaseAmpacity) {
+        resolvedSize = item.size;
+        baseAmpacity = item.ampacity;
+        found = true;
+        break;
+      }
+    }
+    
+    // If even the largest size is too small, use largest
+    if (!found) {
+      const largest = list[list.length - 1];
+      resolvedSize = largest.size;
+      baseAmpacity = largest.ampacity;
+      sizingError = true;
+    }
+  } else {
+    // Manual size selection
+    resolvedSize = parseFloat(wire.params.selectedSize);
+    const item = list.find(x => x.size === resolvedSize);
+    baseAmpacity = item ? item.ampacity : 17.5;
+  }
+  
+  const deratedAmpacity = baseAmpacity * deratingFactor;
+  if (deratedAmpacity < reqCurrent) {
+    sizingError = true;
+  }
+  
+  // 5. Voltage Drop Calculations
+  // Resistivity at standard operating temperature (~75°C)
+  // Cu = 0.0225 ohm.mm2/m, Al = 0.036 ohm.mm2/m
+  const rho = wire.params.material === "Cu" ? 0.0225 : 0.036;
+  const R = (rho * wire.params.length) / resolvedSize; // Ohm
+  
+  // Approximate reactance per phase for multicore cables (typically 0.08 ohm/km = 0.00008 ohm/m)
+  const X = 0.00008 * wire.params.length; // Ohm
+  
+  // Use average motor power factor (approx 0.85 if no motor is connected, otherwise search for motor)
+  let pf = 0.85;
+  const destNode = nodes.find(n => n.id === wire.toNode);
+  if (destNode && destNode.type === "motor") {
+    pf = destNode.params.pf;
+  }
+  const sinPhi = Math.sqrt(1 - pf * pf);
+  
+  // 3-Phase voltage drop formula
+  const vdVolt = Math.sqrt(3) * loadCurrent * (R * pf + X * sinPhi);
+  const vdPct = (vdVolt / systemGlobals.voltage) * 100;
+  
+  return {
+    loadCurrent,
+    deratingFactor,
+    minBaseAmpacity,
+    resolvedSize,
+    baseAmpacity,
+    deratedAmpacity,
+    vdVolt,
+    vdPct,
+    sizingError
+  };
+}
+
+// Full check over all wires/cables in system to identify compliance violations
+function recalculateSystem() {
+  wires.forEach(w => {
+    const calc = calculateWireSizing(w);
+    w.calculated = calc;
+  });
+  
+  nodes.forEach(n => {
+    if (n.type === "breaker") {
+      const stats = getConnectedBranchStats(n.id);
+      if (n.params.autoSize) {
+        n.params.selectedRating = selectBreakerSize(stats.totalFLA * 1.25);
+      }
+    } else if (n.type === "vfd") {
+      const stats = getConnectedBranchStats(n.id);
+      if (n.params.autoSize) {
+        n.params.ratedCurrent = selectVfdSize(stats.totalFLA);
+      }
+    } else if (n.type === "softstarter") {
+      const stats = getConnectedBranchStats(n.id);
+      if (n.params.autoSize) {
+        n.params.ratedCurrent = selectSoftStarterSize(stats.totalFLA);
+      }
+    }
+  });
+}
+
+// ==========================================================================
+// 9. Schematic Rendering (SVGs Drawing Generator)
+// ==========================================================================
+
+function renderCanvas() {
+  // Clear previous drawings
+  wiresLayer.innerHTML = "";
+  nodesLayer.innerHTML = "";
+  
+  // 1. Draw Wires / Cables
+  wires.forEach(w => {
+    const fromNode = nodes.find(n => n.id === w.fromNode);
+    const toNode = nodes.find(n => n.id === w.toNode);
+    
+    if (fromNode && toNode) {
+      const startPt = getTerminalPosition(fromNode, "output");
+      const endPt = getTerminalPosition(toNode, "input");
+      
+      // Calculate Orthogonal Routing Path (to keep drawings looking neat and blocky)
+      // Path goes: Start -> Down a bit -> Horizontally -> Down to end
+      const midY = startPt.y + (endPt.y - startPt.y) / 2;
+      const pathData = `M ${startPt.x} ${startPt.y} L ${startPt.x} ${midY} L ${endPt.x} ${midY} L ${endPt.x} ${endPt.y}`;
+      
+      const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      pathEl.setAttribute("d", pathData);
+      
+      let isViolating = (w.calculated && (w.calculated.vdPct > 3.0 || w.calculated.sizingError));
+      
+      let className = "wire-path";
+      if (isViolating) className += " violating";
+      if (w.id === selectedElementId) className += " wire-path-selected";
+      
+      pathEl.setAttribute("class", className);
+      pathEl.setAttribute("data-wire-id", w.id);
+      
+      // Click selection
+      pathEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selectElement(w.id, 'wire');
+      });
+      
+      wiresLayer.appendChild(pathEl);
+      
+      // Draw a cable label marker at the horizontal segment
+      const midX = startPt.x + (endPt.x - startPt.x) / 2;
+      const textEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      textEl.setAttribute("x", midX);
+      textEl.setAttribute("y", midY - 6);
+      textEl.setAttribute("font-size", "7");
+      textEl.setAttribute("fill", isViolating ? "var(--color-error)" : "var(--text-muted)");
+      textEl.setAttribute("font-family", "var(--font-mono)");
+      textEl.setAttribute("text-anchor", "middle");
+      
+      const sizeStr = w.calculated ? w.calculated.resolvedSize + " mm²" : "";
+      const lenStr = w.params.length + "m";
+      textEl.textContent = `${sizeStr} (${lenStr})`;
+      
+      wiresLayer.appendChild(textEl);
+    }
+  });
+  
+  // 2. Draw Component Nodes
+  nodes.forEach(n => {
+    const nodeG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    nodeG.setAttribute("class", "node-group" + (n.id === selectedElementId ? " selected" : ""));
+    nodeG.setAttribute("data-node-id", n.id);
+    nodeG.setAttribute("transform", `translate(${n.x}, ${n.y})`);
+    
+    // Core Dimensions
+    const w = n.type === "busbar" ? 120 : 80;
+    const h = n.type === "busbar" ? 12 : 50;
+    
+    // Main boundary box
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", -w / 2);
+    rect.setAttribute("y", -h / 2);
+    rect.setAttribute("width", w);
+    rect.setAttribute("height", h);
+    rect.setAttribute("class", "node-rect");
+    nodeG.appendChild(rect);
+    
+    // Specific symbol drawing inside the box
+    drawNodeSymbol(nodeG, n, w, h);
+    
+    // Draw Name text
+    const textName = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    textName.setAttribute("x", 0);
+    textName.setAttribute("y", n.type === "busbar" ? 4 : h / 2 - 16);
+    textName.setAttribute("class", "node-label");
+    textName.textContent = n.name;
+    nodeG.appendChild(textName);
+    
+    // Draw Sublabel details (current sizing)
+    const textSub = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    textSub.setAttribute("x", 0);
+    textSub.setAttribute("y", h / 2 - 6);
+    textSub.setAttribute("class", "node-sublabel");
+    
+    let subStr = "";
+    if (n.type === "motor") {
+      subStr = `${n.params.power} ${n.params.unit}`;
+    } else if (n.type === "vfd") {
+      subStr = `${n.params.ratedCurrent}A VFD`;
+    } else if (n.type === "softstarter") {
+      subStr = `${n.params.ratedCurrent}A SoftS`;
+    } else if (n.type === "breaker") {
+      subStr = `${n.params.selectedRating}A MCCB`;
+    } else if (n.type === "busbar") {
+      subStr = `${n.params.rating}A ${n.params.material}`;
+    }
+    
+    textSub.textContent = subStr;
+    nodeG.appendChild(textSub);
+    
+    // Draw Terminal Dots
+    // Inputs (Blue dot at top)
+    if (n.type !== "source") {
+      const dotIn = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dotIn.setAttribute("cx", 0);
+      dotIn.setAttribute("cy", -h / 2);
+      dotIn.setAttribute("r", "4");
+      dotIn.setAttribute("class", "terminal-dot input");
+      dotIn.setAttribute("data-node-id", n.id);
+      dotIn.setAttribute("data-type", "input");
+      nodeG.appendChild(dotIn);
+    }
+    
+    // Outputs (Green dot at bottom)
+    if (n.type !== "motor") {
+      const dotOut = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dotOut.setAttribute("cx", 0);
+      dotOut.setAttribute("cy", h / 2);
+      dotOut.setAttribute("r", "4");
+      dotOut.setAttribute("class", "terminal-dot output");
+      dotOut.setAttribute("data-node-id", n.id);
+      dotOut.setAttribute("data-type", "output");
+      nodeG.appendChild(dotOut);
+    }
+    
+    nodesLayer.appendChild(nodeG);
+  });
+}
+
+function drawNodeSymbol(group, node, width, height) {
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("class", "node-symbol-path");
+  
+  if (node.type === "source") {
+    // Circle with sine wave
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", 0);
+    circle.setAttribute("cy", -5);
+    circle.setAttribute("r", 10);
+    circle.setAttribute("class", "node-symbol-path");
+    group.appendChild(circle);
+    
+    path.setAttribute("d", "M -6 -5 Q -3 -10 0 -5 T 6 -5");
+    group.appendChild(path);
+    
+  } else if (node.type === "breaker") {
+    // Switch breaker contact symbol
+    path.setAttribute("d", "M 0 -15 L 0 -5 L -8 5 M 0 5 L 0 15");
+    group.appendChild(path);
+    
+  } else if (node.type === "vfd") {
+    // Diagonal divided box rectifier/inverter symbols
+    path.setAttribute("d", `M ${-width/2} ${-height/2} L ${width/2} ${height/2-18}`); // diagonal
+    group.appendChild(path);
+    
+    const text1 = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text1.setAttribute("x", -15);
+    text1.setAttribute("y", -8);
+    text1.setAttribute("font-size", "8");
+    text1.setAttribute("fill", "var(--text-primary)");
+    text1.textContent = "~";
+    group.appendChild(text1);
+
+    const text2 = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text2.setAttribute("x", 10);
+    text2.setAttribute("y", 2);
+    text2.setAttribute("font-size", "8");
+    text2.setAttribute("fill", "var(--text-primary)");
+    text2.textContent = "=";
+    group.appendChild(text2);
+    
+  } else if (node.type === "softstarter") {
+    // Thyristor back to back diode symbol representation or "SS"
+    path.setAttribute("d", "M -15 -10 L 15 -10 L 0 10 Z");
+    path.setAttribute("fill", "none");
+    group.appendChild(path);
+    
+  } else if (node.type === "dol") {
+    // Contactor square box + overload representation
+    path.setAttribute("d", "M -10 -15 H 10 V -5 H -10 Z M -10 -5 H 10 V 5 H -10 Z");
+    group.appendChild(path);
+    
+  } else if (node.type === "motor") {
+    // Circle with "M" inside
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", 0);
+    circle.setAttribute("cy", -6);
+    circle.setAttribute("r", 12);
+    circle.setAttribute("class", "node-symbol-path");
+    group.appendChild(circle);
+    
+    const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    txt.setAttribute("x", 0);
+    txt.setAttribute("y", -2);
+    txt.setAttribute("font-size", "11");
+    txt.setAttribute("font-weight", "bold");
+    txt.setAttribute("text-anchor", "middle");
+    txt.setAttribute("fill", "var(--text-primary)");
+    txt.textContent = "M 3~";
+    group.appendChild(txt);
+  }
+}
+
+// ==========================================================================
+// 10. File Actions: Import, Export, Share Link
+// ==========================================================================
+
+function exportJSON() {
+  const data = {
+    version: "1.0",
+    systemGlobals,
+    nodes,
+    wires
+  };
+  
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `mcc-schematic-design-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  updateStatus("Exported schematic JSON.");
+}
+
+function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.nodes && data.wires) {
+        systemGlobals = data.systemGlobals || systemGlobals;
+        nodes = data.nodes;
+        wires = data.wires;
+        
+        // Sync inputs UI
+        document.getElementById("sys-voltage").value = systemGlobals.voltage;
+        document.getElementById("sys-freq").value = systemGlobals.frequency;
+        document.getElementById("sys-pf-target").value = systemGlobals.pfTarget;
+        
+        deselectAll();
+        recalculateSystem();
+        renderCanvas();
+        updateStatus("Imported schematic design file.");
+      } else {
+        alert("Invalid file format: missing nodes or wires configuration.");
+      }
+    } catch (err) {
+      alert("Error parsing JSON file: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function shareLink() {
+  const state = {
+    systemGlobals,
+    nodes,
+    wires
+  };
+  
+  // Serialize state to base64
+  const serialized = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  const url = new URL(window.location.href);
+  url.hash = `design=${serialized}`;
+  
+  navigator.clipboard.writeText(url.toString()).then(() => {
+    alert("Shareable design URL copied to clipboard!");
+    updateStatus("Sharing link copied.");
+  }).catch(err => {
+    alert("Could not copy link: " + err);
+  });
+}
+
+function loadInitialState() {
+  // Check URL hash for shared design
+  const hash = window.location.hash;
+  if (hash.startsWith("#design=")) {
+    try {
+      const serialized = hash.substring(8);
+      const decoded = JSON.parse(decodeURIComponent(escape(atob(serialized))));
+      if (decoded.nodes && decoded.wires) {
+        systemGlobals = decoded.systemGlobals || systemGlobals;
+        nodes = decoded.nodes;
+        wires = decoded.wires;
+        
+        // Sync UI inputs
+        document.getElementById("sys-voltage").value = systemGlobals.voltage;
+        document.getElementById("sys-freq").value = systemGlobals.frequency;
+        document.getElementById("sys-pf-target").value = systemGlobals.pfTarget;
+        
+        recalculateSystem();
+        renderCanvas();
+        updateStatus("Loaded shared design schematic.");
+        return;
+      }
+    } catch (e) {
+      console.error("Failed to decode shared layout: ", e);
+    }
+  }
+  
+  // Insert initial default components (Grid Power Source -> Main Busbar) so the user is not greeted by an empty canvas
+  nodes = [
+    {
+      id: "node_source",
+      type: "source",
+      x: 250,
+      y: 60,
+      name: "Utility Grid",
+      params: { scc: 35 }
+    },
+    {
+      id: "node_busbar",
+      type: "busbar",
+      x: 250,
+      y: 160,
+      name: "MCC Main Busbar",
+      params: { material: "Cu", rating: 800 }
+    }
+  ];
+  
+  wires = [
+    {
+      id: "wire_main_feed",
+      fromNode: "node_source",
+      toNode: "node_busbar",
+      params: {
+        length: 10,
+        material: "Cu",
+        insulation: "XLPE",
+        routing: "Tray",
+        ambientTemp: 30,
+        groupingFactor: 1.0,
+        selectedSize: "Auto"
+      }
+    }
+  ];
+  
+  recalculateSystem();
+  renderCanvas();
+}

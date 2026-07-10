@@ -96,6 +96,16 @@ const TOOLS_DATA = [
     releaseDate: "2026-07-10T11:30:00Z"
   },
   {
+    id: "mcc-feeder-designer",
+    name: "MCC Feeder & Motor Starter Designer",
+    description: "Design Single Line Diagrams of Motor Control Centers. Drag & drop DOL starters, VFDs, soft starters, and cables, with real-time automatic sizing and compliance checks.",
+    tags: ["electrical", "mcc", "motor", "vfd", "dol", "cable", "sizing", "schematic"],
+    icon: "grid",
+    path: "./tools/mcc-feeder-designer/index.html",
+    status: "beta",
+    releaseDate: "2026-07-10T14:00:00Z"
+  },
+  {
     id: "beam-calculator",
     name: "Structural Beam Solver & Designer",
     description: "Analyze simply supported or cantilever beams with custom materials, cross-sections, and loads. Solves for reactions, shear, bending moment, deflection, and stress, with live 2D interactive diagrams.",

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCC Feeder & Motor Starter Designer (Beta) - Engineering Toolkit</title>
+  
+  <!-- Standardized CSS Links -->
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Inline theme initializer to prevent flickering -->
+  <script>
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  </script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- Standardized Tool Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <!-- Standardized Back Button -->
+        <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        
+        <!-- Tool-Specific Icon (Grid/Network style representation of MCC feeders) -->
+        <div class="hdr-icon" style="color: var(--accent-primary);">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+            <line x1="15" y1="3" x2="15" y2="21"></line>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="3" y1="15" x2="21" y2="15"></line>
+          </svg>
+        </div>
+        
+        <!-- Titles -->
+        <div class="hdr-titles">
+          <h1>MCC Feeder & Motor Starter Designer <span class="beta-badge">BETA</span></h1>
+          <p>Design single line diagrams of Motor Control Centers with live cable sizing, starter calculations, and voltage drop validation.</p>
+        </div>
+      </div>
+      
+      <div class="hdr-right">
+        <!-- Standardized Share & File Action Buttons -->
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <i data-lucide="share-2"></i> Share Link
+        </button>
+        <button onclick="exportJSON()" class="hdr-btn" title="Export schematic to JSON file">
+          <i data-lucide="download"></i> Export JSON
+        </button>
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import schematic from JSON file">
+          <i data-lucide="upload"></i> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" />
+        
+        <!-- Standard divider -->
+        <div class="hdr-divider"></div>
+        
+        <!-- Global Auth Button (Managed by auth-ui.js) -->
+        <button id="auth-btn" title="Sign In">
+          <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+        </button>
+        
+        <!-- Standard Theme Toggle -->
+        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+          <i data-lucide="moon" class="moon-icon"></i>
+          <i data-lucide="sun" class="sun-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="container page-content">
+    <div class="mcc-designer-layout">
+      
+      <!-- Left Panel: Component Palette -->
+      <aside class="palette-sidebar">
+        <div class="panel-section">
+          <h3>Palette</h3>
+          <p class="section-desc">Click a component to add it to the canvas. Wire terminals to form circuits.</p>
+          
+          <div class="component-list">
+            <button class="palette-btn" onclick="addNodeToCanvas('source')" title="Add 3-Phase Power Source">
+              <div class="palette-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M7 12c2.5-4 5.5 4 8 0" stroke-linecap="round"></path>
+                </svg>
+              </div>
+              <div class="palette-info">
+                <span class="comp-name">Power Source</span>
+                <span class="comp-desc">Utility feed (e.g. 480V)</span>
+              </div>
+            </button>
+            
+            <button class="palette-btn" onclick="addNodeToCanvas('busbar')" title="Add Horizontal MCC Main Busbar">
+              <div class="palette-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <circle cx="6" cy="12" r="2" fill="currentColor"></circle>
+                  <circle cx="12" cy="12" r="2" fill="currentColor"></circle>
+                  <circle cx="18" cy="12" r="2" fill="currentColor"></circle>
+                </svg>
+              </div>
+              <div class="palette-info">
+                <span class="comp-name">Main Busbar</span>
+                <span class="comp-desc">Distribution copper bar</span>
+              </div>
+            </button>
+            
+            <button class="palette-btn" onclick="addNodeToCanvas('breaker')" title="Add Circuit Breaker / MCCB">
+              <div class="palette-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="6" r="1.5" fill="currentColor"></circle>
+                  <line x1="12" y1="7.5" x2="12" y2="11"></line>
+                  <line x1="12" y1="11" x2="7" y2="14"></line>
+                  <line x1="12" y1="15" x2="12" y2="18"></line>
+                  <circle cx="12" cy="19.5" r="1.5" fill="currentColor"></circle>
+                </svg>
+              </div>
+              <div class="palette-info">
+                <span class="comp-name">Circuit Breaker</span>
+                <span class="comp-desc">MCCB/MPCB protection</span>
+              </div>
+            </button>
+
+            <button class="palette-btn" onclick="addNodeToCanvas('dol')" title="Add DOL Motor Starter">
+              <div class="palette-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="5" y="4" width="14" height="7" rx="1"></rect>
+                  <text x="12" y="9.5" font-size="7" font-weight="bold" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif">DOL</text>
+                  <rect x="8" y="14" width="8" height="6" rx="1" fill="none" stroke-dasharray="2 2"></rect>
+                  <path d="M12 11v3"></path>
+                </svg>
+              </div>
+              <div class="palette-info">
+                <span class="comp-name">DOL Starter</span>
+                <span class="comp-desc">Contactor & Thermal OL</span>
+              </div>
+            </button>
+
+            <button class="palette-btn" onclick="addNodeToCanvas('vfd')" title="Add Variable Frequency Drive">
+              <div class="palette-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                  <line x1="4" y1="20" x2="20" y2="4"></line>
+                  <text x="8" y="12" font-size="7" font-weight="bold" fill="currentColor" stroke="none">~</text>
+                  <text x="14" y="15" font-size="7" font-weight="bold" fill="currentColor" stroke="none">=</text>
+                </svg>
+              </div>
+              <div class="palette-info">
+                <span class="comp-name">VFD Controller</span>
+                <span class="comp-desc">AC variable speed drive</span>
+              </div>
+            </button>
+
+            <button class="palette-btn" onclick="addNodeToCanvas('softstarter')" title="Add Soft Starter">
+              <div class="palette-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                  <line x1="4" y1="20" x2="20" y2="4"></line>
+                  <text x="7" y="11" font-size="6" font-weight="bold" fill="currentColor" stroke="none">SS</text>
+                  <path d="M13 14l2-2h4"></path>
+                </svg>
+              </div>
+              <div class="palette-info">
+                <span class="comp-name">Soft Starter</span>
+                <span class="comp-desc">Voltage ramp-up starter</span>
+              </div>
+            </button>
+
+            <button class="palette-btn" onclick="addNodeToCanvas('motor')" title="Add 3-Phase AC Motor">
+              <div class="palette-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <text x="12" y="15" font-size="10" font-weight="bold" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif">M</text>
+                </svg>
+              </div>
+              <div class="palette-info">
+                <span class="comp-name">3-Phase Motor</span>
+                <span class="comp-desc">AC Induction Motor load</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-section system-globals">
+          <h3>System Settings</h3>
+          <div class="form-group">
+            <label for="sys-voltage">System Voltage</label>
+            <select id="sys-voltage" onchange="updateGlobals()">
+              <option value="480">480 V (3Ø)</option>
+              <option value="400" selected>400 V (3Ø)</option>
+              <option value="415">415 V (3Ø)</option>
+              <option value="230">230 V (3Ø)</option>
+              <option value="690">690 V (3Ø)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="sys-freq">Frequency</label>
+            <select id="sys-freq" onchange="updateGlobals()">
+              <option value="50" selected>50 Hz</option>
+              <option value="60">60 Hz</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="sys-pf-target">Target Power Factor</label>
+            <input type="number" id="sys-pf-target" value="0.85" min="0.5" max="1" step="0.01" onchange="updateGlobals()">
+          </div>
+        </div>
+
+        <div class="canvas-help-info">
+          <h4>💡 Wiring Guide</h4>
+          <ul>
+            <li>Drag nodes to position them.</li>
+            <li>Click the green output dot (bottom) of any node.</li>
+            <li>Click the blue input dot (top) of another node.</li>
+            <li>This creates a connecting <strong>Feeder Cable</strong>.</li>
+            <li>Click any wire or component to edit details.</li>
+            <li>Press <strong>Delete</strong> key to remove selected items.</li>
+          </ul>
+        </div>
+      </aside>
+      
+      <!-- Center: Drag-and-Drop SVG Canvas -->
+      <section class="canvas-container">
+        <div class="canvas-toolbar">
+          <div class="toolbar-left">
+            <span class="canvas-status" id="canvas-status">Status: Ready</span>
+          </div>
+          <div class="toolbar-right">
+            <button class="icon-btn" onclick="zoomCanvas(1.1)" title="Zoom In"><i data-lucide="zoom-in"></i></button>
+            <button class="icon-btn" onclick="zoomCanvas(0.9)" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
+            <button class="icon-btn" onclick="resetZoom()" title="Reset Zoom"><i data-lucide="maximize-2"></i></button>
+            <div class="tlb-divider"></div>
+            <button class="btn btn-danger" onclick="clearCanvas()" title="Clear Entire Canvas"><i data-lucide="trash-2"></i> Clear All</button>
+          </div>
+        </div>
+
+        <div class="svg-viewport" id="svg-viewport">
+          <svg id="schematic-canvas" width="100%" height="100%">
+            <!-- Grid Pattern -->
+            <defs>
+              <pattern id="grid-pattern" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--grid-color)" stroke-width="0.5" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid-pattern)" id="canvas-bg" />
+            
+            <!-- Group for zoom and pan -->
+            <g id="canvas-content-group">
+              <!-- Wires / Cables will be drawn here -->
+              <g id="wires-layer"></g>
+              <!-- Dragging wire preview line -->
+              <line id="drag-wire-line" class="drag-wire-line" x1="0" y1="0" x2="0" y2="0" visibility="hidden" />
+              <!-- Component nodes will be drawn here -->
+              <g id="nodes-layer"></g>
+            </g>
+          </svg>
+        </div>
+      </section>
+      
+      <!-- Right Panel: Inspector -->
+      <aside class="inspector-sidebar" id="inspector-sidebar">
+        <div class="inspector-empty" id="inspector-empty-state">
+          <i data-lucide="info" class="empty-icon"></i>
+          <h3>No Element Selected</h3>
+          <p>Click on any component or cable on the canvas to configure parameters and view calculation details.</p>
+        </div>
+        
+        <div class="inspector-content hidden" id="inspector-panel-details">
+          <div class="inspector-header">
+            <h2 id="ins-element-title">Component Name</h2>
+            <span class="badge" id="ins-element-badge">Type</span>
+          </div>
+          
+          <div class="inspector-body">
+            <!-- Dynamically populated forms go here -->
+            <div id="ins-form-fields"></div>
+            
+            <!-- Sizing Results Panel -->
+            <div class="sizing-results-card" id="ins-results-card">
+              <h3>Design Output & Compliance</h3>
+              <div id="ins-results-content">
+                <!-- Sizing results go here -->
+              </div>
+            </div>
+
+            <div class="danger-actions-section">
+              <button class="btn btn-outline-danger btn-full" onclick="deleteSelectedElement()">
+                <i data-lucide="trash"></i> Delete Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </main>
+
+  <!-- Firebase & Project Helpers -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/project-manager.js"></script>
+  
+  <!-- Local App Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
