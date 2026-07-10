@@ -87,18 +87,19 @@
       <h1 class="hero-title">Engineering Tools & <span>Calculators</span></h1>
       <p class="hero-subtitle">A curated toolbox of interactive calculators, compliance checkers, and design tools built to streamline engineering workflows.</p>
       
-      <div class="search-box-wrapper">
-        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input type="text" id="search-input" class="search-input" placeholder="Search tools (e.g., wire, torque, copper)..." autocomplete="off" autofocus>
-      </div>
-
-      <div class="search-filters-row">
+      <div class="search-toolbar-row">
+        <div class="search-box-wrapper">
+          <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="search-input" class="search-input" placeholder="Search tools (e.g., wire, torque, copper)..." autocomplete="off" autofocus>
+        </div>
+        
         <select id="sort-select" class="form-select" title="Sort tools grid">
           <option value="default">Default Sort Order</option>
           <option value="popularity">Most Popular (Global Uses)</option>
+          <option value="newest">Newest Tools</option>
           <option value="alphabetical">Alphabetical (A-Z)</option>
         </select>
         

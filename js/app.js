@@ -213,6 +213,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const usesB = popularityStats[b.id] || 0;
         return usesB - usesA;
       });
+    } else if (sortBy === "newest") {
+      result.sort((a, b) => {
+        const dateA = new Date(a.releaseDate || 0);
+        const dateB = new Date(b.releaseDate || 0);
+        return dateB - dateA;
+      });
     }
     
     renderCards(result);

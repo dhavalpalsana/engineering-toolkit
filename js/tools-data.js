@@ -12,7 +12,8 @@ const TOOLS_DATA = [
     tags: ["management", "quality", "root-cause", "ishikawa", "lean", "six-sigma", "engineering"],
     icon: "fishbone",
     path: "./tools/fishbone-diagram/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-03T12:00:00Z"
   },
   {
     id: "wire-gauge",
@@ -21,7 +22,8 @@ const TOOLS_DATA = [
     tags: ["electrical", "awg", "nec", "power", "cable", "thermal", "thermodynamics"],
     icon: "zap",
     path: "./tools/wire-gauge/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-04T12:00:00Z"
   },
   {
     id: "unit-converter",
@@ -30,7 +32,8 @@ const TOOLS_DATA = [
     tags: ["general", "conversion", "units", "pressure", "temperature", "torque", "energy"],
     icon: "refresh-cw",
     path: "./tools/unit-converter/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-05T12:00:00Z"
   },
   {
     id: "busbar-sizing",
@@ -39,7 +42,8 @@ const TOOLS_DATA = [
     tags: ["electrical", "busbar", "copper", "aluminium", "switchgear", "short-circuit", "IEC", "thermal"],
     icon: "layers",
     path: "./tools/busbar-sizing/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-06T12:00:00Z"
   },
   {
     id: "can-bus-designer",
@@ -48,7 +52,8 @@ const TOOLS_DATA = [
     tags: ["electrical", "automotive", "can", "signal-integrity", "physics", "harness"],
     icon: "network",
     path: "./tools/can-bus-designer/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-07T12:00:00Z"
   },
   {
     id: "plot-extractor",
@@ -57,7 +62,8 @@ const TOOLS_DATA = [
     tags: ["general", "math", "curve-fitting", "plot", "digitizer", "data-extraction"],
     icon: "line-chart",
     path: "./tools/plot-extractor/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-08T21:10:00Z"
   },
   {
     id: "code-scanner",
@@ -66,7 +72,8 @@ const TOOLS_DATA = [
     tags: ["general", "barcode", "qr", "scanner", "utility", "datamatrix"],
     icon: "scan",
     path: "./tools/code-scanner/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-08T23:40:00Z"
   },
   {
     id: "timezone-converter",
@@ -75,7 +82,8 @@ const TOOLS_DATA = [
     tags: ["general", "time", "timezone", "utc", "julian-date", "planner", "astronomy"],
     icon: "clock",
     path: "./tools/timezone-converter/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-08T23:50:00Z"
   },
   {
     id: "drafting-board",
@@ -84,7 +92,8 @@ const TOOLS_DATA = [
     tags: ["mechanical", "civil", "cad", "drafting", "vector", "blueprint"],
     icon: "ruler",
     path: "./tools/drafting-board/index.html",
-    status: "beta"
+    status: "beta",
+    releaseDate: "2026-07-10T11:30:00Z"
   },
   {
     id: "beam-calculator",
@@ -93,7 +102,8 @@ const TOOLS_DATA = [
     tags: ["mechanical", "civil", "structural", "beam", "mechanics", "fea"],
     icon: "activity",
     path: "./tools/beam-calculator/index.html",
-    status: "beta"
+    status: "beta",
+    releaseDate: "2026-07-09T22:00:00Z"
   },
   {
     id: "heatsink-simulator",
@@ -102,7 +112,8 @@ const TOOLS_DATA = [
     tags: ["mechanical", "thermal", "heatsink", "simulation", "heat-transfer", "cfd"],
     icon: "thermometer",
     path: "./tools/heatsink-simulator/index.html",
-    status: "beta"
+    status: "beta",
+    releaseDate: "2026-07-09T03:00:00Z"
   },
   {
     id: "bolt-torque",
@@ -111,7 +122,8 @@ const TOOLS_DATA = [
     tags: ["mechanical", "bolt", "torque", "thread", "fastener"],
     icon: "wrench",
     path: "./tools/bolt-torque/index.html",
-    status: "coming-soon"
+    status: "coming-soon",
+    releaseDate: "2026-07-02T12:00:00Z"
   },
   {
     id: "pressure-drop",
@@ -120,6 +132,7 @@ const TOOLS_DATA = [
     tags: ["fluids", "hydraulics", "pipe", "flow", "pressure"],
     icon: "droplet",
     path: "./tools/pressure-drop/index.html",
-    status: "coming-soon"
+    status: "coming-soon",
+    releaseDate: "2026-07-01T12:00:00Z"
   }
 ];

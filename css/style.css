@@ -251,8 +251,9 @@ header {
 }
 
 .search-box-wrapper {
+  flex: 1;
   max-width: 580px;
-  margin: 0 auto 32px;
+  margin: 0;
   position: relative;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -738,16 +739,16 @@ footer {
 /* ==========================================================================
    Dashboard Sorting and Favorites
    ========================================================================== */
-.search-filters-row {
+.search-toolbar-row {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 12px;
-  max-width: 580px;
-  margin: -12px auto 24px;
+  max-width: 900px;
+  margin: 0 auto 32px;
 }
 
-.search-filters-row .form-select {
+.search-toolbar-row .form-select {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
@@ -758,12 +759,13 @@ footer {
   outline: none;
   cursor: pointer;
   transition: all var(--transition-fast);
-  height: 38px;
+  height: 60px;
   min-width: 180px;
   box-sizing: border-box;
+  box-shadow: var(--shadow-lg);
 }
 
-.search-filters-row .form-select:hover {
+.search-toolbar-row .form-select:hover {
   border-color: var(--accent-teal);
 }
 
@@ -772,16 +774,17 @@ footer {
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
   border-radius: var(--radius-md);
-  padding: 0 16px;
+  padding: 0 20px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
-  height: 38px;
+  height: 60px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   box-sizing: border-box;
+  box-shadow: var(--shadow-lg);
 }
 
 .filter-fav-btn:hover {
@@ -821,14 +824,20 @@ footer {
   fill: #eab308;
 }
 
-@media (max-width: 580px) {
-  .search-filters-row {
+@media (max-width: 768px) {
+  .search-toolbar-row {
     flex-direction: column;
     width: 100%;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    gap: 8px;
   }
-  .search-filters-row .form-select,
+  .search-box-wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+  .search-toolbar-row .form-select,
   .filter-fav-btn {
     width: 100%;
+    height: 50px;
   }
 }
