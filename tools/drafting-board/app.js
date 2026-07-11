@@ -43,6 +43,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let sheetWidth = 297;
   let sheetHeight = 210;
 
+  // WebGL Render pipeline states (Phase 2)
+  let webglRenderer = null;
+  let activeRenderMode = "svg";
+
   // Projected orthographic views configuration (Phase 3)
   let showProjectedViews = true;
   let extrusionThickness = 12; // in mm
@@ -544,6 +548,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- SVG Viewport Rendering ---
   function drawSketchCanvas(drawCursorLine = false) {
+    if (activeRenderMode === "webgl" && webglRenderer) {
+      webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight);
+      return;
+    }
     if (!svg) return;
     svg.setAttribute("viewBox", `0 0 ${sheetWidth} ${sheetHeight}`);
     svg.innerHTML = `
@@ -1994,7 +2002,34 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  window.changeRenderMode = () => {
+    const select = document.getElementById("render-mode-select");
+    if (!select) return;
+    activeRenderMode = select.value;
+
+    const svgCanvas = document.getElementById("sketch-canvas-svg");
+    const webglCanvas = document.getElementById("three-cad-canvas");
+
+    if (activeRenderMode === "webgl") {
+      svgCanvas.style.display = "none";
+      webglCanvas.style.display = "block";
+      if (webglRenderer) {
+        webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight);
+        webglRenderer.resetView(sheetWidth, sheetHeight);
+      }
+    } else {
+      svgCanvas.style.display = "block";
+      webglCanvas.style.display = "none";
+      drawSketchCanvas();
+    }
+  };
+
   // Populate global offset panel initially and boot canvas
+  const webglCanvas = document.getElementById("three-cad-canvas");
+  if (webglCanvas && typeof ExplicitCadRenderer !== "undefined") {
+    webglRenderer = new ExplicitCadRenderer(webglCanvas);
+  }
+
   showEntityInspector();
   drawSketchCanvas();
   initSketcherEvents();

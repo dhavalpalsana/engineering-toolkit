@@ -139,6 +139,9 @@
         <!-- Large high-fidelity 500x500 Grid SVG -->
         <svg id="sketch-canvas-svg" width="500" height="500" viewBox="0 0 500 500"></svg>
         
+        <!-- WebGL High-Performance Canvas (Phase 2) -->
+        <canvas id="three-cad-canvas" width="500" height="500" style="display: none; background: #0F0F0F; outline: none; border-radius: var(--radius-lg);"></canvas>
+        
         <!-- CAD Status Bar -->
         <div class="cad-status-bar" style="background: rgba(15,23,42,0.9); padding: 8px 16px; display: flex; justify-content: space-between; font-size: 11px; font-family: var(--font-mono); border-top: 1px solid var(--border-color); color: var(--text-muted); box-sizing: border-box;">
           <span id="coords-display">X: 0.0 | Y: 0.0 mm</span>
@@ -178,6 +181,13 @@
             <select id="sheet-size-select" class="form-select" onchange="changeSheetSize()">
               <option value="A4" selected>ISO A4 (297 x 210 mm)</option>
               <option value="A3">ISO A3 (420 x 297 mm)</option>
+            </select>
+          </div>
+          <div class="grid-controls-row">
+            <label for="render-mode-select">Viewport Render Mode</label>
+            <select id="render-mode-select" class="form-select" onchange="changeRenderMode()">
+              <option value="svg" selected>Standard SVG Editor</option>
+              <option value="webgl">WebGL Engine (Three.js)</option>
             </select>
           </div>
           
@@ -243,9 +253,12 @@
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
   <script id="project-manager-script" src="../../js/project-manager.js"></script>
+  <!-- Three.js WebGL rendering library (Phase 2) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="js/db.js"></script>
   <script src="js/dxf.js"></script>
-  <script src="app.js?v=2.0.8"></script>
+  <script src="js/renderer.js"></script>
+  <script src="app.js?v=2.0.9"></script>
 
   <script>
     lucide.createIcons();
