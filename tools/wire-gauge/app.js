@@ -199,6 +199,27 @@
                 pfInput.classList.replace('bg-slate-50', 'bg-white');
                 pfInput.classList.remove('text-slate-400');
             }
+
+            const doubleLengthCb = document.getElementById('double-length-cb');
+            if (doubleLengthCb) {
+                if (phase === 'three') {
+                    doubleLengthCb.disabled = true;
+                    if (doubleLengthCb.checked) {
+                        doubleLengthCb.dataset.prevChecked = "true";
+                    } else if (doubleLengthCb.dataset.prevChecked === undefined) {
+                        doubleLengthCb.dataset.prevChecked = "true";
+                    } else {
+                        doubleLengthCb.dataset.prevChecked = "false";
+                    }
+                    doubleLengthCb.checked = false;
+                } else {
+                    doubleLengthCb.disabled = false;
+                    if (doubleLengthCb.dataset.prevChecked !== undefined) {
+                        doubleLengthCb.checked = doubleLengthCb.dataset.prevChecked === "true";
+                    }
+                }
+            }
+
             triggerCalculate();
         }
 
@@ -316,7 +337,9 @@
             let bottleneck_history = [];
             let bottleneck_spec = null;
 
-            const path_multiplier = phase === "three" ? 1.0 : 2.0;
+            const doubleLengthCb = document.getElementById('double-length-cb');
+            const useDoubleLength = doubleLengthCb ? doubleLengthCb.checked : true;
+            const path_multiplier = (phase === "three") ? 1.0 : (useDoubleLength ? 2.0 : 1.0);
 
             // Deep tracking metrics per segment for individual loss evaluations
             const segmentsCalculations = [];
@@ -816,6 +839,12 @@
             // Set lastAmbientUnit globally
             lastAmbientUnit = state.ambientUnit || 'C';
 
+            // Double length return multiplier
+            const doubleLengthCb = document.getElementById('double-length-cb');
+            if (doubleLengthCb) {
+                doubleLengthCb.checked = state.doubleLength !== undefined ? state.doubleLength : true;
+            }
+
             // Phase
             setPhase(state.phase || 'dc');
             onInsulationChanged();
@@ -884,7 +913,8 @@
                 routing: document.getElementById('install-select').value,
                 ambientTemp: parseInt(document.getElementById('ambient-temp-input').value) || 30,
                 ambientUnit: document.getElementById('ambient-unit-select').value,
-                segments: segments
+                segments: segments,
+                doubleLength: document.getElementById('double-length-cb') ? document.getElementById('double-length-cb').checked : true
             };
         }
 
