@@ -1,6 +1,7 @@
 // ==========================================================================
 // Explicit 2D CAD WebGL Viewport Renderer (Phase 2)
 // High-performance Three.js 2D Orthographic pipeline with GPU line batching
+// Aligned with standard SVG layout coordinates (Y-down) for overlay sync.
 // ==========================================================================
 
 class ExplicitCadRenderer {
@@ -20,15 +21,14 @@ class ExplicitCadRenderer {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0F0F0F); // Classic dark CAD background
 
-    // Camera setup (Orthographic, looking down Z towards absolute XY plane)
+    // Camera setup (Orthographic, Y-down to align with SVG layout space)
     const aspect = this.width / this.height;
     const viewSize = 300; // default visible width in mm
     this.camera = new THREE.OrthographicCamera(
       -viewSize * aspect / 2, viewSize * aspect / 2,
-      viewSize / 2, -viewSize / 2,
+      -viewSize / 2, viewSize / 2,  // Y-down: top is negative, bottom is positive
       0.1, 1000
     );
-    // Position camera looking down Z-axis
     this.camera.position.set(150, 100, 500);
     this.camera.lookAt(150, 100, 0);
 
@@ -44,7 +44,6 @@ class ExplicitCadRenderer {
     let startCamPos = { x: 0, y: 0 };
 
     this.canvas.addEventListener("mousedown", (e) => {
-      // Left or middle mouse drag for panning viewport bounds
       isPanning = true;
       startMouse.x = e.clientX;
       startMouse.y = e.clientY;
@@ -60,12 +59,13 @@ class ExplicitCadRenderer {
         const viewportWidth = this.camera.right - this.camera.left;
         const scaleX = viewportWidth / this.width;
         
-        const viewportHeight = this.camera.top - this.camera.bottom;
+        const viewportHeight = this.camera.bottom - this.camera.top;
         const scaleY = viewportHeight / this.height;
 
         this.camera.position.x = startCamPos.x - dx * scaleX;
-        this.camera.position.y = startCamPos.y + dy * scaleY;
+        this.camera.position.y = startCamPos.y - dy * scaleY; // match Y direction
         this.render();
+        if (this.onViewChange) this.onViewChange();
       }
     });
 
@@ -73,7 +73,6 @@ class ExplicitCadRenderer {
       isPanning = false;
     });
 
-    // Zoom-to-cursor scaling by updating camera bounds
     this.canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
       
@@ -86,23 +85,24 @@ class ExplicitCadRenderer {
       const ndcX = (mouseX / this.width) * 2 - 1;
       const ndcY = -(mouseY / this.height) * 2 + 1;
 
-      // Inverse projection mapping back to model WCS space
+      // Unproject mouse coordinate back to WCS model space (Y inverted relative to NDC)
       const worldX = this.camera.position.x + ndcX * (this.camera.right - this.camera.left) / 2;
-      const worldY = this.camera.position.y + ndcY * (this.camera.top - this.camera.bottom) / 2;
+      const worldY = this.camera.position.y - ndcY * (this.camera.bottom - this.camera.top) / 2;
 
       const aspect = this.width / this.height;
       const newViewSize = (this.camera.right - this.camera.left) * zoomFactor / aspect;
       
       this.camera.left = -newViewSize * aspect / 2;
       this.camera.right = newViewSize * aspect / 2;
-      this.camera.top = newViewSize / 2;
-      this.camera.bottom = -newViewSize / 2;
+      this.camera.top = -newViewSize / 2;
+      this.camera.bottom = newViewSize / 2;
 
       this.camera.position.x = worldX - ndcX * (this.camera.right - this.camera.left) / 2;
-      this.camera.position.y = worldY - ndcY * (this.camera.top - this.camera.bottom) / 2;
+      this.camera.position.y = worldY + ndcY * (this.camera.bottom - this.camera.top) / 2;
 
       this.camera.updateProjectionMatrix();
       this.render();
+      if (this.onViewChange) this.onViewChange();
     }, { passive: false });
   }
 
@@ -121,7 +121,6 @@ class ExplicitCadRenderer {
     }
   }
 
-  // GPU batched draw-call vector line pipeline
   updateDrawing(vertices, circles, isClosed, sheetWidth, sheetHeight) {
     this.clearGeometries();
 
@@ -134,7 +133,7 @@ class ExplicitCadRenderer {
       colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
     };
 
-    // 1. Draw sheet background borders (locked layer equivalent)
+    // 1. Draw sheet background borders (locked layout backdrop)
     const borderCol = "#334155";
     addLineSegment(0, 0, sheetWidth, 0, borderCol);
     addLineSegment(sheetWidth, 0, sheetWidth, sheetHeight, borderCol);
@@ -162,7 +161,7 @@ class ExplicitCadRenderer {
       for (let i = 0; i < limit; i++) {
         const p1 = vertices[i];
         const p2 = vertices[(i + 1) % numVerts];
-        addLineSegment(p1.x, p1.y, p2.x, p2.y, "#14b8a6"); // Teal profile outline
+        addLineSegment(p1.x, p1.y, p2.x, p2.y, "#14b8a6");
       }
     }
 
@@ -172,7 +171,6 @@ class ExplicitCadRenderer {
       const angleStep = (Math.PI * 2) / segments;
       const color = c.construction ? "#64748b" : "#3b82f6";
       for (let i = 0; i < segments; i++) {
-        // Skip ticks for dashed construction geometries
         if (c.construction && i % 2 === 0) continue;
         const theta1 = i * angleStep;
         const theta2 = (i + 1) * angleStep;
@@ -186,7 +184,7 @@ class ExplicitCadRenderer {
       }
     });
 
-    // Create and attach single LineSegments geometry for WebGL rendering performance
+    // Create and attach single LineSegments geometry
     if (linePoints.length > 0) {
       const geom = new THREE.BufferGeometry();
       geom.setAttribute("position", new THREE.Float32BufferAttribute(linePoints, 3));
@@ -210,8 +208,22 @@ class ExplicitCadRenderer {
     this.render();
   }
 
+  // Synchronize SVG overlay viewBox to WebGL camera projection bounds
+  syncSvgOverlay() {
+    const svgOverlay = document.getElementById("sketch-canvas-svg");
+    if (!svgOverlay) return;
+
+    const minX = this.camera.position.x + this.camera.left;
+    const minY = this.camera.position.y + this.camera.top;
+    const width = this.camera.right - this.camera.left;
+    const height = this.camera.bottom - this.camera.top;
+
+    svgOverlay.setAttribute("viewBox", `${minX} ${minY} ${width} ${height}`);
+  }
+
   render() {
     this.renderer.render(this.scene, this.camera);
+    this.syncSvgOverlay();
   }
 
   resetView(sheetWidth, sheetHeight) {
@@ -219,8 +231,8 @@ class ExplicitCadRenderer {
     const viewSize = Math.max(sheetWidth, sheetHeight) * 1.2;
     this.camera.left = -viewSize * aspect / 2;
     this.camera.right = viewSize * aspect / 2;
-    this.camera.top = viewSize / 2;
-    this.camera.bottom = -viewSize / 2;
+    this.camera.top = -viewSize / 2;
+    this.camera.bottom = viewSize / 2;
     this.camera.position.set(sheetWidth / 2, sheetHeight / 2, 500);
     this.camera.lookAt(sheetWidth / 2, sheetHeight / 2, 0);
     this.camera.updateProjectionMatrix();

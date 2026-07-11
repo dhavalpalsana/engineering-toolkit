@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // WebGL Render pipeline states (Phase 2)
   let webglRenderer = null;
-  let activeRenderMode = "svg";
+  let activeRenderMode = "webgl";
 
   // Projected orthographic views configuration (Phase 3)
   let showProjectedViews = true;
@@ -59,6 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Theme/UI Boot ---
   const svg = document.getElementById("sketch-canvas-svg");
+  const canvasEl = document.getElementById("three-cad-canvas");
 
   function snapToGrid(x, y, snap) {
     return {
@@ -67,32 +68,24 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  function getMousePos(svgCanvas, evt) {
-    const rect = svgCanvas.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
-    
-    const aspect = sheetWidth / sheetHeight;
-    let scale, padX, padY;
-    if (w / h > aspect) {
-      // Widescreen pillarbox (horizontal centering offset)
-      scale = h / sheetHeight;
-      padX = (w - h * aspect) / 2;
-      padY = 0;
-    } else {
-      // Tall screen letterbox (vertical centering offset)
-      scale = w / sheetWidth;
-      padX = 0;
-      padY = (h - w / aspect) / 2;
+  function getMousePos(canvasEl, evt) {
+    if (webglRenderer) {
+      const rect = webglRenderer.canvas.getBoundingClientRect();
+      const mouseX = evt.clientX - rect.left;
+      const mouseY = evt.clientY - rect.top;
+
+      // Normalize device coordinates (-1 to 1)
+      const ndcX = (mouseX / webglRenderer.width) * 2 - 1;
+      const ndcY = -(mouseY / webglRenderer.height) * 2 + 1;
+
+      const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
+      vector.unproject(webglRenderer.camera);
+      return {
+        x: Math.round(vector.x),
+        y: Math.round(vector.y)
+      };
     }
-    
-    const sx = (evt.clientX - rect.left - padX) / scale;
-    const sy = (evt.clientY - rect.top - padY) / scale;
-    
-    return {
-      x: (sx - panOffset.x) / zoomLevel,
-      y: (sy - panOffset.y) / zoomLevel
-    };
+    return { x: 0, y: 0 };
   }
 
   // Track shift key for Ortho Lock
@@ -1555,9 +1548,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Mouse & Touch Events Handler ---
   function initSketcherEvents() {
-    console.log("Binding SVG mouse listeners...");
-    svg.addEventListener("mousedown", (e) => {
-      console.log("mousedown fired on target element:", e.target);
+    console.log("Binding WebGL canvas mouse listeners...");
+    canvasEl.addEventListener("mousedown", (e) => {
+      console.log("mousedown fired on canvas:", e.target);
       
       // Pan handling: middle-click or pan-mode left-click
       if (e.button === 1 || (e.button === 0 && editorMode === "pan")) {
@@ -1567,7 +1560,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const pos = getMousePos(svg, e);
+      const pos = getMousePos(canvasEl, e);
       console.log("Relative coordinate position:", pos);
       
       // Determine click targets
@@ -1718,19 +1711,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
     
-    svg.addEventListener("mousemove", (e) => {
-      if (isPanning) {
-        const dx = e.clientX - panStart.x;
-        const dy = e.clientY - panStart.y;
-        const rect = svg.getBoundingClientRect();
-        panOffset.x += (dx / rect.width) * 500;
-        panOffset.y += (dy / rect.height) * 500;
-        panStart = { x: e.clientX, y: e.clientY };
-        drawSketchCanvas();
-        return;
-      }
+    canvasEl.addEventListener("mousemove", (e) => {
+      if (isPanning) return;
 
-      const pos = getMousePos(svg, e);
+      const pos = getMousePos(canvasEl, e);
       const rawSnapped = snapToGrid(pos.x, pos.y, gridSnap);
       
       // Update Intelli-Snap tracker
@@ -1772,13 +1756,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
     
-    svg.addEventListener("mouseup", (e) => {
+    canvasEl.addEventListener("mouseup", (e) => {
       if (isPanning) {
         isPanning = false;
         return;
       }
 
-      const pos = getMousePos(svg, e);
+      const pos = getMousePos(canvasEl, e);
       const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
 
       if (editorMode === "circle" && activeCircleCenter) {
@@ -1886,45 +1870,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     }
-
-    // Wheel zooming
-    svg.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      const zoomFactor = 1.1;
-      const rect = svg.getBoundingClientRect();
-      const mousePosScreen = {
-        x: ((e.clientX - rect.left) / rect.width) * 500,
-        y: ((e.clientY - rect.top) / rect.height) * 500
-      };
-      
-      const prevZoom = zoomLevel;
-      if (e.deltaY < 0) {
-        zoomLevel = Math.min(zoomLevel * zoomFactor, 10.0);
-      } else {
-        zoomLevel = Math.max(zoomLevel / zoomFactor, 0.25);
-      }
-      
-      panOffset.x = mousePosScreen.x - (mousePosScreen.x - panOffset.x) * (zoomLevel / prevZoom);
-      panOffset.y = mousePosScreen.y - (mousePosScreen.y - panOffset.y) * (zoomLevel / prevZoom);
-      
-      drawSketchCanvas();
-    }, { passive: false });
   }
 
   // --- CAD Viewport Scaling Helpers ---
   window.zoomViewport = (factor) => {
-    const prevZoom = zoomLevel;
-    zoomLevel = Math.max(0.25, Math.min(zoomLevel * factor, 10.0));
-    // Zoom centered at viewport midpoint (250, 250)
-    panOffset.x = 250 - (250 - panOffset.x) * (zoomLevel / prevZoom);
-    panOffset.y = 250 - (250 - panOffset.y) * (zoomLevel / prevZoom);
-    drawSketchCanvas();
+    if (webglRenderer) {
+      const aspect = webglRenderer.width / webglRenderer.height;
+      const width = (webglRenderer.camera.right - webglRenderer.camera.left) / factor;
+      
+      webglRenderer.camera.left = -width / 2;
+      webglRenderer.camera.right = width / 2;
+      webglRenderer.camera.top = -width / aspect / 2;
+      webglRenderer.camera.bottom = width / aspect / 2;
+      webglRenderer.camera.updateProjectionMatrix();
+      webglRenderer.render();
+    }
   };
 
   window.resetViewport = () => {
-    zoomLevel = 1.0;
-    panOffset = { x: 0, y: 0 };
-    drawSketchCanvas();
+    if (webglRenderer) {
+      webglRenderer.resetView(sheetWidth, sheetHeight);
+    }
   };
 
   window.changeSheetSize = () => {
@@ -1938,8 +1904,13 @@ document.addEventListener("DOMContentLoaded", () => {
       sheetWidth = 420;
       sheetHeight = 297;
     }
-    resetViewport();
+    if (webglRenderer) {
+      webglRenderer.resetView(sheetWidth, sheetHeight);
+    }
+    drawSketchCanvas();
+    updateLiveProperties();
   };
+
 
   window.toggleProjectedViews = () => {
     const cb = document.getElementById("toggle-projections-cb");
@@ -2044,35 +2015,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  window.changeRenderMode = () => {
-    const select = document.getElementById("render-mode-select");
-    if (!select) return;
-    activeRenderMode = select.value;
-
-    const svgCanvas = document.getElementById("sketch-canvas-svg");
-    const webglCanvas = document.getElementById("three-cad-canvas");
-
-    if (activeRenderMode === "webgl") {
-      svgCanvas.style.display = "none";
-      webglCanvas.style.display = "block";
-      if (webglRenderer) {
-        webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight);
-        webglRenderer.resetView(sheetWidth, sheetHeight);
-      }
-    } else {
-      svgCanvas.style.display = "block";
-      webglCanvas.style.display = "none";
-      drawSketchCanvas();
-    }
-  };
-
   // Populate global offset panel initially and boot canvas
   const webglCanvas = document.getElementById("three-cad-canvas");
   if (webglCanvas && typeof ExplicitCadRenderer !== "undefined") {
     webglRenderer = new ExplicitCadRenderer(webglCanvas);
+    webglRenderer.onViewChange = () => {
+      drawSketchCanvas();
+    };
   }
 
   showEntityInspector();
+  if (webglRenderer) {
+    webglRenderer.resetView(sheetWidth, sheetHeight);
+  }
   drawSketchCanvas();
   initSketcherEvents();
 });

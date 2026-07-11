@@ -136,11 +136,14 @@
           </button>
         </div>
 
-        <!-- Large high-fidelity 500x500 Grid SVG -->
-        <svg id="sketch-canvas-svg" width="500" height="500" viewBox="0 0 500 500"></svg>
-        
-        <!-- WebGL High-Performance Canvas (Phase 2) -->
-        <canvas id="three-cad-canvas" width="500" height="500" style="display: none; background: #0F0F0F; outline: none; border-radius: var(--radius-lg);"></canvas>
+        <!-- High-Performance CAD Viewport Container (Phase 2 & 3) -->
+        <div id="cad-viewport-container" style="position: relative; width: 500px; height: 500px; overflow: hidden; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
+          <!-- WebGL High-Performance Canvas -->
+          <canvas id="three-cad-canvas" width="500" height="500" style="position: absolute; top: 0; left: 0; background: #0F0F0F; outline: none; border: none;"></canvas>
+          
+          <!-- Transparent SVG overlay for annotations & snap helpers (pointer-events: none) -->
+          <svg id="sketch-canvas-svg" width="500" height="500" viewBox="0 0 500 500" style="position: absolute; top: 0; left: 0; pointer-events: none; border: none; background: transparent;"></svg>
+        </div>
         
         <!-- CAD Status Bar -->
         <div class="cad-status-bar" style="background: rgba(15,23,42,0.9); padding: 8px 16px; display: flex; justify-content: space-between; font-size: 11px; font-family: var(--font-mono); border-top: 1px solid var(--border-color); color: var(--text-muted); box-sizing: border-box;">
@@ -190,14 +193,7 @@
               <option value="A3">ISO A3 (420 x 297 mm)</option>
             </select>
           </div>
-          <div class="grid-controls-row">
-            <label for="render-mode-select">Viewport Render Mode</label>
-            <select id="render-mode-select" class="form-select" onchange="changeRenderMode()">
-              <option value="svg" selected>Standard SVG Editor</option>
-              <option value="webgl">WebGL Engine (Three.js)</option>
-            </select>
-          </div>
-          
+
           <div class="grid-controls-row" style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="toggle-projections-cb" checked onchange="toggleProjectedViews()" style="width: 16px; height: 16px; cursor: pointer;" />
             <label for="toggle-projections-cb" style="margin: 0; cursor: pointer; font-weight: 500;">Show Orthographic Projections</label>
