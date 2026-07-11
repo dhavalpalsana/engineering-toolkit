@@ -256,55 +256,62 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Please draw a shape first to export.");
       return;
     }
-    let dxf = "  0\nSECTION\n  2\nENTITIES\n";
-
-    const addDxfLine = (x1, y1, x2, y2, layer) => {
-      dxf += "  0\nLINE\n  8\n" + layer + "\n";
-      dxf += ` 10\n${x1}\n 20\n${y1}\n 30\n0.0\n`;
-      dxf += ` 11\n${x2}\n 21\n${y2}\n 31\n0.0\n`;
-    };
-
-    const addDxfCircle = (cx, cy, r, layer) => {
-      dxf += "  0\nCIRCLE\n  8\n" + layer + "\n";
-      dxf += ` 10\n${cx}\n 20\n${cy}\n 30\n0.0\n 40\n${r}\n`;
-    };
-
-    // Draw boundary lines
+    
+    const db = new DxfDatabase();
+    
+    // Add layers
+    db.addLayer("PROFILE_OUTLINE", 3, "CONTINUOUS");
+    db.addLayer("HOLES", 1, "CONTINUOUS");
+    db.addLayer("CONSTRUCTION", 2, "DASHED");
+    db.addLayer("SHEET_FORMAT", 7, "CONTINUOUS");
+    
+    // 1. Export boundary outline lines
     const n = sketchVertices.length;
     const limit = isSketchClosed ? n : n - 1;
     for (let i = 0; i < limit; i++) {
       const p1 = sketchVertices[i];
       const p2 = sketchVertices[(i + 1) % n];
-      addDxfLine(p1.x, p1.y, p2.x, p2.y, "PROFILE_OUTLINE");
+      db.entities.push({
+        type: "LINE",
+        layer: "PROFILE_OUTLINE",
+        x1: p1.x, y1: p1.y,
+        x2: p2.x, y2: p2.y
+      });
     }
 
-    // Draw circle holes
+    // 2. Export circle holes
     sketchCircles.forEach(c => {
-      addDxfCircle(c.cx, c.cy, c.r, c.construction ? "CONSTRUCTION" : "HOLES");
+      db.entities.push({
+        type: "CIRCLE",
+        layer: c.construction ? "CONSTRUCTION" : "HOLES",
+        cx: c.cx, cy: c.cy, r: c.r
+      });
     });
 
-    // Draw Sheet Format borders & title block on separate layer (Phase 6)
+    // 3. Export Sheet Format borders & title block on separate layer
     // Outer border
-    addDxfLine(0, 0, sheetWidth, 0, "SHEET_FORMAT");
-    addDxfLine(sheetWidth, 0, sheetWidth, sheetHeight, "SHEET_FORMAT");
-    addDxfLine(sheetWidth, sheetHeight, 0, sheetHeight, "SHEET_FORMAT");
-    addDxfLine(0, sheetHeight, 0, 0, "SHEET_FORMAT");
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 0, y1: 0, x2: sheetWidth, y2: 0 });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth, y1: 0, x2: sheetWidth, y2: sheetHeight });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth, y1: sheetHeight, x2: 0, y2: sheetHeight });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 0, y1: sheetHeight, x2: 0, y2: 0 });
+    
     // Inner border
-    addDxfLine(10, 10, sheetWidth - 10, 10, "SHEET_FORMAT");
-    addDxfLine(sheetWidth - 10, 10, sheetWidth - 10, sheetHeight - 10, "SHEET_FORMAT");
-    addDxfLine(sheetWidth - 10, sheetHeight - 10, 10, sheetHeight - 10, "SHEET_FORMAT");
-    addDxfLine(10, sheetHeight - 10, 10, 10, "SHEET_FORMAT");
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 10, y1: 10, x2: sheetWidth - 10, y2: 10 });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth - 10, y1: 10, x2: sheetWidth - 10, y2: sheetHeight - 10 });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth - 10, y1: sheetHeight - 10, x2: 10, y2: sheetHeight - 10 });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 10, y1: sheetHeight - 10, x2: 10, y2: 10 });
+    
     // Title block lines
     const tx = sheetWidth - 110;
     const ty = sheetHeight - 40;
     const tw = 100;
     const th = 30;
-    addDxfLine(tx, ty, tx + tw, ty, "SHEET_FORMAT");
-    addDxfLine(tx, ty + 10, tx + tw, ty + 10, "SHEET_FORMAT");
-    addDxfLine(tx, ty + 20, tx + tw, ty + 20, "SHEET_FORMAT");
-    addDxfLine(tx + 60, ty + 10, tx + 60, ty + 30, "SHEET_FORMAT");
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx, y1: ty, x2: tx + tw, y2: ty });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx, y1: ty + 10, x2: tx + tw, y2: ty + 10 });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx, y1: ty + 20, x2: tx + tw, y2: ty + 20 });
+    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx + 60, y1: ty + 10, x2: tx + 60, y2: ty + 30 });
 
-    dxf += "  0\nENDSEC\n  0\nEOF\n";
+    const dxf = db.export();
 
     const blob = new Blob([dxf], { type: "application/dxf" });
     const a = document.createElement("a");
