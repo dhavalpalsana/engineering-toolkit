@@ -4,11 +4,11 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   line-height: 1.6;
-  overflow-x: hidden;
+  overflow: hidden;
   transition: background-color var(--transition-normal), color var(--transition-normal);
   position: relative;
 }

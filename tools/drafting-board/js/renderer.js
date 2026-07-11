@@ -8,8 +8,11 @@
 class ExplicitCadRenderer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.width = canvas.width;
-    this.height = canvas.height;
+    const container = canvas.parentElement;
+    this.width = container ? container.clientWidth : (canvas.clientWidth || 800);
+    this.height = container ? container.clientHeight : (canvas.clientHeight || 600);
+    canvas.width = this.width;
+    canvas.height = this.height;
     
     this.renderer = new THREE.WebGLRenderer({
       canvas: canvas,
@@ -256,6 +259,24 @@ class ExplicitCadRenderer {
     this.camera.position.set(sheetWidth / 2, sheetHeight / 2, 500);
     this.camera.lookAt(sheetWidth / 2, sheetHeight / 2, 0);
     this.camera.updateProjectionMatrix();
+    this.render();
+  }
+
+  resize() {
+    const container = this.canvas.parentElement;
+    this.width = container ? container.clientWidth : (this.canvas.clientWidth || 800);
+    this.height = container ? container.clientHeight : (this.canvas.clientHeight || 600);
+    this.canvas.width = this.width;
+    this.canvas.height = this.height;
+
+    const aspect = this.width / this.height;
+    const currentHeight = this.camera.bottom - this.camera.top;
+    
+    this.camera.left = -currentHeight * aspect / 2;
+    this.camera.right = currentHeight * aspect / 2;
+    this.camera.updateProjectionMatrix();
+    
+    this.renderer.setSize(this.width, this.height);
     this.render();
   }
 }

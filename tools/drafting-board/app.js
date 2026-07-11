@@ -612,11 +612,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- SVG Viewport Rendering ---
   function drawSketchCanvas(drawCursorLine = false) {
+    if (!svg) return;
+
     if (activeRenderMode === "webgl" && webglRenderer) {
+      // 1. Update the high-performance WebGL vector geometry
       webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight, layers);
+      
+      // 2. Clear the SVG overlay except for defs marker definitions
+      svg.innerHTML = `
+        <defs>
+          <marker id="arrow-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 10 0 L 0 5 L 10 10 z" fill="var(--accent-primary)" />
+          </marker>
+          <marker id="arrow-end" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-primary)" />
+          </marker>
+        </defs>
+      `;
+      
+      // 3. Render all coordinates, annotations, dimensions, and snap helpers directly into the SVG root!
+      renderToViewport(svg, drawCursorLine);
+      
+      // 4. Update the SVG viewBox viewport transformation mapping
+      webglRenderer.syncSvgOverlay();
       return;
     }
-    if (!svg) return;
+
     svg.setAttribute("viewBox", `0 0 ${sheetWidth} ${sheetHeight}`);
     svg.innerHTML = `
       <defs>
@@ -2407,6 +2428,10 @@ document.addEventListener("DOMContentLoaded", () => {
     webglRenderer.onViewChange = () => {
       drawSketchCanvas();
     };
+    window.addEventListener("resize", () => {
+      webglRenderer.resize();
+      drawSketchCanvas();
+    });
   }
 
   window.instantiateBlock = (blockType) => {
