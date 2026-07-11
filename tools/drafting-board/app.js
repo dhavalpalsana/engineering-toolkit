@@ -47,6 +47,15 @@ document.addEventListener("DOMContentLoaded", () => {
   let webglRenderer = null;
   let activeRenderMode = "webgl";
 
+  // Layer Control configuration (Phase 5)
+  let layers = {
+    "PROFILE_OUTLINE": { color: "#14b8a6", visible: true, frozen: false },
+    "HOLES": { color: "#3b82f6", visible: true, frozen: false },
+    "CONSTRUCTION": { color: "#64748b", visible: true, frozen: false },
+    "SHEET_FORMAT": { color: "#334155", visible: true, frozen: false }
+  };
+  let activeBlockToInsert = null;
+
   // Projected orthographic views configuration (Phase 3)
   let showProjectedViews = true;
   let extrusionThickness = 12; // in mm
@@ -421,6 +430,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function renderLayerManager() {
+    const container = document.getElementById("layer-manager-list");
+    if (!container) return;
+    container.innerHTML = "";
+    
+    Object.keys(layers).forEach(layerName => {
+      const layer = layers[layerName];
+      
+      const row = document.createElement("div");
+      row.style = "display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(30, 41, 59, 0.4); border-radius: var(--radius-sm); border: 1px solid var(--border-color);";
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = layerName;
+      nameSpan.style = "font-weight: 500; color: var(--text-primary);";
+      
+      const controlsDiv = document.createElement("div");
+      controlsDiv.style = "display: flex; align-items: center; gap: 8px;";
+      
+      // Color dot indicator
+      const dot = document.createElement("span");
+      dot.style = `width: 8px; height: 8px; border-radius: 50%; background-color: ${layer.color}; display: inline-block;`;
+      
+      // Visible toggle button
+      const visBtn = document.createElement("button");
+      visBtn.style = "background: none; border: none; padding: 2px; cursor: pointer; color: " + (layer.visible ? "var(--accent-primary)" : "var(--text-muted)");
+      visBtn.innerHTML = layer.visible 
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>` 
+        : `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+      visBtn.title = layer.visible ? "Hide Layer" : "Show Layer";
+      visBtn.onclick = () => {
+        layer.visible = !layer.visible;
+        renderLayerManager();
+        drawSketchCanvas();
+      };
+      
+      // Freeze toggle button
+      const freezeBtn = document.createElement("button");
+      freezeBtn.style = "background: none; border: none; padding: 2px; cursor: pointer; color: " + (layer.frozen ? "#38bdf8" : "var(--text-muted)");
+      freezeBtn.innerHTML = layer.frozen 
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>` 
+        : `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
+      freezeBtn.title = layer.frozen ? "Unfreeze Layer" : "Freeze Layer (Lock Editing)";
+      freezeBtn.onclick = () => {
+        layer.frozen = !layer.frozen;
+        renderLayerManager();
+        drawSketchCanvas();
+      };
+      
+      controlsDiv.appendChild(dot);
+      controlsDiv.appendChild(visBtn);
+      controlsDiv.appendChild(freezeBtn);
+      
+      row.appendChild(nameSpan);
+      row.appendChild(controlsDiv);
+      
+      container.appendChild(row);
+    });
+  }
+
   // --- Drawing Sheet Format Background Overlay ---
   function drawSheetFormat(svgElement) {
     // 1. Draw Paper background rectangle (white sheet)
@@ -542,7 +610,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- SVG Viewport Rendering ---
   function drawSketchCanvas(drawCursorLine = false) {
     if (activeRenderMode === "webgl" && webglRenderer) {
-      webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight);
+      webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight, layers);
       return;
     }
     if (!svg) return;
@@ -1562,6 +1630,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const pos = getMousePos(canvasEl, e);
       console.log("Relative coordinate position:", pos);
+
+      // Block modification interaction if target layers are frozen (Phase 5)
+      if (editorMode === "circle" && layers["HOLES"].frozen) {
+        alert("The HOLES layer is frozen / locked.");
+        return;
+      }
+      if ((editorMode === "draw" || editorMode === "rect" || editorMode === "poly" || editorMode === "fillet") && layers["PROFILE_OUTLINE"].frozen) {
+        alert("The PROFILE_OUTLINE layer is frozen / locked.");
+        return;
+      }
+
+      // ── BLOCK INSTANTIATION MODE (Phase 5) ──
+      if (editorMode === "insert_block" && activeBlockToInsert) {
+        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
+        
+        if (activeBlockToInsert === "M4_SCREW") {
+          sketchCircles.push({ cx: snapPt.x, cy: snapPt.y, r: 2, construction: false });
+        } 
+        else if (activeBlockToInsert === "M5_SCREW") {
+          sketchCircles.push({ cx: snapPt.x, cy: snapPt.y, r: 2.5, construction: false });
+        } 
+        else if (activeBlockToInsert === "M6_SCREW") {
+          sketchCircles.push({ cx: snapPt.x, cy: snapPt.y, r: 3, construction: false });
+        }
+        else if (activeBlockToInsert === "TSLOT_2020") {
+          const half = 10;
+          sketchVertices = [
+            { x: snapPt.x - half, y: snapPt.y - half },
+            { x: snapPt.x + half, y: snapPt.y - half },
+            { x: snapPt.x + half, y: snapPt.y + half },
+            { x: snapPt.x - half, y: snapPt.y + half }
+          ];
+          isSketchClosed = true;
+        }
+        
+        activeBlockToInsert = null;
+        setEditorMode("draw");
+        drawSketchCanvas();
+        updateLiveProperties();
+        return;
+      }
       
       // Determine click targets
       const targetCircleIndex = e.target.getAttribute("data-circle-index");
@@ -1728,6 +1837,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (editorMode === "draw") {
         if (selectedVertexIndex !== -1) {
+          if (layers["PROFILE_OUTLINE"].frozen) return;
           sketchVertices[selectedVertexIndex] = finalSnapped;
           drawSketchCanvas();
           updateLiveProperties();
@@ -2024,7 +2134,17 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
+  window.instantiateBlock = (blockType) => {
+    activeBlockToInsert = blockType;
+    setEditorMode("insert_block");
+    const instr = document.getElementById("sketcher-instruction");
+    if (instr) {
+      instr.textContent = `Click on viewport to insert ${blockType} at coordinate.`;
+    }
+  };
+
   showEntityInspector();
+  renderLayerManager();
   if (webglRenderer) {
     webglRenderer.resetView(sheetWidth, sheetHeight);
   }

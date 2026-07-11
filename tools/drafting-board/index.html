@@ -208,6 +208,33 @@
           </div>
         </div>
 
+        <!-- Layer Control Panel (Phase 5) -->
+        <div class="sidebar-section">
+          <h3>Layer Manager</h3>
+          <div id="layer-manager-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; padding-right: 4px; font-size: 11px; font-family: var(--font-sans);">
+            <!-- Dynamic layer list items will be injected here -->
+          </div>
+        </div>
+
+        <!-- Reusable Block Library Manager (Phase 5) -->
+        <div class="sidebar-section">
+          <h3>Block Library</h3>
+          <div class="action-grid" style="grid-template-columns: 1fr; gap: 6px;">
+            <button class="action-btn secondary" onclick="instantiateBlock('M4_SCREW')" style="justify-content: flex-start; text-align: left; padding: 6px 10px; font-size: 11px; gap: 8px;">
+              <i data-lucide="nut"></i> M4 Hex Cap Screw
+            </button>
+            <button class="action-btn secondary" onclick="instantiateBlock('M5_SCREW')" style="justify-content: flex-start; text-align: left; padding: 6px 10px; font-size: 11px; gap: 8px;">
+              <i data-lucide="nut"></i> M5 Hex Cap Screw
+            </button>
+            <button class="action-btn secondary" onclick="instantiateBlock('M6_SCREW')" style="justify-content: flex-start; text-align: left; padding: 6px 10px; font-size: 11px; gap: 8px;">
+              <i data-lucide="nut"></i> M6 Hex Cap Screw
+            </button>
+            <button class="action-btn secondary" onclick="instantiateBlock('TSLOT_2020')" style="justify-content: flex-start; text-align: left; padding: 6px 10px; font-size: 11px; gap: 8px;">
+              <i data-lucide="columns"></i> 20x20 T-Slot Profile
+            </button>
+          </div>
+        </div>
+
         <!-- Vector Exports -->
         <div class="sidebar-section">
           <h3>Vector Exports</h3>
@@ -262,7 +289,7 @@
   <script src="js/dxf.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/cli.js"></script>
-  <script src="app.js?v=2.1.0"></script>
+  <script src="app.js?v=2.1.1"></script>
 
   <script>
     lucide.createIcons();

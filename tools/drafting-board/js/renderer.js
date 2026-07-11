@@ -1,7 +1,8 @@
 // ==========================================================================
-// Explicit 2D CAD WebGL Viewport Renderer (Phase 2)
+// Explicit 2D CAD WebGL Viewport Renderer (Phase 2 & 5)
 // High-performance Three.js 2D Orthographic pipeline with GPU line batching
 // Aligned with standard SVG layout coordinates (Y-down) for overlay sync.
+// Dynamic visibility filtering based on CAD Layer Control states.
 // ==========================================================================
 
 class ExplicitCadRenderer {
@@ -121,7 +122,8 @@ class ExplicitCadRenderer {
     }
   }
 
-  updateDrawing(vertices, circles, isClosed, sheetWidth, sheetHeight) {
+  // GPU batched draw-call vector line pipeline with layers visibility filtering
+  updateDrawing(vertices, circles, isClosed, sheetWidth, sheetHeight, layersState) {
     this.clearGeometries();
 
     const linePoints = [];
@@ -133,54 +135,70 @@ class ExplicitCadRenderer {
       colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
     };
 
-    // 1. Draw sheet background borders (locked layout backdrop)
-    const borderCol = "#334155";
-    addLineSegment(0, 0, sheetWidth, 0, borderCol);
-    addLineSegment(sheetWidth, 0, sheetWidth, sheetHeight, borderCol);
-    addLineSegment(sheetWidth, sheetHeight, 0, sheetHeight, borderCol);
-    addLineSegment(0, sheetHeight, 0, 0, borderCol);
+    // Default layers state if none is active/passed
+    const ls = layersState || {
+      "PROFILE_OUTLINE": { visible: true, color: "#14b8a6" },
+      "HOLES": { visible: true, color: "#3b82f6" },
+      "CONSTRUCTION": { visible: true, color: "#64748b" },
+      "SHEET_FORMAT": { visible: true, color: "#334155" }
+    };
 
-    addLineSegment(10, 10, sheetWidth - 10, 10, borderCol);
-    addLineSegment(sheetWidth - 10, 10, sheetWidth - 10, sheetHeight - 10, borderCol);
-    addLineSegment(sheetWidth - 10, sheetHeight - 10, 10, sheetHeight - 10, borderCol);
-    addLineSegment(10, sheetHeight - 10, 10, 10, borderCol);
+    // 1. Draw sheet background borders (locked layer equivalent)
+    if (ls["SHEET_FORMAT"] && ls["SHEET_FORMAT"].visible) {
+      const borderCol = ls["SHEET_FORMAT"].color || "#334155";
+      addLineSegment(0, 0, sheetWidth, 0, borderCol);
+      addLineSegment(sheetWidth, 0, sheetWidth, sheetHeight, borderCol);
+      addLineSegment(sheetWidth, sheetHeight, 0, sheetHeight, borderCol);
+      addLineSegment(0, sheetHeight, 0, 0, borderCol);
 
-    // Title Block lines
-    const tx = sheetWidth - 110;
-    const ty = sheetHeight - 40;
-    const tw = 100;
-    addLineSegment(tx, ty, tx + tw, ty, borderCol);
-    addLineSegment(tx, ty + 10, tx + tw, ty + 10, borderCol);
-    addLineSegment(tx, ty + 20, tx + tw, ty + 20, borderCol);
-    addLineSegment(tx + 60, ty + 10, tx + 60, ty + 30, borderCol);
+      addLineSegment(10, 10, sheetWidth - 10, 10, borderCol);
+      addLineSegment(sheetWidth - 10, 10, sheetWidth - 10, sheetHeight - 10, borderCol);
+      addLineSegment(sheetWidth - 10, sheetHeight - 10, 10, sheetHeight - 10, borderCol);
+      addLineSegment(10, sheetHeight - 10, 10, 10, borderCol);
+
+      // Title Block lines
+      const tx = sheetWidth - 110;
+      const ty = sheetHeight - 40;
+      const tw = 100;
+      addLineSegment(tx, ty, tx + tw, ty, borderCol);
+      addLineSegment(tx, ty + 10, tx + tw, ty + 10, borderCol);
+      addLineSegment(tx, ty + 20, tx + tw, ty + 20, borderCol);
+      addLineSegment(tx + 60, ty + 10, tx + 60, ty + 30, borderCol);
+    }
 
     // 2. Draw active sketch profile outline
-    const numVerts = vertices.length;
-    if (numVerts >= 2) {
-      const limit = isClosed ? numVerts : numVerts - 1;
-      for (let i = 0; i < limit; i++) {
-        const p1 = vertices[i];
-        const p2 = vertices[(i + 1) % numVerts];
-        addLineSegment(p1.x, p1.y, p2.x, p2.y, "#14b8a6");
+    if (ls["PROFILE_OUTLINE"] && ls["PROFILE_OUTLINE"].visible) {
+      const profileCol = ls["PROFILE_OUTLINE"].color || "#14b8a6";
+      const numVerts = vertices.length;
+      if (numVerts >= 2) {
+        const limit = isClosed ? numVerts : numVerts - 1;
+        for (let i = 0; i < limit; i++) {
+          const p1 = vertices[i];
+          const p2 = vertices[(i + 1) % numVerts];
+          addLineSegment(p1.x, p1.y, p2.x, p2.y, profileCol);
+        }
       }
     }
 
     // 3. Draw circles
     circles.forEach(c => {
-      const segments = 64;
-      const angleStep = (Math.PI * 2) / segments;
-      const color = c.construction ? "#64748b" : "#3b82f6";
-      for (let i = 0; i < segments; i++) {
-        if (c.construction && i % 2 === 0) continue;
-        const theta1 = i * angleStep;
-        const theta2 = (i + 1) * angleStep;
-        addLineSegment(
-          c.cx + c.r * Math.cos(theta1),
-          c.cy + c.r * Math.sin(theta1),
-          c.cx + c.r * Math.cos(theta2),
-          c.cy + c.r * Math.sin(theta2),
-          color
-        );
+      const drawLayer = c.construction ? "CONSTRUCTION" : "HOLES";
+      if (ls[drawLayer] && ls[drawLayer].visible) {
+        const color = ls[drawLayer].color || (c.construction ? "#64748b" : "#3b82f6");
+        const segments = 64;
+        const angleStep = (Math.PI * 2) / segments;
+        for (let i = 0; i < segments; i++) {
+          if (c.construction && i % 2 === 0) continue;
+          const theta1 = i * angleStep;
+          const theta2 = (i + 1) * angleStep;
+          addLineSegment(
+            c.cx + c.r * Math.cos(theta1),
+            c.cy + c.r * Math.sin(theta1),
+            c.cx + c.r * Math.cos(theta2),
+            c.cy + c.r * Math.sin(theta2),
+            color
+          );
+        }
       }
     });
 
@@ -195,15 +213,17 @@ class ExplicitCadRenderer {
       this.drawGroup.add(lineMesh);
     }
 
-    // 4. Endpoints visualization
-    vertices.forEach(v => {
-      const size = 1.6;
-      const geom = new THREE.BoxGeometry(size, size, 0.1);
-      const mat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.position.set(v.x, v.y, 0);
-      this.drawGroup.add(mesh);
-    });
+    // 4. Endpoints visualization (only if profile layer is visible)
+    if (ls["PROFILE_OUTLINE"] && ls["PROFILE_OUTLINE"].visible) {
+      vertices.forEach(v => {
+        const size = 1.6;
+        const geom = new THREE.BoxGeometry(size, size, 0.1);
+        const mat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.set(v.x, v.y, 0);
+        this.drawGroup.add(mesh);
+      });
+    }
 
     this.render();
   }
