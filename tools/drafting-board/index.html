@@ -227,6 +227,14 @@
               <button class="tool-btn" onclick="instantiateBlock('TSLOT_2020')"><i data-lucide="columns"></i> T-Slot 2020</button>
             </div>
           </div>
+
+          <div class="panel-group">
+            <div class="group-title">Vector Exports</div>
+            <div class="group-buttons">
+              <button class="tool-btn" onclick="exportSVGDrawing()"><i data-lucide="image"></i> Export SVG</button>
+              <button class="tool-btn" onclick="exportDXFDrawing()"><i data-lucide="file-text"></i> Export DXF</button>
+            </div>
+          </div>
         </div>
       </div>
     </header>
@@ -316,7 +324,7 @@
   <script src="js/dxf.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/cli.js"></script>
-  <script src="app.js?v=2.1.2"></script>
+  <script src="app.js?v=2.1.3"></script>
 
   <script>
     lucide.createIcons();

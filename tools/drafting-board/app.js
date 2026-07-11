@@ -159,6 +159,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (err) {
         alert("Failed to parse JSON file.");
       }
+      event.target.value = "";
     };
     reader.readAsText(file);
   };
@@ -247,12 +248,29 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Please draw a shape first to export.");
       return;
     }
-    const svgClone = svg.cloneNode(true);
-    svgClone.querySelectorAll(".sk-handle, .sk-handle-selected, .sketcher-toolbar, .sk-snap-indicator, .sk-align-guide").forEach(el => el.remove());
-    svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svgClone.style.background = "#0c0f1d";
     
-    const svgData = new XMLSerializer().serializeToString(svgClone);
+    const exportSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    exportSvg.setAttribute("viewBox", `0 0 ${sheetWidth} ${sheetHeight}`);
+    exportSvg.setAttribute("width", sheetWidth);
+    exportSvg.setAttribute("height", sheetHeight);
+    exportSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    exportSvg.style.background = "#0c0f1d";
+    
+    exportSvg.innerHTML = `
+      <defs>
+        <marker id="arrow-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 10 0 L 0 5 L 10 10 z" fill="var(--accent-primary)" />
+        </marker>
+        <marker id="arrow-end" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-primary)" />
+        </marker>
+      </defs>
+    `;
+    
+    renderToViewport(exportSvg, false);
+    exportSvg.querySelectorAll(".sk-handle, .sk-handle-selected, .sk-snap-indicator, .sk-align-guide").forEach(el => el.remove());
+    
+    const svgData = new XMLSerializer().serializeToString(exportSvg);
     const blob = new Blob([svgData], { type: "image/svg+xml" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
