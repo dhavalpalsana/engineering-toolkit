@@ -79,199 +79,226 @@
     </div>
   </header>
 
-  <!-- Main Container -->
-  <main class="container page-content">
-    <div id="sketcher-instruction" class="sketcher-instruction">
-      Click on the grid to place vertices. Click the starting node (or 'Close Shape') to close the loop.
-    </div>
+  <!-- Main Professional Workspace Container (Phase 1) -->
+  <main class="cad-app-container">
+    <!-- 1. Top Ribbon Bar -->
+    <header class="cad-ribbon">
+      <div class="ribbon-tabs">
+        <button id="ribbon-tab-home" class="ribbon-tab-btn active" onclick="switchRibbonTab('Home')">Home</button>
+        <button id="ribbon-tab-annotate" class="ribbon-tab-btn" onclick="switchRibbonTab('Annotate')">Annotate</button>
+        <button id="ribbon-tab-layers" class="ribbon-tab-btn" onclick="switchRibbonTab('Layers')">Layers</button>
+        <button id="ribbon-tab-calculators" class="ribbon-tab-btn" onclick="switchRibbonTab('Calculators')">Calculators</button>
+        <button id="ribbon-tab-manage" class="ribbon-tab-btn" onclick="switchRibbonTab('Manage')">Manage</button>
+      </div>
+      
+      <div class="ribbon-panels">
+        <!-- Home Panel -->
+        <div id="ribbon-panel-Home" class="ribbon-panel active">
+          <div class="panel-group">
+            <div class="group-title">Draw</div>
+            <div class="group-buttons">
+              <button id="tool-draw-btn" class="tool-btn active" onclick="setEditorMode('draw')">
+                <i data-lucide="pen-tool"></i> Line
+              </button>
+              <button id="tool-circle-btn" class="tool-btn" onclick="setEditorMode('circle')">
+                <i data-lucide="circle"></i> Circle
+              </button>
+              <button id="tool-rect-btn" class="tool-btn" onclick="setEditorMode('rect')">
+                <i data-lucide="square"></i> Rectangle
+              </button>
+              <button id="tool-poly-btn" class="tool-btn" onclick="setEditorMode('poly')">
+                <i data-lucide="hexagon"></i> Polygon
+              </button>
+            </div>
+          </div>
+          
+          <div class="panel-group">
+            <div class="group-title">Modify</div>
+            <div class="group-buttons">
+              <button id="tool-fillet-btn" class="tool-btn" onclick="setEditorMode('fillet')">
+                <i data-lucide="corner-down-right"></i> Fillet
+              </button>
+              <button id="tool-offset-btn" class="tool-btn" onclick="setEditorMode('offset')">
+                <i data-lucide="layers"></i> Offset
+              </button>
+              <button class="tool-btn" onclick="undoSketchPoint()"><i data-lucide="undo-2"></i> Undo</button>
+              <button class="tool-btn" onclick="clearSketchCanvas()"><i data-lucide="trash-2"></i> Clear</button>
+              <button id="close-shape-btn" class="tool-btn" onclick="closeSketchShape()"><i data-lucide="check-square"></i> Close Loop</button>
+            </div>
+          </div>
 
-    <div class="drafting-workspace">
-      <!-- Left: SVG Drawing Canvas Area -->
-      <div class="canvas-wrapper">
-        <div class="sketcher-toolbar">
-          <!-- Drawing Tools -->
-          <button id="tool-draw-btn" class="tool-btn active" title="Line / Polyline Tool" onclick="setEditorMode('draw')">
-            <i data-lucide="pen-tool"></i>
-          </button>
-          <button id="tool-circle-btn" class="tool-btn" title="Circle Tool" onclick="setEditorMode('circle')">
-            <i data-lucide="circle"></i>
-          </button>
-          <button id="tool-rect-btn" class="tool-btn" title="Rectangle Tool" onclick="setEditorMode('rect')">
-            <i data-lucide="square"></i>
-          </button>
-          <button id="tool-poly-btn" class="tool-btn" title="Poly Shape Tool" onclick="setEditorMode('poly')">
-            <i data-lucide="hexagon"></i>
-          </button>
-          
-          <div style="width: 24px; height: 1px; background: var(--border-color); margin: 4px auto; opacity: 0.5;"></div>
-          
-          <!-- Modification / Inspection Tools -->
-          <button id="tool-fillet-btn" class="tool-btn" title="Fillet Corner" onclick="setEditorMode('fillet')">
-            <i data-lucide="corner-down-right"></i>
-          </button>
-          <button id="tool-offset-btn" class="tool-btn" title="Offset Part Profile" onclick="setEditorMode('offset')">
-            <i data-lucide="layers"></i>
-          </button>
-          <button id="tool-dimension-btn" class="tool-btn" title="Smart Dimension" onclick="setEditorMode('dimension')">
-            <i data-lucide="scaling"></i>
-          </button>
-          <button id="tool-measure-btn" class="tool-btn" title="Measure Ruler" onclick="setEditorMode('measure')">
-            <i data-lucide="ruler"></i>
-          </button>
-        </div>
-        
-        <!-- Floating CAD Viewport Controls (Top Right) -->
-        <div class="cad-viewport-controls">
-          <button class="viewport-btn" id="vp-zoom-in" title="Zoom In" onclick="zoomViewport(1.2)">
-            <i data-lucide="zoom-in"></i>
-          </button>
-          <button class="viewport-btn" id="vp-zoom-out" title="Zoom Out" onclick="zoomViewport(1/1.2)">
-            <i data-lucide="zoom-out"></i>
-          </button>
-          <button class="viewport-btn" id="vp-pan" title="Pan Viewport" onclick="setEditorMode('pan')">
-            <i data-lucide="hand"></i>
-          </button>
-          <button class="viewport-btn" id="vp-reset" title="Reset View" onclick="resetViewport()">
-            <i data-lucide="maximize"></i>
-          </button>
+          <div class="panel-group">
+            <div class="group-title">Drafting Options</div>
+            <div class="group-buttons">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-size: 8px; color: var(--text-muted); text-transform: uppercase;">Snap Grid</label>
+                <select id="grid-snap-select" class="form-select" onchange="changeGridSnap()" style="height: 24px; font-size: 10px; padding: 0 4px;">
+                  <option value="5">5 mm</option>
+                  <option value="10" selected>10 mm</option>
+                  <option value="20">20 mm</option>
+                  <option value="50">50 mm</option>
+                </select>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <label style="font-size: 8px; color: var(--text-muted); text-transform: uppercase;">Sheet Format</label>
+                <select id="sheet-size-select" class="form-select" onchange="changeSheetSize()" style="height: 24px; font-size: 10px; padding: 0 4px;">
+                  <option value="A4" selected>ISO A4 (297 x 210)</option>
+                  <option value="A3">ISO A3 (420 x 297)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-group">
+            <div class="group-title">Interactive View</div>
+            <div class="group-buttons">
+              <button class="tool-btn" onclick="zoomViewport(1.2)" title="Zoom In"><i data-lucide="zoom-in"></i></button>
+              <button class="tool-btn" onclick="zoomViewport(1/1.2)" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
+              <button id="vp-pan" class="tool-btn" onclick="setEditorMode('pan')" title="Pan Viewport"><i data-lucide="hand"></i></button>
+              <button class="tool-btn" onclick="resetViewport()" title="Reset View"><i data-lucide="maximize"></i></button>
+            </div>
+          </div>
         </div>
 
-        <!-- High-Performance CAD Viewport Container (Phase 2 & 3) -->
-        <div id="cad-viewport-container" style="position: relative; width: 500px; height: 500px; overflow: hidden; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
-          <!-- WebGL High-Performance Canvas -->
-          <canvas id="three-cad-canvas" width="500" height="500" style="position: absolute; top: 0; left: 0; background: #0F0F0F; outline: none; border: none;"></canvas>
-          
-          <!-- Transparent SVG overlay for annotations & snap helpers (pointer-events: none) -->
-          <svg id="sketch-canvas-svg" width="500" height="500" viewBox="0 0 500 500" style="position: absolute; top: 0; left: 0; pointer-events: none; border: none; background: transparent;"></svg>
+        <!-- Annotate Panel -->
+        <div id="ribbon-panel-Annotate" class="ribbon-panel">
+          <div class="panel-group">
+            <div class="group-title">Dimensions</div>
+            <div class="group-buttons">
+              <button id="tool-dimension-btn" class="tool-btn" onclick="setEditorMode('dimension')">
+                <i data-lucide="scaling"></i> Smart Dimension
+              </button>
+              <button id="tool-measure-btn" class="tool-btn" onclick="setEditorMode('measure')">
+                <i data-lucide="ruler"></i> Ruler Measure
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">Projection Scheme</div>
+            <div class="group-buttons">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" id="toggle-projections-cb" checked onchange="toggleProjectedViews()" style="width: 14px; height: 14px; cursor: pointer;" />
+                <label for="toggle-projections-cb" style="font-size: 10px; cursor: pointer; font-weight: 500;">Show Projected Views</label>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-left: 12px;" id="extrusion-thickness-row">
+                <label for="extrusion-thickness-input" style="font-size: 10px;">Thickness (mm):</label>
+                <input type="number" id="extrusion-thickness-input" class="form-select" value="12" min="2" max="100" onchange="changeExtrusionThickness()" style="width: 50px; height: 24px; font-size: 10px; padding: 0 4px;" />
+              </div>
+            </div>
+          </div>
         </div>
-        
-        <!-- CAD Status Bar -->
-        <div class="cad-status-bar" style="background: rgba(15,23,42,0.9); padding: 8px 16px; display: flex; justify-content: space-between; font-size: 11px; font-family: var(--font-mono); border-top: 1px solid var(--border-color); color: var(--text-muted); box-sizing: border-box;">
-          <span id="coords-display">X: 0.0 | Y: 0.0 mm</span>
-          <span id="cad-status-text">Status: Drawing Profile</span>
+
+        <!-- Layers Panel -->
+        <div id="ribbon-panel-Layers" class="ribbon-panel">
+          <div class="panel-group" style="flex: 1; border-right: none;">
+            <div class="group-title">Layer Control</div>
+            <div id="layer-manager-list" style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <!-- Managed dynamically by app.js -->
+            </div>
+          </div>
         </div>
-        
-        <!-- CAD Command CLI Input (Phase 3) -->
-        <div class="cad-command-cli" style="background: rgba(30, 41, 59, 0.9); border-top: 1px solid var(--border-color); display: flex; align-items: center; padding: 6px 16px; box-sizing: border-box; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);">
-          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-primary); font-weight: bold; margin-right: 8px; user-select: none;">COMMAND ></span>
-          <input type="text" id="command-cli-input" placeholder="Enter coordinate (e.g. 100,100, @50,20, @50&lt;45) or key L / C..." 
-                 style="flex: 1; background: transparent; border: none; outline: none; font-family: var(--font-mono); font-size: 11px; color: var(--text-primary); padding: 2px 0;" />
+
+        <!-- Calculators Panel -->
+        <div id="ribbon-panel-Calculators" class="ribbon-panel">
+          <div class="panel-group">
+            <div class="group-title">Sizing Modules</div>
+            <div class="group-buttons">
+              <button class="tool-btn" onclick="openSizer('BUSBAR')">
+                <i data-lucide="sliders"></i> Busbar Sizer
+              </button>
+              <button class="tool-btn" onclick="openSizer('THERMAL')">
+                <i data-lucide="thermometer"></i> Thermal Conductor
+              </button>
+              <button class="tool-btn" onclick="openSizer('BEAM')">
+                <i data-lucide="trending-up"></i> Beam Deflection
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manage Panel -->
+        <div id="ribbon-panel-Manage" class="ribbon-panel">
+          <div class="panel-group">
+            <div class="group-title">Block Library</div>
+            <div class="group-buttons">
+              <button class="tool-btn" onclick="instantiateBlock('M4_SCREW')"><i data-lucide="nut"></i> M4 Screw</button>
+              <button class="tool-btn" onclick="instantiateBlock('M5_SCREW')"><i data-lucide="nut"></i> M5 Screw</button>
+              <button class="tool-btn" onclick="instantiateBlock('M6_SCREW')"><i data-lucide="nut"></i> M6 Screw</button>
+              <button class="tool-btn" onclick="instantiateBlock('TSLOT_2020')"><i data-lucide="columns"></i> T-Slot 2020</button>
+            </div>
+          </div>
         </div>
       </div>
+    </header>
 
-      <!-- Right: Blueprint Sidebar Controls & Live Telemetry -->
-      <div class="drafting-sidebar">
-        <!-- Entity Editor Inspector Panel -->
-        <div class="sidebar-section hidden" id="sidebar-inspector-section">
-          <h3>Entity Inspector</h3>
+    <!-- 2. Main Workspace (Properties Sidebar + Viewport) -->
+    <div class="cad-workspace-middle">
+      <aside class="cad-properties-sidebar">
+        <h3>Properties</h3>
+        <div id="sidebar-inspector-section" class="properties-list">
           <div id="inspector-fields-container">
-            <!-- Dynamic inspector fields -->
+            <!-- Dynamic fields -->
           </div>
         </div>
-
-        <!-- Snap Options and Commands -->
-        <div class="sidebar-section">
-          <h3>Drafting Controls</h3>
-          <div class="action-grid">
-            <button class="action-btn secondary" id="close-shape-btn" onclick="closeSketchShape()">Close Shape</button>
-            <button class="action-btn secondary" onclick="clearSketchCanvas()">Clear Board</button>
-            <button class="action-btn secondary" id="undo-btn" onclick="undoSketchPoint()">Undo Node</button>
+        
+        <!-- Live Profile Area properties readout (Phase 4) -->
+        <h3 style="margin-top: 24px;">Telemetry</h3>
+        <div class="telemetry-readout">
+          <div class="tel-item">
+            <span class="lbl">Area (A)</span>
+            <span class="val" id="sk-area">0.0 cm²</span>
           </div>
-          <div class="grid-controls-row">
-            <label for="grid-snap-select">Grid Snap Resolution</label>
-            <select id="grid-snap-select" class="form-select" onchange="changeGridSnap()">
-              <option value="5">5 mm</option>
-              <option value="10" selected>10 mm</option>
-              <option value="20">20 mm</option>
-              <option value="50">50 mm</option>
-            </select>
+          <div class="tel-item">
+            <span class="lbl">Moment (Iz)</span>
+            <span class="val" id="sk-inertia">0.0 cm⁴</span>
           </div>
-          <div class="grid-controls-row">
-            <label for="sheet-size-select">Drawing Sheet Size</label>
-            <select id="sheet-size-select" class="form-select" onchange="changeSheetSize()">
-              <option value="A4" selected>ISO A4 (297 x 210 mm)</option>
-              <option value="A3">ISO A3 (420 x 297 mm)</option>
-            </select>
+          <div class="tel-item">
+            <span class="lbl">Centroid (ȳ)</span>
+            <span class="val" id="sk-centroid">0.0 mm</span>
           </div>
-
-          <div class="grid-controls-row" style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
-            <input type="checkbox" id="toggle-projections-cb" checked onchange="toggleProjectedViews()" style="width: 16px; height: 16px; cursor: pointer;" />
-            <label for="toggle-projections-cb" style="margin: 0; cursor: pointer; font-weight: 500;">Show Orthographic Projections</label>
-          </div>
-
-          <div class="grid-controls-row" id="extrusion-thickness-row" style="margin-top: 10px;">
-            <label for="extrusion-thickness-input">Part Extrusion Thickness</label>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <input type="number" id="extrusion-thickness-input" class="form-select" value="12" min="2" max="100" onchange="changeExtrusionThickness()" style="width: 80px;" />
-              <span style="font-size: 12px; color: var(--text-muted);">mm</span>
-            </div>
+          <div class="tel-item">
+            <span class="lbl">Height (d)</span>
+            <span class="val" id="sk-height">0.0 mm</span>
           </div>
         </div>
-
-        <!-- Layer Control Panel (Phase 5) -->
-        <div class="sidebar-section">
-          <h3>Layer Manager</h3>
-          <div id="layer-manager-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; padding-right: 4px; font-size: 11px; font-family: var(--font-sans);">
-            <!-- Dynamic layer list items will be injected here -->
-          </div>
+      </aside>
+      
+      <main class="cad-canvas-container">
+        <div id="sketcher-instruction" class="sketcher-instruction-bubble">
+          Click on the grid to place vertices. Click the starting node to close the loop.
         </div>
-
-        <!-- Reusable Block Library Manager (Phase 5) -->
-        <div class="sidebar-section">
-          <h3>Block Library</h3>
-          <div class="action-grid" style="grid-template-columns: 1fr; gap: 6px;">
-            <button class="action-btn secondary" onclick="instantiateBlock('M4_SCREW')" style="justify-content: flex-start; text-align: left; padding: 6px 10px; font-size: 11px; gap: 8px;">
-              <i data-lucide="nut"></i> M4 Hex Cap Screw
-            </button>
-            <button class="action-btn secondary" onclick="instantiateBlock('M5_SCREW')" style="justify-content: flex-start; text-align: left; padding: 6px 10px; font-size: 11px; gap: 8px;">
-              <i data-lucide="nut"></i> M5 Hex Cap Screw
-            </button>
-            <button class="action-btn secondary" onclick="instantiateBlock('M6_SCREW')" style="justify-content: flex-start; text-align: left; padding: 6px 10px; font-size: 11px; gap: 8px;">
-              <i data-lucide="nut"></i> M6 Hex Cap Screw
-            </button>
-            <button class="action-btn secondary" onclick="instantiateBlock('TSLOT_2020')" style="justify-content: flex-start; text-align: left; padding: 6px 10px; font-size: 11px; gap: 8px;">
-              <i data-lucide="columns"></i> 20x20 T-Slot Profile
-            </button>
-          </div>
+        
+        <div id="cad-viewport-container" class="viewport-canvas-box">
+          <canvas id="three-cad-canvas"></canvas>
+          <svg id="sketch-canvas-svg"></svg>
         </div>
+      </main>
+    </div>
 
-        <!-- Vector Exports -->
-        <div class="sidebar-section">
-          <h3>Vector Exports</h3>
-          <div class="action-grid">
-            <button class="action-btn primary" onclick="exportSVGDrawing()">
-              <i data-lucide="image"></i> Export SVG
-            </button>
-            <button class="action-btn primary" onclick="exportDXFDrawing()">
-              <i data-lucide="file-text"></i> Export DXF
-            </button>
-          </div>
+    <!-- 3. Bottom command CLI + Footer Status Bar -->
+    <footer class="cad-footer-area">
+      <div class="cad-command-line">
+        <span class="prompt-symbol">Command:</span>
+        <input type="text" id="command-cli-input" placeholder="Type command name or coordinate (e.g. LINE, CIRCLE, @100&lt;45, @50,-20)..." />
+      </div>
+      
+      <div class="cad-status-bar">
+        <div class="sheet-tabs">
+          <button id="sheet-tab-model" class="sheet-tab-btn active" onclick="switchSheetTab('Model')">Model Space</button>
+          <button id="sheet-tab-sheet1" class="sheet-tab-btn" onclick="switchSheetTab('Sheet1')">Sheet 1</button>
         </div>
-
-        <!-- Calculated Structural Telemetry (Live updates!) -->
-        <div class="sidebar-section">
-          <h3>Profile Area properties</h3>
-          <div class="telemetry-readout">
-            <div class="tel-item">
-              <span class="lbl">Cross-Section Area (A)</span>
-              <span class="val" id="sk-area">0.0 cm²</span>
-            </div>
-            <div class="tel-item">
-              <span class="lbl">Moment of Inertia (Iz)</span>
-              <span class="val" id="sk-inertia">0.0 cm⁴</span>
-            </div>
-            <div class="tel-item">
-              <span class="lbl">Neutral Axis / Centroid (ȳ)</span>
-              <span class="val" id="sk-centroid">0.0 mm</span>
-            </div>
-            <div class="tel-item">
-              <span class="lbl">Outer Profile Height (d)</span>
-              <span class="val" id="sk-height">0.0 mm</span>
-            </div>
-          </div>
+        
+        <div id="coords-display" class="coordinate-display">
+          X: 0.0 | Y: 0.0 mm
+        </div>
+        
+        <div class="status-toggles">
+          <button id="toggle-ortho-btn" class="status-toggle-btn active" onclick="toggleStatusSetting('ortho')">ORTHO</button>
+          <button id="toggle-grid-btn" class="status-toggle-btn active" onclick="toggleStatusSetting('grid')">GRID</button>
+          <button id="toggle-snap-btn" class="status-toggle-btn active" onclick="toggleStatusSetting('snap')">SNAP</button>
         </div>
       </div>
-    </div>
+    </footer>
   </main>
 
   <!-- Firebase Scripts -->

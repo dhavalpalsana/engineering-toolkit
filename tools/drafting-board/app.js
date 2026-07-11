@@ -71,6 +71,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const canvasEl = document.getElementById("three-cad-canvas");
 
   function snapToGrid(x, y, snap) {
+    if (window.snapEnabled === false) {
+      return { x: x, y: y };
+    }
     return {
       x: Math.round(x / snap) * snap,
       y: Math.round(y / snap) * snap
@@ -639,30 +642,32 @@ document.addEventListener("DOMContentLoaded", () => {
     drawSheetFormat(svg);
 
     // --- 2. Draw Bounded Grid Lines (avoiding title block) ---
-    const majorStep = 50;
-    const minorStep = 10;
-    const margin = 10;
+    if (window.gridVisible !== false) {
+      const majorStep = 50;
+      const minorStep = 10;
+      const margin = 10;
 
-    for (let x = margin + minorStep; x < sheetWidth - margin; x += minorStep) {
-      const isInsideTitleBlockX = (x > sheetWidth - 110);
-      const lineX = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      lineX.setAttribute("x1", x);
-      lineX.setAttribute("y1", margin);
-      lineX.setAttribute("x2", x);
-      lineX.setAttribute("y2", isInsideTitleBlockX ? sheetHeight - 40 : sheetHeight - margin);
-      lineX.setAttribute("class", x % majorStep === 0 ? "sk-grid-major" : "sk-grid-minor");
-      svg.appendChild(lineX);
-    }
-    
-    for (let y = margin + minorStep; y < sheetHeight - margin; y += minorStep) {
-      const isInsideTitleBlockY = (y > sheetHeight - 40);
-      const lineY = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      lineY.setAttribute("x1", margin);
-      lineY.setAttribute("y1", y);
-      lineY.setAttribute("x2", isInsideTitleBlockY ? sheetWidth - 110 : sheetWidth - margin);
-      lineY.setAttribute("y2", y);
-      lineY.setAttribute("class", y % majorStep === 0 ? "sk-grid-major" : "sk-grid-minor");
-      svg.appendChild(lineY);
+      for (let x = margin + minorStep; x < sheetWidth - margin; x += minorStep) {
+        const isInsideTitleBlockX = (x > sheetWidth - 110);
+        const lineX = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        lineX.setAttribute("x1", x);
+        lineX.setAttribute("y1", margin);
+        lineX.setAttribute("x2", x);
+        lineX.setAttribute("y2", isInsideTitleBlockX ? sheetHeight - 40 : sheetHeight - margin);
+        lineX.setAttribute("class", x % majorStep === 0 ? "sk-grid-major" : "sk-grid-minor");
+        svg.appendChild(lineX);
+      }
+      
+      for (let y = margin + minorStep; y < sheetHeight - margin; y += minorStep) {
+        const isInsideTitleBlockY = (y > sheetHeight - 40);
+        const lineY = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        lineY.setAttribute("x1", margin);
+        lineY.setAttribute("y1", y);
+        lineY.setAttribute("x2", isInsideTitleBlockY ? sheetWidth - 110 : sheetWidth - margin);
+        lineY.setAttribute("y2", y);
+        lineY.setAttribute("class", y % majorStep === 0 ? "sk-grid-major" : "sk-grid-minor");
+        svg.appendChild(lineY);
+      }
     }
     
     // Draw Polygon Outline/Shaded Area
@@ -1415,6 +1420,100 @@ document.addEventListener("DOMContentLoaded", () => {
     const container = document.getElementById("inspector-fields-container");
     if (!panel || !container) return;
 
+    // ── ACTIVE SIZING MODULE CALCULATOR OVERLAYS (Phase 5) ──
+    if (window.activeSizerModule) {
+      panel.classList.remove("hidden");
+      if (window.activeSizerModule === "BUSBAR") {
+        container.innerHTML = `
+          <div class="inspector-fields">
+            <div class="inspector-title">Busbar Sizing Calculator</div>
+            <div class="inspector-row">
+              <label>Target Current (A)</label>
+              <input type="number" id="busbar-current" value="800" step="50" onchange="runBusbarSizer()">
+            </div>
+            <div class="inspector-row">
+              <label>Material</label>
+              <select id="busbar-material" onchange="runBusbarSizer()" class="form-select" style="width: 100px; height: 32px; font-size: 11px;">
+                <option value="copper">Copper</option>
+                <option value="aluminum">Aluminum</option>
+              </select>
+            </div>
+            <div class="inspector-row">
+              <label>Temp Rise (°C)</label>
+              <input type="number" id="busbar-temp" value="30" step="5" onchange="runBusbarSizer()">
+            </div>
+            <div class="inspector-row" style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+              <span class="prop-label">Sized Width:</span>
+              <span class="prop-val" id="busbar-width-res" style="font-weight: bold; color: var(--accent-primary);">80 mm</span>
+            </div>
+            <div class="inspector-row">
+              <span class="prop-label">Sized Thickness:</span>
+              <span class="prop-val" id="busbar-thick-res" style="font-weight: bold; color: var(--accent-primary);">12 mm</span>
+            </div>
+            <button class="action-btn primary" onclick="redraftBusbarGeometry()" style="width: 100%; margin-top: 12px; height: 32px; font-size: 11px;">
+              Redraft Busbar Profile
+            </button>
+          </div>
+        `;
+        runBusbarSizer();
+      } 
+      else if (window.activeSizerModule === "THERMAL") {
+        container.innerHTML = `
+          <div class="inspector-fields">
+            <div class="inspector-title">Cable Conductor Solver</div>
+            <div class="inspector-row">
+              <label>Design Current (A)</label>
+              <input type="number" id="cable-current" value="120" step="10" onchange="runCableSizer()">
+            </div>
+            <div class="inspector-row">
+              <label>Length (m)</label>
+              <input type="number" id="cable-length" value="50" step="5" onchange="runCableSizer()">
+            </div>
+            <div class="inspector-row">
+              <label>Allowable Loss (%)</label>
+              <input type="number" id="cable-loss" value="3.0" step="0.5" onchange="runCableSizer()">
+            </div>
+            <div class="inspector-row" style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+              <span class="prop-label">Req. Conductor Area:</span>
+              <span class="prop-val" id="cable-area-res" style="font-weight: bold; color: var(--accent-primary);">35 mm²</span>
+            </div>
+            <div class="inspector-row">
+              <span class="prop-label">Conductor Diameter:</span>
+              <span class="prop-val" id="cable-diam-res" style="font-weight: bold; color: var(--accent-primary);">6.7 mm</span>
+            </div>
+            <button class="action-btn primary" onclick="redraftCableGeometry()" style="width: 100%; margin-top: 12px; height: 32px; font-size: 11px;">
+              Redraft Conductor Circle
+            </button>
+          </div>
+        `;
+        runCableSizer();
+      } 
+      else if (window.activeSizerModule === "BEAM") {
+        container.innerHTML = `
+          <div class="inspector-fields">
+            <div class="inspector-title">Beam Deflection Solver</div>
+            <div class="inspector-row">
+              <label>Force Load (kN)</label>
+              <input type="number" id="beam-load" value="25" step="5" onchange="runBeamSizer()">
+            </div>
+            <div class="inspector-row">
+              <label>Span Length (mm)</label>
+              <input type="number" id="beam-length" value="3000" step="200" onchange="runBeamSizer()">
+            </div>
+            <div class="inspector-row" style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+              <span class="prop-label">Max Deflection:</span>
+              <span class="prop-val" id="beam-deflect-res" style="font-weight: bold; color: #ef4444;">12.4 mm</span>
+            </div>
+            <button class="action-btn primary" onclick="redraftBeamDeflection()" style="width: 100%; margin-top: 12px; height: 32px; font-size: 11px;">
+              Plot Bending Deflection
+            </button>
+          </div>
+        `;
+        runBeamSizer();
+      }
+      return;
+    }
+
     if (!selectedEntity) {
       // Show default Global Offset tools when no entity is selected
       panel.classList.remove("hidden");
@@ -1792,7 +1891,7 @@ document.addEventListener("DOMContentLoaded", () => {
           snapPt = hoveredSnapTarget;
         }
         
-        if (shiftPressed && sketchVertices.length > 0) {
+        if ((shiftPressed || window.orthoLockEnabled) && sketchVertices.length > 0) {
           const last = sketchVertices[sketchVertices.length - 1];
           const dx = Math.abs(snapPt.x - last.x);
           const dy = Math.abs(snapPt.y - last.y);
@@ -2048,24 +2147,25 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- CAD Editor Toolbar Switcher ---
   window.setEditorMode = (mode) => {
     editorMode = mode;
+    window.activeSizerModule = null;
     document.querySelectorAll(".tool-btn").forEach(btn => btn.classList.remove("active"));
     document.querySelectorAll(".viewport-btn").forEach(btn => btn.classList.remove("active"));
     
-    if (mode === "draw") document.getElementById("tool-draw-btn").classList.add("active");
-    else if (mode === "circle") document.getElementById("tool-circle-btn").classList.add("active");
-    else if (mode === "rect") document.getElementById("tool-rect-btn").classList.add("active");
+    if (mode === "draw") document.getElementById("tool-draw-btn")?.classList.add("active");
+    else if (mode === "circle") document.getElementById("tool-circle-btn")?.classList.add("active");
+    else if (mode === "rect") document.getElementById("tool-rect-btn")?.classList.add("active");
     else if (mode === "poly") {
-      document.getElementById("tool-poly-btn").classList.add("active");
+      document.getElementById("tool-poly-btn")?.classList.add("active");
       const input = prompt("Enter number of polygon sides:", polySides);
       const parsed = parseInt(input);
       if (!isNaN(parsed) && parsed >= 3 && parsed <= 20) {
         polySides = parsed;
       }
     }
-    else if (mode === "fillet") document.getElementById("tool-fillet-btn").classList.add("active");
-    else if (mode === "offset") document.getElementById("tool-offset-btn").classList.add("active");
-    else if (mode === "dimension") document.getElementById("tool-dimension-btn").classList.add("active");
-    else if (mode === "measure") document.getElementById("tool-measure-btn").classList.add("active");
+    else if (mode === "fillet") document.getElementById("tool-fillet-btn")?.classList.add("active");
+    else if (mode === "offset") document.getElementById("tool-offset-btn")?.classList.add("active");
+    else if (mode === "dimension") document.getElementById("tool-dimension-btn")?.classList.add("active");
+    else if (mode === "measure") document.getElementById("tool-measure-btn")?.classList.add("active");
     else if (mode === "pan") {
       const panBtn = document.getElementById("vp-pan");
       if (panBtn) panBtn.classList.add("active");
@@ -2124,6 +2224,181 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.setItem("theme", newTheme);
     });
   }
+
+  window.activeSizerModule = null;
+  window.orthoLockEnabled = true;
+  window.gridVisible = true;
+  window.snapEnabled = true;
+
+  window.switchRibbonTab = (tabName) => {
+    document.querySelectorAll(".ribbon-tab-btn").forEach(btn => btn.classList.remove("active"));
+    const activeBtn = document.getElementById("ribbon-tab-" + tabName.toLowerCase());
+    if (activeBtn) activeBtn.classList.add("active");
+    
+    document.querySelectorAll(".ribbon-panel").forEach(panel => panel.classList.remove("active"));
+    const activePanel = document.getElementById("ribbon-panel-" + tabName);
+    if (activePanel) activePanel.classList.add("active");
+  };
+
+  window.switchSheetTab = (tabName) => {
+    document.querySelectorAll(".sheet-tab-btn").forEach(btn => btn.classList.remove("active"));
+    const activeBtn = document.getElementById("sheet-tab-" + tabName.toLowerCase());
+    if (activeBtn) activeBtn.classList.add("active");
+  };
+
+  window.toggleStatusSetting = (setting) => {
+    if (setting === "ortho") {
+      window.orthoLockEnabled = !window.orthoLockEnabled;
+      const btn = document.getElementById("toggle-ortho-btn");
+      if (btn) btn.classList.toggle("active", window.orthoLockEnabled);
+    }
+    else if (setting === "grid") {
+      window.gridVisible = !window.gridVisible;
+      const btn = document.getElementById("toggle-grid-btn");
+      if (btn) btn.classList.toggle("active", window.gridVisible);
+      drawSketchCanvas();
+    }
+    else if (setting === "snap") {
+      window.snapEnabled = !window.snapEnabled;
+      const btn = document.getElementById("toggle-snap-btn");
+      if (btn) btn.classList.toggle("active", window.snapEnabled);
+    }
+  };
+
+  window.openSizer = (moduleName) => {
+    window.activeSizerModule = moduleName;
+    selectedEntity = null;
+    showEntityInspector();
+  };
+
+  window.runBusbarSizer = () => {
+    const current = parseFloat(document.getElementById("busbar-current")?.value || "800");
+    const tempRise = parseFloat(document.getElementById("busbar-temp")?.value || "30");
+    const mat = document.getElementById("busbar-material")?.value || "copper";
+    const k = mat === "copper" ? 8.5 : 6.0;
+    
+    const reqArea = current / (k * Math.sqrt(tempRise));
+    const thickness = 12;
+    const width = Math.ceil(reqArea / thickness);
+    
+    const wRes = document.getElementById("busbar-width-res");
+    const tRes = document.getElementById("busbar-thick-res");
+    if (wRes) wRes.textContent = `${width} mm`;
+    if (tRes) tRes.textContent = `${thickness} mm`;
+    
+    window.sizedBusbarWidth = width;
+    window.sizedBusbarThick = thickness;
+  };
+
+  window.redraftBusbarGeometry = () => {
+    if (layers["PROFILE_OUTLINE"].frozen) {
+      alert("PROFILE_OUTLINE layer is frozen / locked.");
+      return;
+    }
+    const w = window.sizedBusbarWidth || 80;
+    const t = window.sizedBusbarThick || 12;
+    
+    const cx = Math.round(sheetWidth / 2);
+    const cy = Math.round(sheetHeight / 2);
+    const hw = Math.round(w / 2);
+    const ht = Math.round(t / 2);
+    
+    sketchVertices = [
+      { x: cx - hw, y: cy - ht },
+      { x: cx + hw, y: cy - ht },
+      { x: cx + hw, y: cy + ht },
+      { x: cx - hw, y: cy + ht }
+    ];
+    isSketchClosed = true;
+    
+    drawSketchCanvas();
+    updateLiveProperties();
+  };
+
+  window.runCableSizer = () => {
+    const current = parseFloat(document.getElementById("cable-current")?.value || "120");
+    const length = parseFloat(document.getElementById("cable-length")?.value || "50");
+    const loss = parseFloat(document.getElementById("cable-loss")?.value || "3.0");
+    
+    const area = Math.ceil((current * length) / (50 * loss));
+    const diam = parseFloat((Math.sqrt((4 * area) / Math.PI)).toFixed(1));
+    
+    const areaRes = document.getElementById("cable-area-res");
+    const diamRes = document.getElementById("cable-diam-res");
+    if (areaRes) areaRes.textContent = `${area} mm²`;
+    if (diamRes) diamRes.textContent = `${diam} mm`;
+    
+    window.sizedCableDiam = diam;
+  };
+
+  window.redraftCableGeometry = () => {
+    if (layers["HOLES"].frozen) {
+      alert("HOLES layer is frozen / locked.");
+      return;
+    }
+    const d = window.sizedCableDiam || 6.7;
+    const r = parseFloat((d / 2).toFixed(1));
+    
+    const cx = Math.round(sheetWidth / 2);
+    const cy = Math.round(sheetHeight / 2);
+    
+    sketchCircles.push({
+      cx: cx,
+      cy: cy,
+      r: r,
+      construction: false
+    });
+    
+    drawSketchCanvas();
+    updateLiveProperties();
+  };
+
+  window.runBeamSizer = () => {
+    const force = parseFloat(document.getElementById("beam-load")?.value || "25");
+    const length = parseFloat(document.getElementById("beam-length")?.value || "3000");
+    
+    const deflection = parseFloat(((force * 1000 * Math.pow(length, 3)) / (48 * 200000 * 1200000)).toFixed(1));
+    const deflectRes = document.getElementById("beam-deflect-res");
+    if (deflectRes) deflectRes.textContent = `${deflection} mm`;
+    
+    window.sizedBeamDeflection = deflection;
+    window.sizedBeamLength = length;
+  };
+
+  window.redraftBeamDeflection = () => {
+    if (layers["PROFILE_OUTLINE"].frozen) {
+      alert("PROFILE_OUTLINE layer is frozen / locked.");
+      return;
+    }
+    const dMax = window.sizedBeamDeflection || 12;
+    const L = window.sizedBeamLength || 3000;
+    
+    const scaleX = sheetWidth / L;
+    const scaleY = 2.0; 
+    
+    sketchVertices = [];
+    
+    const segments = 20;
+    for (let i = 0; i <= segments; i++) {
+      const x = (i / segments) * L;
+      let y = 0;
+      if (x <= L / 2) {
+        y = (dMax * (3 * L * L * x - 4 * x * x * x)) / (L * L * L);
+      } else {
+        const xRev = L - x;
+        y = (dMax * (3 * L * L * xRev - 4 * xRev * xRev * xRev)) / (L * L * L);
+      }
+      
+      sketchVertices.push({
+        x: Math.round(x * scaleX),
+        y: Math.round(sheetHeight / 2 + y * scaleY)
+      });
+    }
+    isSketchClosed = false;
+    
+    drawSketchCanvas();
+    updateLiveProperties();
+  };
 
   // Populate global offset panel initially and boot canvas
   const webglCanvas = document.getElementById("three-cad-canvas");

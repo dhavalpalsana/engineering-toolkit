@@ -551,3 +551,293 @@ body::before {
   color: #000;
   border-color: #ef4444;
 }
+
+/* ==========================================================================
+   Professional Workspace Model Layout (Phase 1 Redesign)
+   ========================================================================== */
+
+.cad-app-container {
+  display: grid;
+  grid-template-rows: 110px 1fr 80px;
+  width: 100%;
+  height: calc(100vh - 64px); /* Subtract standard header height */
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  font-family: var(--font-sans);
+}
+
+/* TOP RIBBON BAR */
+.cad-ribbon {
+  background-color: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.ribbon-tabs {
+  background-color: var(--bg-tertiary);
+  display: flex;
+  padding: 4px 16px 0 16px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ribbon-tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+  border-bottom: none;
+}
+
+.ribbon-tab-btn:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.ribbon-tab-btn.active {
+  background-color: var(--bg-secondary);
+  color: var(--accent-primary);
+  border-color: var(--border-color);
+}
+
+.ribbon-panels {
+  flex: 1;
+  display: flex;
+  padding: 8px 16px;
+  background-color: var(--bg-secondary);
+  overflow-x: auto;
+}
+
+.ribbon-panel {
+  display: none;
+  gap: 24px;
+  align-items: center;
+  width: 100%;
+}
+
+.ribbon-panel.active {
+  display: flex;
+}
+
+.panel-group {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color);
+  padding-right: 16px;
+  justify-content: center;
+}
+
+.panel-group:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.group-title {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+
+.group-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* MIDDLE INTERACTIVE WORKSPACE */
+.cad-workspace-middle {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cad-properties-sidebar {
+  background-color: var(--bg-secondary);
+  border-right: 2px solid var(--border-color);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.cad-properties-sidebar h3 {
+  font-size: 13px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.properties-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty-properties-prompt {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  text-align: center;
+  padding: 24px 8px;
+}
+
+.cad-canvas-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #0F0F0F;
+  overflow: hidden;
+}
+
+.viewport-canvas-box {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.viewport-canvas-box canvas,
+.viewport-canvas-box svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+}
+
+.sketcher-instruction-bubble {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-full);
+  padding: 6px 18px;
+  font-size: 11px;
+  color: var(--text-primary);
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  text-align: center;
+}
+
+/* FOOTER COMMAND AREA & STATUS BAR */
+.cad-footer-area {
+  background-color: var(--bg-tertiary);
+  border-top: 2px solid var(--border-color);
+  display: grid;
+  grid-template-rows: 40px 40px;
+  z-index: 10;
+}
+
+.cad-command-line {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background-color: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.prompt-symbol {
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  font-weight: bold;
+  font-size: 11px;
+  margin-right: 8px;
+  user-select: none;
+}
+
+.cad-command-line input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+}
+
+.cad-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  background-color: var(--bg-tertiary);
+}
+
+.sheet-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.sheet-tab-btn {
+  background-color: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.sheet-tab-btn.active {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+}
+
+.coordinate-display {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.status-toggles {
+  display: flex;
+  gap: 4px;
+}
+
+.status-toggle-btn {
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-weight: bold;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.status-toggle-btn.active {
+  background-color: var(--accent-primary-glow);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
