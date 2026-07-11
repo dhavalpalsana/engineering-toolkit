@@ -147,6 +147,13 @@
           <span id="coords-display">X: 0.0 | Y: 0.0 mm</span>
           <span id="cad-status-text">Status: Drawing Profile</span>
         </div>
+        
+        <!-- CAD Command CLI Input (Phase 3) -->
+        <div class="cad-command-cli" style="background: rgba(30, 41, 59, 0.9); border-top: 1px solid var(--border-color); display: flex; align-items: center; padding: 6px 16px; box-sizing: border-box; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);">
+          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-primary); font-weight: bold; margin-right: 8px; user-select: none;">COMMAND ></span>
+          <input type="text" id="command-cli-input" placeholder="Enter coordinate (e.g. 100,100, @50,20, @50&lt;45) or key L / C..." 
+                 style="flex: 1; background: transparent; border: none; outline: none; font-family: var(--font-mono); font-size: 11px; color: var(--text-primary); padding: 2px 0;" />
+        </div>
       </div>
 
       <!-- Right: Blueprint Sidebar Controls & Live Telemetry -->
@@ -258,7 +265,8 @@
   <script src="js/db.js"></script>
   <script src="js/dxf.js"></script>
   <script src="js/renderer.js"></script>
-  <script src="app.js?v=2.0.9"></script>
+  <script src="js/cli.js"></script>
+  <script src="app.js?v=2.1.0"></script>
 
   <script>
     lucide.createIcons();

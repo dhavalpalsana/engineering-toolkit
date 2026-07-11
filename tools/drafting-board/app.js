@@ -1845,6 +1845,48 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    // Command CLI Input Event Listener (Phase 3)
+    const cliInput = document.getElementById("command-cli-input");
+    if (cliInput) {
+      cliInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          const val = cliInput.value;
+          cliInput.value = "";
+          
+          const lastPt = sketchVertices.length > 0 ? sketchVertices[sketchVertices.length - 1] : null;
+
+          const addNodeFn = (x, y) => {
+            sketchVertices.push({ x, y });
+            drawSketchCanvas();
+            updateLiveProperties();
+          };
+
+          const addCircleFn = (cx, cy, r) => {
+            sketchCircles.push({ cx, cy, r, construction: false });
+            drawSketchCanvas();
+            updateLiveProperties();
+          };
+
+          const responseMsg = processCommandText(
+            val,
+            (mode) => setEditorMode(mode),
+            () => editorMode,
+            lastPt,
+            addNodeFn,
+            addCircleFn,
+            clearSketchCanvas,
+            undoSketchPoint,
+            closeSketchShape
+          );
+          
+          const statusText = document.getElementById("cad-status-text");
+          if (statusText && responseMsg) {
+            statusText.textContent = responseMsg;
+          }
+        }
+      });
+    }
+
     // Wheel zooming
     svg.addEventListener("wheel", (e) => {
       e.preventDefault();
