@@ -248,6 +248,9 @@ body::before {
   marker-start: url(#arrow-start);
   marker-end: url(#arrow-end);
 }
+.sk-dim-line.selected {
+  stroke: #f97316 !important;
+}
 
 .sk-dim-lbl {
   fill: var(--text-primary);
@@ -438,6 +441,15 @@ body::before {
 }
 .sk-snap-center {
   stroke: #3b82f6; /* Blue */
+}
+.sk-snap-intersection {
+  stroke: #ef4444; /* Red */
+}
+.sk-snap-tangent {
+  stroke: #ec4899; /* Pink */
+}
+.sk-snap-perpendicular {
+  stroke: #06b6d4; /* Cyan */
 }
 
 .sk-circle {

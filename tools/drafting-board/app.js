@@ -9,6 +9,36 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Drawing State ---
   let sketchVertices = []; // Coordinates array in mm
   let sketchCircles = [];  // Circle entities: [{ cx, cy, r, construction: false }]
+  let sketchInsertions = []; // Block instances: [{ blockName, x, y, scaleX, scaleY, rotation }]
+  let blockDefinitions = {
+    "M4_SCREW": {
+      basePoint: { x: 0, y: 0 },
+      entities: [
+        { type: "CIRCLE", cx: 0, cy: 0, r: 2, layer: "HOLES" }
+      ]
+    },
+    "M5_SCREW": {
+      basePoint: { x: 0, y: 0 },
+      entities: [
+        { type: "CIRCLE", cx: 0, cy: 0, r: 2.5, layer: "HOLES" }
+      ]
+    },
+    "M6_SCREW": {
+      basePoint: { x: 0, y: 0 },
+      entities: [
+        { type: "CIRCLE", cx: 0, cy: 0, r: 3, layer: "HOLES" }
+      ]
+    },
+    "TSLOT_2020": {
+      basePoint: { x: 0, y: 0 },
+      entities: [
+        { type: "LINE", x1: -10, y1: -10, x2: 10, y2: -10, layer: "PROFILE_OUTLINE" },
+        { type: "LINE", x1: 10, y1: -10, x2: 10, y2: 10, layer: "PROFILE_OUTLINE" },
+        { type: "LINE", x1: 10, y1: 10, x2: -10, y2: 10, layer: "PROFILE_OUTLINE" },
+        { type: "LINE", x1: -10, y1: 10, x2: -10, y2: -10, layer: "PROFILE_OUTLINE" }
+      ]
+    }
+  };
   let isSketchClosed = false;
   let gridSnap = 10;       // Snap resolution in mm
   let selectedVertexIndex = -1;
@@ -52,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "PROFILE_OUTLINE": { color: "#14b8a6", visible: true, frozen: false },
     "HOLES": { color: "#3b82f6", visible: true, frozen: false },
     "CONSTRUCTION": { color: "#64748b", visible: true, frozen: false },
-    "SHEET_FORMAT": { color: "#334155", visible: true, frozen: false }
+    "SHEET_FORMAT": { color: "#334155", visible: false, frozen: false }
   };
   let activeBlockToInsert = null;
 
@@ -141,19 +171,77 @@ document.addEventListener("DOMContentLoaded", () => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target.result);
-        if (data.vertices) {
-          sketchVertices = data.vertices;
-          sketchCircles = data.circles || [];
-          customDimensions = data.customDimensions || [];
-          isSketchClosed = !!data.isSketchClosed;
+        const text = e.target.result;
+        if (file.name.toLowerCase().endsWith(".dxf")) {
+          const db = new DxfDatabase();
+          db.parse(text);
+          
+          sketchVertices = [];
+          sketchCircles = [];
+          sketchInsertions = [];
+          customDimensions = [];
+          
+          // Map entities to WCS layout
+          db.entities.forEach(ent => {
+            if (ent.type === "LINE") {
+              if (sketchVertices.length === 0) {
+                sketchVertices.push({ x: ent.x1, y: ent.y1 });
+                sketchVertices.push({ x: ent.x2, y: ent.y2 });
+              } else {
+                const last = sketchVertices[sketchVertices.length - 1];
+                if (Math.hypot(last.x - ent.x1, last.y - ent.y1) < 1.0) {
+                  sketchVertices.push({ x: ent.x2, y: ent.y2 });
+                } else {
+                  sketchVertices.push({ x: ent.x1, y: ent.y1 });
+                  sketchVertices.push({ x: ent.x2, y: ent.y2 });
+                }
+              }
+            }
+            else if (ent.type === "CIRCLE") {
+              sketchCircles.push({ cx: ent.cx, cy: ent.cy, r: ent.r, construction: ent.layer === "CONSTRUCTION" });
+            }
+            else if (ent.type === "INSERT") {
+              sketchInsertions.push({
+                blockName: ent.blockName,
+                x: ent.x,
+                y: ent.y,
+                scaleX: ent.scaleX !== undefined ? ent.scaleX : 1,
+                scaleY: ent.scaleY !== undefined ? ent.scaleY : 1,
+                rotation: ent.rotation !== undefined ? ent.rotation : 0
+              });
+            }
+          });
+          
+          // Load definitions from blocks table
+          if (db.blocks) {
+            Object.keys(db.blocks).forEach(name => {
+              blockDefinitions[name] = db.blocks[name];
+            });
+          }
+          
+          isSketchClosed = (sketchVertices.length >= 3 && 
+            Math.hypot(sketchVertices[0].x - sketchVertices[sketchVertices.length - 1].x, 
+                       sketchVertices[0].y - sketchVertices[sketchVertices.length - 1].y) < 10);
+                       
           drawSketchCanvas();
           updateLiveProperties();
         } else {
-          alert("Invalid file format.");
+          const data = JSON.parse(text);
+          if (data.vertices) {
+            sketchVertices = data.vertices;
+            sketchCircles = data.circles || [];
+            sketchInsertions = data.insertions || [];
+            customDimensions = data.customDimensions || [];
+            isSketchClosed = !!data.isSketchClosed;
+            drawSketchCanvas();
+            updateLiveProperties();
+          } else {
+            alert("Invalid file format.");
+          }
         }
       } catch (err) {
-        alert("Failed to parse JSON file.");
+        console.error(err);
+        alert("Failed to parse file.");
       }
       event.target.value = "";
     };
@@ -166,6 +254,7 @@ document.addEventListener("DOMContentLoaded", () => {
     getInputs: () => ({
       vertices: sketchVertices,
       circles: sketchCircles,
+      insertions: sketchInsertions,
       customDimensions,
       isSketchClosed
     }),
@@ -173,6 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (data && data.vertices) {
         sketchVertices = data.vertices;
         sketchCircles = data.circles || [];
+        sketchInsertions = data.insertions || [];
         customDimensions = data.customDimensions || [];
         isSketchClosed = !!data.isSketchClosed;
         drawSketchCanvas();
@@ -333,6 +423,21 @@ document.addEventListener("DOMContentLoaded", () => {
     db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx, y1: ty + 10, x2: tx + tw, y2: ty + 10 });
     db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx, y1: ty + 20, x2: tx + tw, y2: ty + 20 });
     db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx + 60, y1: ty + 10, x2: tx + 60, y2: ty + 30 });
+
+    // 2.5 Export block insertions and copy definitions to blocks database
+    db.blocks = Object.assign({}, blockDefinitions);
+    sketchInsertions.forEach(ins => {
+      db.entities.push({
+        type: "INSERT",
+        blockName: ins.blockName,
+        layer: "PROFILE_OUTLINE",
+        x: ins.x,
+        y: ins.y,
+        scaleX: ins.scaleX !== undefined ? ins.scaleX : 1,
+        scaleY: ins.scaleY !== undefined ? ins.scaleY : 1,
+        rotation: ins.rotation !== undefined ? ins.rotation : 0
+      });
+    });
 
     const dxf = db.export();
 
@@ -630,7 +735,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (activeRenderMode === "webgl" && webglRenderer) {
       // 1. Update the high-performance WebGL vector geometry
-      webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight, layers);
+      webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight, layers, sketchInsertions, blockDefinitions);
       
       // 2. Clear the SVG overlay except for defs marker definitions
       svg.innerHTML = `
@@ -674,7 +779,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderToViewport(svg, drawCursorLine) {
     
     // --- 1. Draw Paper Sheet Format (Borders, Title block, Subdivisions) ---
-    drawSheetFormat(svg);
+    const rootSvg = svg.tagName === "svg" ? svg : svg.ownerSVGElement;
+    if (layers["SHEET_FORMAT"] && layers["SHEET_FORMAT"].visible) {
+      if (rootSvg) rootSvg.style.background = "#ffffff";
+      drawSheetFormat(svg);
+    } else {
+      if (rootSvg) rootSvg.style.background = "#0c0f1d";
+    }
 
     // --- 2. Draw Bounded Grid Lines (avoiding title block) ---
     if (window.gridVisible !== false) {
@@ -784,6 +895,53 @@ document.addEventListener("DOMContentLoaded", () => {
       svg.appendChild(circleEl);
     });
 
+    // Draw Block Insertions
+    sketchInsertions.forEach((ins, insIdx) => {
+      const def = blockDefinitions[ins.blockName];
+      if (!def) return;
+      
+      const groupEl = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      groupEl.setAttribute("transform", `translate(${ins.x}, ${ins.y}) rotate(${ins.rotation || 0}) scale(${ins.scaleX !== undefined ? ins.scaleX : 1}, ${ins.scaleY !== undefined ? ins.scaleY : 1})`);
+      groupEl.setAttribute("data-insertion-index", insIdx);
+      groupEl.style.cursor = "pointer";
+      
+      let isInsSelected = selectedEntity && selectedEntity.type === "insertion" && selectedEntity.index === insIdx;
+      
+      def.entities.forEach(ent => {
+        const drawLayer = ent.layer || "PROFILE_OUTLINE";
+        if (layers[drawLayer] && layers[drawLayer].visible) {
+          let color = layers[drawLayer].color || "var(--text-primary)";
+          if (isInsSelected) {
+            color = "#f97316"; // Highlight selected block instances
+          }
+          
+          if (ent.type === "LINE") {
+            const lineEl = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            lineEl.setAttribute("x1", ent.x1);
+            lineEl.setAttribute("y1", ent.y1);
+            lineEl.setAttribute("x2", ent.x2);
+            lineEl.setAttribute("y2", ent.y2);
+            lineEl.setAttribute("stroke", color);
+            lineEl.setAttribute("stroke-width", 2.2);
+            lineEl.setAttribute("data-insertion-index", insIdx);
+            groupEl.appendChild(lineEl);
+          }
+          else if (ent.type === "CIRCLE") {
+            const circleEl = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circleEl.setAttribute("cx", ent.cx);
+            circleEl.setAttribute("cy", ent.cy);
+            circleEl.setAttribute("r", ent.r);
+            circleEl.setAttribute("fill", isInsSelected ? "rgba(249, 115, 22, 0.15)" : "none");
+            circleEl.setAttribute("stroke", color);
+            circleEl.setAttribute("stroke-width", 2.2);
+            circleEl.setAttribute("data-insertion-index", insIdx);
+            groupEl.appendChild(circleEl);
+          }
+        }
+      });
+      svg.appendChild(groupEl);
+    });
+
     // Draw active circle guide during placement
     if (editorMode === "circle" && activeCircleCenter && mousePos) {
       const cGuide = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -867,7 +1025,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const dimLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
         dimLine.setAttribute("x1", o1x); dimLine.setAttribute("y1", o1y);
         dimLine.setAttribute("x2", o2x); dimLine.setAttribute("y2", o2y);
-        dimLine.setAttribute("class", "sk-dim-line");
+        
+        let className = "sk-dim-line";
+        if (selectedEntity && selectedEntity.type === "dimension" && selectedEntity.index === dimIdx) {
+          className += " selected";
+        }
+        dimLine.setAttribute("class", className);
+        dimLine.setAttribute("data-dim-index", dimIdx);
+        dimLine.style.cursor = "pointer";
         svg.appendChild(dimLine);
         
         // Text background
@@ -878,13 +1043,17 @@ document.addEventListener("DOMContentLoaded", () => {
         txtBg.setAttribute("fill", "var(--bg-secondary)");
         txtBg.setAttribute("stroke", "var(--border-color)");
         txtBg.setAttribute("stroke-width", "0.5");
+        txtBg.setAttribute("data-dim-index", dimIdx);
+        txtBg.style.cursor = "pointer";
         svg.appendChild(txtBg);
         
         // Text label
         const dimTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
         dimTxt.setAttribute("x", midx); dimTxt.setAttribute("y", midy + 4);
         dimTxt.setAttribute("class", "sk-dim-lbl");
-        dimTxt.textContent = `${Math.round(len)}mm`;
+        dimTxt.setAttribute("data-dim-index", dimIdx);
+        dimTxt.style.cursor = "pointer";
+        dimTxt.textContent = `${dim.d !== undefined ? Math.round(dim.d) : Math.round(len)}mm`;
         svg.appendChild(dimTxt);
       }
     });
@@ -1047,6 +1216,21 @@ document.addEventListener("DOMContentLoaded", () => {
         circ.setAttribute("r", 5);
         circ.setAttribute("class", "sk-snap-indicator sk-snap-center");
         svg.appendChild(circ);
+      } else if (hoveredSnapTarget.type === "intersection") {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `M ${x-4} ${y-4} L ${x+4} ${y+4} M ${x+4} ${y-4} L ${x-4} ${y+4}`);
+        path.setAttribute("class", "sk-snap-indicator sk-snap-intersection");
+        svg.appendChild(path);
+      } else if (hoveredSnapTarget.type === "tangent") {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `M ${x} ${y-4} A 4 4 0 1 1 ${x} ${y+4} A 4 4 0 1 1 ${x} ${y-4} M ${x-5} ${y-4} L ${x+5} ${y-4}`);
+        path.setAttribute("class", "sk-snap-indicator sk-snap-tangent");
+        svg.appendChild(path);
+      } else if (hoveredSnapTarget.type === "perpendicular") {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `M ${x-4} ${y} L ${x} ${y} L ${x} ${y-4}`);
+        path.setAttribute("class", "sk-snap-indicator sk-snap-perpendicular");
+        svg.appendChild(path);
       }
     }
   }
@@ -1071,6 +1255,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let bestTarget = null;
     let minDist = 14;
     
+    // 1. Endpoint snap (Vertices)
     sketchVertices.forEach((v, idx) => {
       const dist = Math.hypot(pos.x - v.x, pos.y - v.y);
       if (dist < minDist) {
@@ -1079,6 +1264,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
     
+    // 2. Midpoint snap (Line segments)
     const n = sketchVertices.length;
     const limit = isSketchClosed ? n : n - 1;
     for (let i = 0; i < limit; i++) {
@@ -1093,6 +1279,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     
+    // 3. Center snap (Circle centers)
     sketchCircles.forEach((c, idx) => {
       const dist = Math.hypot(pos.x - c.cx, pos.y - c.cy);
       if (dist < minDist) {
@@ -1100,6 +1287,88 @@ document.addEventListener("DOMContentLoaded", () => {
         bestTarget = { x: c.cx, y: c.cy, type: "center", index: idx };
       }
     });
+
+    // 4. Intersection snap (Line segment crossings)
+    if (n >= 4) {
+      for (let i = 0; i < limit; i++) {
+        for (let j = i + 2; j < limit; j++) {
+          // Skip adjacent segments or duplicate comparisons
+          if (i === 0 && j === limit - 1) continue;
+          const p1 = sketchVertices[i];
+          const p2 = sketchVertices[(i + 1) % n];
+          const q1 = sketchVertices[j];
+          const q2 = sketchVertices[(j + 1) % n];
+          
+          const d = (p2.x - p1.x) * (q2.y - q1.y) - (p2.y - p1.y) * (q2.x - q1.x);
+          if (Math.abs(d) > 1e-6) {
+            const u = ((q1.x - p1.x) * (q2.y - q1.y) - (q1.y - p1.y) * (q2.x - q1.x)) / d;
+            const v = ((q1.x - p1.x) * (p2.y - p1.y) - (q1.y - p1.y) * (p2.x - p1.x)) / d;
+            if (u >= 0 && u <= 1 && v >= 0 && v <= 1) {
+              const ix = p1.x + u * (p2.x - p1.x);
+              const iy = p1.y + u * (p2.y - p1.y);
+              const dist = Math.hypot(pos.x - ix, pos.y - iy);
+              if (dist < minDist) {
+                minDist = dist;
+                bestTarget = { x: Math.round(ix), y: Math.round(iy), type: "intersection", index: [i, j] };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Tangency point snap (Point to Circle tangents)
+    if (sketchVertices.length > 0) {
+      const lastPt = sketchVertices[sketchVertices.length - 1];
+      sketchCircles.forEach((c, idx) => {
+        const d = Math.hypot(lastPt.x - c.cx, lastPt.y - c.cy);
+        if (d > c.r + 1e-3) {
+          const a = Math.atan2(lastPt.y - c.cy, lastPt.x - c.cx);
+          const theta = Math.acos(c.r / d);
+          
+          const t1x = c.cx + c.r * Math.cos(a + theta);
+          const t1y = c.cy + c.r * Math.sin(a + theta);
+          const t2x = c.cx + c.r * Math.cos(a - theta);
+          const t2y = c.cy + c.r * Math.sin(a - theta);
+          
+          const dist1 = Math.hypot(pos.x - t1x, pos.y - t1y);
+          if (dist1 < minDist) {
+            minDist = dist1;
+            bestTarget = { x: Math.round(t1x), y: Math.round(t1y), type: "tangent", index: idx };
+          }
+          
+          const dist2 = Math.hypot(pos.x - t2x, pos.y - t2y);
+          if (dist2 < minDist) {
+            minDist = dist2;
+            bestTarget = { x: Math.round(t2x), y: Math.round(t2y), type: "tangent", index: idx };
+          }
+        }
+      });
+    }
+
+    // 6. Perpendicular projection snap (Last point onto Line segment)
+    if (sketchVertices.length > 0) {
+      const lastPt = sketchVertices[sketchVertices.length - 1];
+      for (let i = 0; i < limit; i++) {
+        const p1 = sketchVertices[i];
+        const p2 = sketchVertices[(i + 1) % n];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq > 0.1) {
+          const u = ((lastPt.x - p1.x) * dx + (lastPt.y - p1.y) * dy) / lenSq;
+          if (u >= 0 && u <= 1) {
+            const qx = p1.x + u * dx;
+            const qy = p1.y + u * dy;
+            const dist = Math.hypot(pos.x - qx, pos.y - qy);
+            if (dist < minDist) {
+              minDist = dist;
+              bestTarget = { x: Math.round(qx), y: Math.round(qy), type: "perpendicular", index: i };
+            }
+          }
+        }
+      }
+    }
     
     return bestTarget;
   }
@@ -1397,6 +1666,26 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
     } 
+    else if (selectedEntity.type === "dimension") {
+      const dim = customDimensions[idx];
+      if (!dim) return;
+      const v1 = sketchVertices[dim.v1];
+      const v2 = sketchVertices[dim.v2];
+      const len = v1 && v2 ? Math.hypot(v2.x - v1.x, v2.y - v1.y) : 0;
+      const dVal = dim.d !== undefined ? dim.d : len;
+      container.innerHTML = `
+        <div class="inspector-fields">
+          <div class="inspector-title">Distance Dimension</div>
+          <div class="inspector-row">
+            <label>Dimension (mm)</label>
+            <input type="number" value="${Math.round(dVal)}" onchange="updateSelectedEntityParam('dimensionValue', this.value)">
+          </div>
+          <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
+            Delete Dimension
+          </button>
+        </div>
+      `;
+    }
     else if (selectedEntity.type === "vertex") {
       const v = sketchVertices[idx];
       if (!v) return;
@@ -1413,6 +1702,38 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
             Delete Node
+          </button>
+        </div>
+      `;
+    }
+    else if (selectedEntity.type === "insertion") {
+      const ins = sketchInsertions[idx];
+      if (!ins) return;
+      container.innerHTML = `
+        <div class="inspector-fields">
+          <div class="inspector-title">Block Reference: ${ins.blockName}</div>
+          <div class="inspector-row">
+            <label>Position X</label>
+            <input type="number" value="${ins.x}" onchange="updateSelectedEntityParam('insX', this.value)">
+          </div>
+          <div class="inspector-row">
+            <label>Position Y</label>
+            <input type="number" value="${ins.y}" onchange="updateSelectedEntityParam('insY', this.value)">
+          </div>
+          <div class="inspector-row">
+            <label>Rotation (°)</label>
+            <input type="number" value="${ins.rotation}" onchange="updateSelectedEntityParam('insRotation', this.value)">
+          </div>
+          <div class="inspector-row">
+            <label>Scale X</label>
+            <input type="number" value="${ins.scaleX}" step="0.1" onchange="updateSelectedEntityParam('insScaleX', this.value)">
+          </div>
+          <div class="inspector-row">
+            <label>Scale Y</label>
+            <input type="number" value="${ins.scaleY}" step="0.1" onchange="updateSelectedEntityParam('insScaleY', this.value)">
+          </div>
+          <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
+            Delete Block Reference
           </button>
         </div>
       `;
@@ -1439,11 +1760,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (param === "holeTolerance") {
         c.holeTolerance = val;
       }
+      runConstraintSolver();
     } 
     else if (selectedEntity.type === "vertex") {
       const v = sketchVertices[idx];
       if (param === "x") v.x = Math.round(parseFloat(val));
       if (param === "y") v.y = Math.round(parseFloat(val));
+      runConstraintSolver(idx);
     } 
     else if (selectedEntity.type === "line") {
       if (param === "lineLength") {
@@ -1457,7 +1780,36 @@ document.addEventListener("DOMContentLoaded", () => {
           const ratio = newLen / len;
           p2.x = Math.round(p1.x + dx * ratio);
           p2.y = Math.round(p1.y + dy * ratio);
+          
+          // Promote line segment length to a parametric constraint/custom dimension
+          const nextIdx = (idx + 1) % sketchVertices.length;
+          let dim = customDimensions.find(d => (d.v1 === idx && d.v2 === nextIdx) || (d.v1 === nextIdx && d.v2 === idx));
+          if (dim) {
+            dim.d = newLen;
+          } else {
+            customDimensions.push({ v1: idx, v2: nextIdx, d: newLen });
+          }
+          runConstraintSolver(idx);
         }
+      }
+    }
+    else if (selectedEntity.type === "dimension") {
+      if (param === "dimensionValue") {
+        const dim = customDimensions[idx];
+        if (dim) {
+          dim.d = parseFloat(val);
+          runConstraintSolver(dim.v1);
+        }
+      }
+    }
+    else if (selectedEntity.type === "insertion") {
+      const ins = sketchInsertions[idx];
+      if (ins) {
+        if (param === "insX") ins.x = Math.round(parseFloat(val));
+        if (param === "insY") ins.y = Math.round(parseFloat(val));
+        if (param === "insRotation") ins.rotation = parseFloat(val);
+        if (param === "insScaleX") ins.scaleX = parseFloat(val);
+        if (param === "insScaleY") ins.scaleY = parseFloat(val);
       }
     }
     
@@ -1471,6 +1823,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const idx = selectedEntity.index;
     if (selectedEntity.type === "circle") {
       sketchCircles.splice(idx, 1);
+    } else if (selectedEntity.type === "dimension") {
+      customDimensions.splice(idx, 1);
+    } else if (selectedEntity.type === "insertion") {
+      sketchInsertions.splice(idx, 1);
     } else {
       // Vertex or Line deletes vertex
       sketchVertices.splice(idx, 1);
@@ -1513,25 +1869,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (editorMode === "insert_block" && activeBlockToInsert) {
         const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
         
-        if (activeBlockToInsert === "M4_SCREW") {
-          sketchCircles.push({ cx: snapPt.x, cy: snapPt.y, r: 2, construction: false });
-        } 
-        else if (activeBlockToInsert === "M5_SCREW") {
-          sketchCircles.push({ cx: snapPt.x, cy: snapPt.y, r: 2.5, construction: false });
-        } 
-        else if (activeBlockToInsert === "M6_SCREW") {
-          sketchCircles.push({ cx: snapPt.x, cy: snapPt.y, r: 3, construction: false });
-        }
-        else if (activeBlockToInsert === "TSLOT_2020") {
-          const half = 10;
-          sketchVertices = [
-            { x: snapPt.x - half, y: snapPt.y - half },
-            { x: snapPt.x + half, y: snapPt.y - half },
-            { x: snapPt.x + half, y: snapPt.y + half },
-            { x: snapPt.x - half, y: snapPt.y + half }
-          ];
-          isSketchClosed = true;
-        }
+        sketchInsertions.push({
+          blockName: activeBlockToInsert,
+          x: snapPt.x,
+          y: snapPt.y,
+          scaleX: 1,
+          scaleY: 1,
+          rotation: 0
+        });
         
         activeBlockToInsert = null;
         setEditorMode("draw");
@@ -1544,9 +1889,23 @@ document.addEventListener("DOMContentLoaded", () => {
       const targetCircleIndex = e.target.getAttribute("data-circle-index");
       const targetLineIndex = e.target.getAttribute("data-line-index");
       const targetVertexIndex = e.target.getAttribute("data-index");
+      const targetDimIndex = e.target.getAttribute("data-dim-index");
+      const targetInsertionIndex = e.target.getAttribute("data-insertion-index") || e.target.closest("g")?.getAttribute("data-insertion-index");
 
       // ── SMART DIMENSION / SELECT MODE ──
       if (editorMode === "dimension") {
+        if (targetInsertionIndex !== null && targetInsertionIndex !== undefined) {
+          selectedEntity = { type: "insertion", index: parseInt(targetInsertionIndex) };
+          showEntityInspector();
+          drawSketchCanvas();
+          return;
+        }
+        if (targetDimIndex !== null) {
+          selectedEntity = { type: "dimension", index: parseInt(targetDimIndex) };
+          showEntityInspector();
+          drawSketchCanvas();
+          return;
+        }
         if (targetVertexIndex !== null) {
           const clickedIdx = parseInt(targetVertexIndex);
           if (selectedVertexA === -1) {
@@ -1560,7 +1919,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 (d.v1 === selectedVertexB && d.v2 === selectedVertexA)
               );
               if (!exists) {
-                customDimensions.push({ v1: selectedVertexA, v2: selectedVertexB });
+                const p1 = sketchVertices[selectedVertexA];
+                const p2 = sketchVertices[selectedVertexB];
+                const len = p1 && p2 ? Math.hypot(p2.x - p1.x, p2.y - p1.y) : 0;
+                customDimensions.push({ v1: selectedVertexA, v2: selectedVertexB, d: Math.round(len) });
               }
             }
             selectedVertexA = -1;
@@ -1707,6 +2069,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (selectedVertexIndex !== -1) {
           if (layers["PROFILE_OUTLINE"].frozen) return;
           sketchVertices[selectedVertexIndex] = finalSnapped;
+          runConstraintSolver(selectedVertexIndex);
           drawSketchCanvas();
           updateLiveProperties();
         } else {
@@ -2169,6 +2532,158 @@ document.addEventListener("DOMContentLoaded", () => {
       instr.textContent = `Click on viewport to insert ${blockType} at coordinate.`;
     }
   };
+
+  let parametricConstraints = [];
+
+  window.getSelectedEntity = () => selectedEntity;
+  window.setSelectedEntity = (val) => {
+    selectedEntity = val;
+    showEntityInspector();
+    drawSketchCanvas();
+  };
+  window.getVerticesCount = () => sketchVertices.length;
+  window.getCirclesCount = () => sketchCircles.length;
+  window.getParametricConstraints = () => parametricConstraints;
+  window.addParametricConstraint = (c) => {
+    parametricConstraints.push(c);
+    runConstraintSolver();
+    drawSketchCanvas();
+  };
+
+  function buildVariablesAndConstraints(lockedIdx = -1) {
+    let vars = [];
+    // Vertices variables
+    for (let i = 0; i < sketchVertices.length; i++) {
+      const v = sketchVertices[i];
+      const isLocked = (i === lockedIdx);
+      vars.push(new Variable(`v_${i}_x`, v.x, !isLocked));
+      vars.push(new Variable(`v_${i}_y`, v.y, !isLocked));
+    }
+    
+    // Circle variables
+    const circleBase = 2 * sketchVertices.length;
+    for (let j = 0; j < sketchCircles.length; j++) {
+      const c = sketchCircles[j];
+      vars.push(new Variable(`c_${j}_cx`, c.cx, true));
+      vars.push(new Variable(`c_${j}_cy`, c.cy, true));
+      vars.push(new Variable(`c_${j}_r`, c.r, true));
+    }
+
+    let solverConstraints = [];
+    
+    // Custom dimensions: treat as distance constraints
+    customDimensions.forEach(dim => {
+      const p1 = sketchVertices[dim.v1];
+      const p2 = sketchVertices[dim.v2];
+      if (p1 && p2) {
+        const dVal = dim.d !== undefined ? dim.d : Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        solverConstraints.push(new Constraint("distance", [2 * dim.v1, 2 * dim.v1 + 1, 2 * dim.v2, 2 * dim.v2 + 1], { d: dVal }));
+      }
+    });
+
+    // Parametric constraints
+    parametricConstraints.forEach(pc => {
+      switch (pc.type) {
+        case "horizontal": {
+          if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length) {
+            solverConstraints.push(new Constraint("horizontal", [2 * pc.targets[0] + 1, 2 * pc.targets[1] + 1]));
+          }
+          break;
+        }
+        case "vertical": {
+          if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length) {
+            solverConstraints.push(new Constraint("vertical", [2 * pc.targets[0], 2 * pc.targets[1]]));
+          }
+          break;
+        }
+        case "distance": {
+          if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length) {
+            solverConstraints.push(new Constraint("distance", [2 * pc.targets[0], 2 * pc.targets[0] + 1, 2 * pc.targets[1], 2 * pc.targets[1] + 1], { d: pc.d }));
+          }
+          break;
+        }
+        case "perpendicular": {
+          if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length &&
+              pc.targets[2] < sketchVertices.length && pc.targets[3] < sketchVertices.length) {
+            solverConstraints.push(new Constraint("perpendicular", [
+              2 * pc.targets[0], 2 * pc.targets[0] + 1,
+              2 * pc.targets[1], 2 * pc.targets[1] + 1,
+              2 * pc.targets[2], 2 * pc.targets[2] + 1,
+              2 * pc.targets[3], 2 * pc.targets[3] + 1
+            ]));
+          }
+          break;
+        }
+        case "parallel": {
+          if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length &&
+              pc.targets[2] < sketchVertices.length && pc.targets[3] < sketchVertices.length) {
+            solverConstraints.push(new Constraint("parallel", [
+              2 * pc.targets[0], 2 * pc.targets[0] + 1,
+              2 * pc.targets[1], 2 * pc.targets[1] + 1,
+              2 * pc.targets[2], 2 * pc.targets[2] + 1,
+              2 * pc.targets[3], 2 * pc.targets[3] + 1
+            ]));
+          }
+          break;
+        }
+        case "coincident": {
+          if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length) {
+            solverConstraints.push(new Constraint("coincident", [
+              2 * pc.targets[0], 2 * pc.targets[0] + 1,
+              2 * pc.targets[1], 2 * pc.targets[1] + 1
+            ]));
+          }
+          break;
+        }
+        case "concentric": {
+          if (pc.targets[0] < sketchCircles.length && pc.targets[1] < sketchCircles.length) {
+            solverConstraints.push(new Constraint("concentric", [
+              circleBase + 3 * pc.targets[0], circleBase + 3 * pc.targets[0] + 1,
+              circleBase + 3 * pc.targets[1], circleBase + 3 * pc.targets[1] + 1
+            ]));
+          }
+          break;
+        }
+        case "tangent": {
+          if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length &&
+              pc.targets[2] < sketchCircles.length) {
+            solverConstraints.push(new Constraint("tangent", [
+              2 * pc.targets[0], 2 * pc.targets[0] + 1,
+              2 * pc.targets[1], 2 * pc.targets[1] + 1,
+              circleBase + 3 * pc.targets[2], circleBase + 3 * pc.targets[2] + 1, circleBase + 3 * pc.targets[2] + 2
+            ]));
+          }
+          break;
+        }
+      }
+    });
+
+    return { vars, solverConstraints };
+  }
+
+  function applySolvedVariables(vars) {
+    for (let i = 0; i < sketchVertices.length; i++) {
+      sketchVertices[i].x = Math.round(vars[2 * i].value);
+      sketchVertices[i].y = Math.round(vars[2 * i + 1].value);
+    }
+    const circleBase = 2 * sketchVertices.length;
+    for (let j = 0; j < sketchCircles.length; j++) {
+      sketchCircles[j].cx = Math.round(vars[circleBase + 3 * j].value);
+      sketchCircles[j].cy = Math.round(vars[circleBase + 3 * j + 1].value);
+      sketchCircles[j].r = Math.round(vars[circleBase + 3 * j + 2].value);
+    }
+  }
+
+  function runConstraintSolver(lockedVertexIdx = -1) {
+    if (sketchVertices.length === 0 && sketchCircles.length === 0) return;
+    const { vars, solverConstraints } = buildVariablesAndConstraints(lockedVertexIdx);
+    if (solverConstraints.length === 0) return;
+
+    const success = solveConstraints(vars, solverConstraints, 100, 1e-4);
+    if (success) {
+      applySolvedVariables(vars);
+    }
+  }
 
   showEntityInspector();
   renderLayerManager();

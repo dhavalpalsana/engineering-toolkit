@@ -57,10 +57,10 @@
         <button onclick="exportJSON()" class="hdr-btn" title="Export drawing to JSON file">
           <i data-lucide="download"></i> Export JSON
         </button>
-        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import drawing from JSON file">
-          <i data-lucide="upload"></i> Import JSON
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import drawing from JSON or DXF file">
+          <i data-lucide="upload"></i> Import Drawing
         </button>
-        <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" />
+        <input id="import-file-input" type="file" accept=".json,.dxf" class="hidden" onchange="importJSON(event)" />
         
         <!-- Standard divider -->
         <div class="hdr-divider"></div>
@@ -277,6 +277,7 @@
   <script src="js/dxf.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/cli.js"></script>
+  <script src="js/solver.js"></script>
   <script src="app.js?v=2.1.4"></script>
 
   <script>

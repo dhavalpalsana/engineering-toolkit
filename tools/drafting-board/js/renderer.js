@@ -126,7 +126,7 @@ class ExplicitCadRenderer {
   }
 
   // GPU batched draw-call vector line pipeline with layers visibility filtering
-  updateDrawing(vertices, circles, isClosed, sheetWidth, sheetHeight, layersState) {
+  updateDrawing(vertices, circles, isClosed, sheetWidth, sheetHeight, layersState, insertions = [], blockDefinitions = {}) {
     this.clearGeometries();
 
     const linePoints = [];
@@ -203,6 +203,55 @@ class ExplicitCadRenderer {
           );
         }
       }
+    });
+
+    // Helper to transform block coordinates
+    const transformPoint = (px, py, ins) => {
+      const rad = ((ins.rotation || 0) * Math.PI) / 180;
+      let sx = px * (ins.scaleX !== undefined ? ins.scaleX : 1);
+      let sy = py * (ins.scaleY !== undefined ? ins.scaleY : 1);
+      let rx = sx * Math.cos(rad) - sy * Math.sin(rad);
+      let ry = sx * Math.sin(rad) + sy * Math.cos(rad);
+      return {
+        x: rx + ins.x,
+        y: ry + ins.y
+      };
+    };
+
+    // Draw Block Insertions
+    insertions.forEach(ins => {
+      const block = blockDefinitions[ins.blockName];
+      if (!block) return;
+      
+      block.entities.forEach(ent => {
+        const drawLayer = ent.layer || "PROFILE_OUTLINE";
+        if (ls[drawLayer] && ls[drawLayer].visible) {
+          const color = ls[drawLayer].color || "#ffffff";
+          
+          if (ent.type === "LINE") {
+            const p1 = transformPoint(ent.x1, ent.y1, ins);
+            const p2 = transformPoint(ent.x2, ent.y2, ins);
+            addLineSegment(p1.x, p1.y, p2.x, p2.y, color);
+          }
+          else if (ent.type === "CIRCLE") {
+            const center = transformPoint(ent.cx, ent.cy, ins);
+            const rScaled = ent.r * Math.abs(ins.scaleX !== undefined ? ins.scaleX : 1);
+            const segments = 64;
+            const angleStep = (Math.PI * 2) / segments;
+            for (let i = 0; i < segments; i++) {
+              const theta1 = i * angleStep;
+              const theta2 = (i + 1) * angleStep;
+              addLineSegment(
+                center.x + rScaled * Math.cos(theta1),
+                center.y + rScaled * Math.sin(theta1),
+                center.x + rScaled * Math.cos(theta2),
+                center.y + rScaled * Math.sin(theta2),
+                color
+              );
+            }
+          }
+        }
+      });
     });
 
     // Create and attach single LineSegments geometry

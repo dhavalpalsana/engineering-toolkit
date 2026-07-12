@@ -98,6 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const resTheta = document.getElementById("res-theta");
   const resMass = document.getElementById("res-mass");
   const resMassEff = document.getElementById("res-mass-eff");
+  const resTAirRise = document.getElementById("res-t-air-rise");
   const fanCurveChart = document.getElementById("fan-curve-chart");
 
   const tabButtons = document.querySelectorAll(".tab-btn");
@@ -1444,6 +1445,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const gridQ = new Float32Array(size_total);
       const gridType = new Uint8Array(size_total); // 0: air, 1: heatsink, 2: source, 3: tim, 4: duct
       const gridDensity = new Float32Array(size_total);
+      const gridIsGraphite = new Uint8Array(size_total);
+      const T_air = new Float32Array(Vz).fill(ambient);
       
       cadParts.forEach(part => {
         if (part.role === "ignore") return;
@@ -1492,12 +1495,21 @@ document.addEventListener("DOMContentLoaded", () => {
               const part = cadParts[pIdx];
               if (part.role === "ignore") continue;
               if (part._worldBBox.intersectsBox(voxelBox)) {
-                gridK[idx] = part._k;
-                gridDensity[idx] = part._density;
-                if (part.role === "heatsink") gridType[idx] = 1;
-                else if (part.role === "source") gridType[idx] = 2;
-                else if (part.role === "tim") gridType[idx] = 3;
-                else if (part.role === "duct") gridType[idx] = 4;
+                if (part.role === "tim") {
+                  // Treat TIM voxels as heatsink base (type 1) with heatsink conductivity to avoid bulk resistance exaggeration
+                  const hsPart = cadParts.find(p => p.role === "heatsink");
+                  gridK[idx] = hsPart ? hsPart._k : part._k;
+                  gridDensity[idx] = hsPart ? hsPart._density : part._density;
+                  gridType[idx] = 1;
+                  gridIsGraphite[idx] = (hsPart && hsPart.material === "graphite") ? 1 : 0;
+                } else {
+                  gridK[idx] = part._k;
+                  gridDensity[idx] = part._density;
+                  if (part.role === "heatsink") gridType[idx] = 1;
+                  else if (part.role === "source") gridType[idx] = 2;
+                  else if (part.role === "duct") gridType[idx] = 4;
+                  gridIsGraphite[idx] = (part.material === "graphite") ? 1 : 0;
+                }
                 break;
               }
             }
@@ -1662,6 +1674,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const specPerf = (theta > 0 && massGrams > 0) ? (1000 / (theta * massGrams)) : 0; // mW / (K * g)
         resMassEff.textContent = `${specPerf.toFixed(1)} mW/(K·g)`;
         
+        if (environment.mode === "forced" && typeof T_air !== "undefined") {
+          const inletT = T_air[0];
+          const outletT = T_air[Vz - 1];
+          const rise = outletT - inletT;
+          resTAirRise.textContent = `${rise.toFixed(1)} °C (Out: ${outletT.toFixed(1)}°C)`;
+        } else {
+          resTAirRise.textContent = "N/A";
+        }
+        
         if (maxT > 105) {
           statusBadge.className = "badge critical-badge";
           statusBadge.textContent = "Critical";
@@ -1756,10 +1777,138 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
+        // ── 1. Update Air Properties & Spatially Varying Air Temp (1D Fluid Network) ──
+        T_air.fill(ambient);
+        
+        let sumT = 0, countT = 0;
+        for (let idx = 0; idx < size_total; idx++) {
+          if (gridType[idx] === 1 || gridType[idx] === 2) {
+            sumT += grid[idx];
+            countT++;
+          }
+        }
+        const T_wall_avg = countT > 0 ? sumT / countT : ambient;
+        const T_film = (T_wall_avg + ambient) / 2;
+
+        const rhoAir = 353.0 / (T_film + 273.15);
+        const nuAir = (1.32 + 0.009 * T_film) * 1e-5;
+        const kAir = 0.0242 + 7.4e-5 * T_film;
+
+        const W = cadMode ? size.x * 2 : heatsink.width;
+        const L = cadMode ? size.z * 2 : heatsink.length;
+        const Hf = cadMode ? size.y * 2 : heatsink.finHeight;
+        const tf = heatsink.finThickness;
+        const N = heatsink.finCount;
+        const s = (W - N * tf) / (N - 1 || 1);
+        const Dh = (2 * s * Hf) / (s + Hf || 1);
+
+        if (environment.mode === "forced") {
+          const pMax = 45;
+          const qMaxCFM = environment.fanAirflow;
+          let operatingFlowCFM = qMaxCFM;
+          let flowVelocity = 1.0;
+          for (let flow = 0.5; flow <= qMaxCFM; flow += 0.5) {
+            const qM3S = flow * 0.000471947;
+            const areaChannel = (W * Hf) / 1e6;
+            const areaBypass = ((environment.bypassSide * 2 * (Hf + heatsink.thickness)) + (environment.bypassTop * W)) / 1e6;
+            const bypassFactor = areaBypass > 0 ? 1 / (1 + 1.6 * (areaBypass / areaChannel)) : 1.0;
+            const vChannel = (qM3S / areaChannel) * bypassFactor;
+            const Re = (vChannel * (Dh / 1000)) / nuAir;
+            const f = Re > 2000 ? 0.316 * Math.pow(Re, -0.25) : 64 / (Re || 1);
+            const pressureDrop = f * (L / Dh) * (rhoAir * vChannel * vChannel) / 2;
+            const fanPressure = pMax * (1 - Math.pow(flow / qMaxCFM, 2));
+            if (pressureDrop >= fanPressure) {
+              operatingFlowCFM = flow;
+              flowVelocity = vChannel;
+              break;
+            }
+          }
+          const reChannel = (flowVelocity * (Dh / 1000)) / nuAir;
+          const pr = 0.7;
+          let Nu = reChannel > 2300 ? 0.023 * Math.pow(reChannel, 0.8) * Math.pow(pr, 0.4) : 3.66 + (0.0668 * (Dh / L) * reChannel * pr) / (1 + 0.04 * Math.pow((Dh / L) * reChannel * pr, 2/3));
+          hVal = (Nu * kAir) / (Dh / 1000);
+
+          const qM3S = operatingFlowCFM * 0.000471947;
+          const areaBypass = ((environment.bypassSide * 2 * (Hf + heatsink.thickness)) + (environment.bypassTop * W)) / 1e6;
+          const areaChannel = (W * Hf) / 1e6;
+          const bypassFactor = areaBypass > 0 ? 1 / (1 + 1.6 * (areaBypass / areaChannel)) : 1.0;
+          const mDot_channels = rhoAir * qM3S * bypassFactor;
+          const Cp = 1005; // J/kg-K
+          const C_dot = Math.max(1e-3, mDot_channels * Cp);
+
+          for (let k = 0; k < Vz - 1; k++) {
+            let q_slice = 0;
+            for (let i = 0; i < Vx; i++) {
+              const iStride = i * strideY;
+              for (let j = 0; j < Vy; j++) {
+                const jStride = j * strideZ;
+                const idx = iStride + jStride + k;
+                const type = gridType[idx];
+                if (type !== 1 && type !== 2) continue;
+
+                const neighbors = [
+                  { ni: i - 1, nj: j, nk: k, area: dy * dz, nidx: idx - strideY },
+                  { ni: i + 1, nj: j, nk: k, area: dy * dz, nidx: idx + strideY },
+                  { ni: i, nj: j - 1, nk: k, area: dx * dz, nidx: idx - strideZ },
+                  { ni: i, nj: j + 1, nk: k, area: dx * dz, nidx: idx + strideZ }
+                ];
+
+                neighbors.forEach(n => {
+                  let isAirNeigh = true;
+                  if (n.ni >= 0 && n.ni < Vx && n.nj >= 0 && n.nj < Vy) {
+                    const typeNeigh = gridType[n.nidx];
+                    if (typeNeigh === 1 || typeNeigh === 2) {
+                      isAirNeigh = false;
+                    }
+                  } else if (n.nj < 0) {
+                    isAirNeigh = false; // bottom PCB is adiabatic
+                  }
+                  if (isAirNeigh) {
+                    q_slice += hVal * n.area * Math.max(0, grid[idx] - T_air[k]);
+                  }
+                });
+              }
+            }
+            T_air[k + 1] = T_air[k] + q_slice / C_dot;
+          }
+        } else {
+          // Natural convection
+          const dT_est = Math.max(1.0, T_wall_avg - ambient);
+          let C_orientation = 1.42;
+          let L_char = (cadMode ? size.y * 2 : heatsink.finHeight) / 1000;
+          if (environment.orientation === "upward") {
+            C_orientation = 1.32;
+            const AreaM2 = (W * L) / 1e6;
+            const PerimM = (2 * (W + L)) / 1000;
+            L_char = Math.max(0.01, AreaM2 / PerimM);
+          } else if (environment.orientation === "downward") {
+            C_orientation = 0.59;
+            const AreaM2 = (W * L) / 1e6;
+            const PerimM = (2 * (W + L)) / 1000;
+            L_char = Math.max(0.01, AreaM2 / PerimM);
+          }
+          const h_conv = C_orientation * Math.pow(dT_est / L_char, 0.25);
+          const sigma = 5.67e-8;
+          const T_avg_k = T_wall_avg + 273.15;
+          const h_rad = environment.emissivity * sigma * 4 * Math.pow(T_avg_k, 3);
+          hVal = h_conv + h_rad;
+        }
+
         const iterationsPerFrame = Math.max(1, Math.min(100, Math.round(80000 / size_total)));
         let maxDiff = 0;
         const omega = 1.9 - 1.5 / Vx; // Optimal SOR acceleration parameter based on grid size
         
+        // Helper to query directional thermal conductivity for Graphite Anisotropy
+        const getNodeK = (nodeIdx, dir) => {
+          const type = gridType[nodeIdx];
+          const kVal = gridK[nodeIdx];
+          if (gridIsGraphite[nodeIdx] === 1) {
+            if (dir === "y") return 10.0; // through-plane PGS conductivity
+            return 800.0; // in-plane PGS conductivity
+          }
+          return kVal; // isotropic
+        };
+
         for (let step = 0; step < iterationsPerFrame && iter < maxIter; step++, iter++) {
           maxDiff = 0;
           
@@ -1772,7 +1921,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const type = gridType[idx];
                 
                 if (type === 0 || type === 4) { // air or duct
-                  grid[idx] = ambient;
+                  grid[idx] = T_air[k];
                   continue;
                 }
                 
@@ -1780,12 +1929,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 let tSum = 0;
                 
                 const neighbors = [
-                  { ni: i - 1, nj: j, nk: k, area: dy * dz, dist: dx, nidx: idx - strideY },
-                  { ni: i + 1, nj: j, nk: k, area: dy * dz, dist: dx, nidx: idx + strideY },
-                  { ni: i, nj: j - 1, nk: k, area: dx * dz, dist: dy, nidx: idx - strideZ },
-                  { ni: i, nj: j + 1, nk: k, area: dx * dz, dist: dy, nidx: idx + strideZ },
-                  { ni: i, nj: j, nk: k - 1, area: dx * dy, dist: dz, nidx: idx - 1 },
-                  { ni: i, nj: j, nk: k + 1, area: dx * dy, dist: dz, nidx: idx + 1 }
+                  { ni: i - 1, nj: j, nk: k, area: dy * dz, dist: dx, nidx: idx - strideY, dir: "x" },
+                  { ni: i + 1, nj: j, nk: k, area: dy * dz, dist: dx, nidx: idx + strideY, dir: "x" },
+                  { ni: i, nj: j - 1, nk: k, area: dx * dz, dist: dy, nidx: idx - strideZ, dir: "y" },
+                  { ni: i, nj: j + 1, nk: k, area: dx * dz, dist: dy, nidx: idx + strideZ, dir: "y" },
+                  { ni: i, nj: j, nk: k - 1, area: dx * dy, dist: dz, nidx: idx - 1, dir: "z" },
+                  { ni: i, nj: j, nk: k + 1, area: dx * dy, dist: dz, nidx: idx + 1, dir: "z" }
                 ];
                 
                 neighbors.forEach(n => {
@@ -1801,8 +1950,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     const typeNode = gridType[idx];
                     const typeNeigh = gridType[n.nidx];
                     
-                    const kNode = gridK[idx];
-                    const kNeigh = gridK[n.nidx];
+                    const kNode = getNodeK(idx, n.dir);
+                    const kNeigh = getNodeK(n.nidx, n.dir);
                     const kAvg = 2 * kNode * kNeigh / (kNode + kNeigh || 1);
                     
                     let R_total = n.dist / (kAvg * n.area || 1);
@@ -1816,9 +1965,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     condSum += cond;
                     tSum += cond * grid[n.nidx];
                   } else {
+                    // Bottom boundary (nj < 0) is adiabatic (PCB substrate)
+                    if (n.nj < 0) {
+                      return; // equivalent to continue in forEach
+                    }
                     const condAir = hVal * n.area;
                     condSum += condAir;
-                    tSum += condAir * ambient;
+                    tSum += condAir * T_air[k];
                   }
                 });
                 

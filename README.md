@@ -22,11 +22,11 @@ The toolkit runs entirely client-side as a static site with optional user authen
 
 | Tool | Domain | Key Features |
 | :--- | :--- | :--- |
-| [**2D Engineering Drafting Board**](tools/drafting-board/) | Mechanical / Civil | Draw vector parts, blueprints, layouts with snap nodes, add custom dimensions, and save to cloud user accounts to import directly into solvers. |
+| [**2D Engineering Drafting Board**](tools/drafting-board/) | Mechanical / Civil | Draw parametric vector parts with snaps (endpoints, intersections, tangents, perpendiculars), Levenberg-Marquardt geometric constraint solver, and ASCII DXF import/export pipeline. |
 | [**Structural Beam Solver**](tools/beam-calculator/) | Mechanical / Civil | 1D Finite Element Analysis (FEA) solver, custom materials & shapes (I-Beam, Box, pipe), support presets, and live interactive SFD/BMD/Deflection diagrams. |
 | [**Ishikawa Fishbone Diagram**](tools/fishbone-diagram/) | Quality & Systems | Pre-built templates (6M, 8P, 4S), auto-scaling dynamic SVG, PNG/SVG exports, and Cloud Project Manager sync. |
 | [**Dynamic Cable Thermal Solver**](tools/wire-gauge/) | Electrical / Thermo | Real-time proportional SVG heat maps, multi-segment series derating, NEC/IEC limit checks, and gauge optimization. |
-| [**Parametric Heatsink Simulator**](tools/heatsink-simulator/) | Thermal / CAD | 3D voxel heat diffusion CFD solver, custom materials (Magnesium/Graphite/Al/Copper), mass telemetry, and sharing links. |
+| [**Parametric Heatsink Simulator**](tools/heatsink-simulator/) | Thermal / CAD | 3D voxel heat diffusion solver, custom materials (Aluminum/Copper/Magnesium/Anisotropic Graphite), 1D airflow advection network, micro-scale TIM interface resistance, and sharing links. |
 | [**Engineering Unit Converter**](tools/unit-converter/) | General Utility | Bidirectional conversions across 23 categories (Mechanics, Thermo, Fluids, Electrical) with instant fuzzy search. |
 | [**Busbar Capacity Calculator**](tools/busbar-sizing/) | Power Systems | DC skin effect, EM forces, deflection, short-circuit ratings, and voltage drops with live SVG busbar previews. |
 | [**CAN Bus Harness Designer**](tools/can-bus-designer/) | Aerospace / Auto | Interactive drag-and-drop topology canvas, ISO 11898 compliance checker, propagation delays, and signal reflection model. |
