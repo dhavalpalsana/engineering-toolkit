@@ -25,7 +25,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let tim = {
     thickness: 100, // micrometers (0.1mm)
-    k: 5.0          // W/mK
+    k: 5.0,          // W/mK
+    preset: "custom"
   };
 
   let environment = {
@@ -68,6 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const chipsListContainer = document.getElementById("sources-list-container");
   const timThicknessInput = document.getElementById("tim-thickness");
   const timKInput = document.getElementById("tim-k");
+  const timPresetSelect = document.getElementById("tim-preset");
 
   const convectionMode = document.getElementById("convection-mode");
   const ambientTempInput = document.getElementById("ambient-temp");
@@ -176,6 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
     environment.emissivity = parseFloat(surfaceEmissivityInput.value) || 0.85;
     tim.thickness = parseFloat(timThicknessInput.value) || 100;
     tim.k = parseFloat(timKInput.value) || 5.0;
+    tim.preset = timPresetSelect ? timPresetSelect.value : "custom";
 
     // Update 3D model meshes
     update3DModel(environment.ambientTemp, environment.ambientTemp);
@@ -901,6 +904,39 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  const timPresets = {
+    "paste-high": { k: 5.0, thickness: 50 },
+    "paste-std": { k: 2.0, thickness: 100 },
+    "pad-thin": { k: 1.5, thickness: 500 },
+    "pad-thick": { k: 3.0, thickness: 1000 },
+    "pcm": { k: 4.0, thickness: 40 },
+    "liquid-metal": { k: 70.0, thickness: 10 }
+  };
+
+  if (timPresetSelect) {
+    timPresetSelect.addEventListener("change", () => {
+      const val = timPresetSelect.value;
+      if (val !== "custom" && timPresets[val]) {
+        timThicknessInput.value = timPresets[val].thickness;
+        timKInput.value = timPresets[val].k;
+        tim.thickness = timPresets[val].thickness;
+        tim.k = timPresets[val].k;
+        tim.preset = val;
+        updateCADGeometry();
+        document.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+  }
+
+  if (timThicknessInput && timKInput && timPresetSelect) {
+    [timThicknessInput, timKInput].forEach(input => {
+      input.addEventListener("input", () => {
+        timPresetSelect.value = "custom";
+        tim.preset = "custom";
+      });
+    });
+  }
+
   const runSimBtn = document.getElementById("run-sim-btn");
   if (runSimBtn) {
     runSimBtn.addEventListener("click", () => {
@@ -1059,6 +1095,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         timThicknessInput.value = tim.thickness;
         timKInput.value = tim.k;
+        if (timPresetSelect) {
+          timPresetSelect.value = tim.preset || "custom";
+        }
 
         convectionMode.value = environment.mode;
         if (environment.mode === "natural") {
