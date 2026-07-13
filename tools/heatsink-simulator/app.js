@@ -1636,7 +1636,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
       
+      let operatingFlowCFM = 0;
+      let operatingPressPa = 0;
       let hVal = 8.0;
+      
       if (environment.mode === "forced") {
         const W = cadMode ? size.x * 2 : heatsink.width;
         const L = cadMode ? size.z * 2 : heatsink.length;
@@ -1647,7 +1650,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const Dh = (2 * s * Hf) / (s + Hf || 1);
         const pMax = 45;
         const qMaxCFM = environment.fanAirflow;
-        let operatingFlowCFM = qMaxCFM;
+        operatingFlowCFM = qMaxCFM;
         let flowVelocity = 1.0;
         for (let flow = 0.5; flow <= qMaxCFM; flow += 0.5) {
           const qM3S = flow * 0.000471947;
@@ -1664,6 +1667,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (pressureDrop >= fanPressure) {
             operatingFlowCFM = flow;
             flowVelocity = vChannel;
+            operatingPressPa = pressureDrop;
             break;
           }
         }
@@ -1866,6 +1870,9 @@ document.addEventListener("DOMContentLoaded", () => {
             sourcesTempList.appendChild(row);
           });
         }
+        
+        // Draw the fan curve matching chart
+        drawFanCurve(operatingFlowCFM, operatingPressPa);
       };
 
       const finalizeSimulation = () => {
