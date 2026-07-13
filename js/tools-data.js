@@ -131,7 +131,7 @@ const TOOLS_DATA = [
     tags: ["mechanical", "thermal", "heatsink", "simulation", "heat-transfer", "cfd"],
     icon: "thermometer",
     path: "./tools/heatsink-simulator/index.html",
-    status: "beta",
+    status: "active",
     releaseDate: "2026-07-09T03:00:00Z"
   },
   {
