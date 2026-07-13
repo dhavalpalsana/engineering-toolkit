@@ -34,6 +34,7 @@ The toolkit runs entirely client-side as a static site with optional user authen
 | [**Barcode & QR Code Scanner**](tools/code-scanner/) | General Utility | Client-side webcam/image decoding scanner, history logger, CSV exports, sharing links, and Project Manager sync. |
 | [**Interactive Time Planner**](tools/timezone-converter/) | General Utility | Multi-timezone alignment layout with visual daylight/night/work segments, horizontal continuous gradients, and JDN/Julian conversions. |
 | [**MCC Feeder & Starter Designer**](tools/mcc-feeder-designer/) | Electrical / Control | Design Motor Control Center Single Line Diagrams. Drag & drop DOL starters, VFDs, soft starters, and cables with real-time sizing calculations. |
+| [**MOSFET Power Loss Calculator**](tools/mosfet-power-loss/) | Electrical / Thermo | Physics-based semiconductor power loss modeler. Calculate and compare conduction, switching, gate charge, dead-time, and Coss losses side-by-side for multiple devices. |
 
 ---
 
@@ -60,6 +61,7 @@ engineering-toolkit/
 │   ├── fishbone-diagram/
 │   ├── heatsink-simulator/
 │   ├── mcc-feeder-designer/
+│   ├── mosfet-power-loss/
 │   ├── plot-extractor/
 │   ├── timezone-converter/
 │   ├── unit-converter/
