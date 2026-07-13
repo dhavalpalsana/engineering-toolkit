@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOSFET Power Loss Calculator & Comparator — Engineering Toolkit</title>
+  <meta name="description" content="Physics-based MOSFET power loss calculator and comparator. Calculate conduction, switching, dead-time, gate, and output capacitance losses side-by-side.">
+  
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eng-toolkit.web.app/tools/mosfet-power-loss/">
+  <meta property="og:title" content="MOSFET Power Loss Calculator & Comparator — Engineering Toolkit">
+  <meta property="og:description" content="Calculate and compare conduction, switching, gate, dead-time, and Coss losses for multiple MOSFETs side-by-side.">
+  <meta property="og:image" content="https://eng-toolkit.web.app/assets/og-image.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MOSFET Power Loss Calculator & Comparator — Engineering Toolkit">
+  <meta name="twitter:description" content="Physics-based MOSFET loss modeler supporting side-by-side comparisons of multiple parts.">
+  <meta name="twitter:image" content="https://eng-toolkit.web.app/assets/og-image.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Standardized Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <!-- Standardized Back Button -->
+        <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        
+        <!-- Tool-Specific Icon (Transistor / MOSFET SVG) -->
+        <div class="hdr-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h4" />
+            <path d="M9 7v10" />
+            <path d="M12 6v12" />
+            <path d="M12 7h5v-3" />
+            <path d="M12 17h5v3" />
+            <path d="M12 12h5" />
+            <circle cx="12" cy="12" r="9" stroke-dasharray="2 2" opacity="0.3" />
+          </svg>
+        </div>
+        
+        <!-- Titles -->
+        <div class="hdr-titles">
+          <h1>MOSFET Power Loss Calculator</h1>
+          <p>Analyze and compare semiconductor power dissipation and thermal efficiency side-by-side</p>
+        </div>
+      </div>
+      
+      <div class="hdr-right">
+        <!-- Standardized Share & File Action Buttons -->
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-share-2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share Link
+        </button>
+        <button onclick="exportJSON()" class="hdr-btn" title="Export diagram to JSON file">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export JSON
+        </button>
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import diagram from JSON file">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" style="display:none;" onchange="importJSON(event)" />
+        
+        <!-- Standard divider -->
+        <div class="hdr-divider"></div>
+        
+        <!-- Global Auth Button (Managed by auth-ui.js) -->
+        <button id="auth-btn" title="Sign In">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> <span id="auth-btn-text">Sign In</span>
+        </button>
+        
+        <!-- Standard Theme Toggle -->
+        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon moon-icon"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun sun-icon" style="display:none;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content wrapped in container -->
+  <main class="container">
+    
+    <!-- Hero / Title Section -->
+    <div class="hero">
+      <h2>MOSFET <span>Loss Modeler</span> & Comparator</h2>
+      <p>Analyze power semiconductor losses (conduction, switching, gate charge, reverse recovery, dead-time, and Coss) in switching topologies. Customize operating parameters to compare multiple MOSFET parts side-by-side.</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="main-tabs">
+      <button id="tab-btn-calc" class="main-tab active" onclick="switchTab('calc-panel')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-grid"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+        Calculator & Comparator
+      </button>
+      <button id="tab-btn-def" class="main-tab" onclick="switchTab('def-panel')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-open"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        Definitions
+      </button>
+      <button id="tab-btn-formula" class="main-tab" onclick="switchTab('formula-panel')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calculator"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
+        Loss Formulas
+      </button>
+    </nav>
+
+    <!-- Tab 1: Calculator & Comparator Panel -->
+    <section id="calc-panel" class="tab-panel active">
+      <div class="calculator-layout">
+        
+        <!-- Left: Operating Conditions Sidebar -->
+        <aside class="sidebar-card">
+          <div class="card-header">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sliders"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/></svg>
+            <h3>Operating Conditions</h3>
+          </div>
+          <div class="card-body">
+            
+            <div class="field">
+              <label for="inp-vbus">Bus Voltage <span class="unit">Vbus [V]</span></label>
+              <div class="input-group">
+                <input type="number" id="inp-vbus" value="48" step="1" min="0" oninput="recalculateAll()">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="inp-iload">Load Current / Max Current <span class="unit">Iload [A]</span></label>
+              <div class="input-group">
+                <input type="number" id="inp-iload" value="15" step="0.5" min="0" oninput="recalculateAll()">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="inp-fsw">Switching Frequency <span class="unit">fsw [kHz]</span></label>
+              <div class="input-group">
+                <input type="number" id="inp-fsw" value="100" step="10" min="0" oninput="recalculateAll()">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="inp-vgate">Gate Drive Voltage <span class="unit">Vgate [V]</span></label>
+              <div class="input-group">
+                <input type="number" id="inp-vgate" value="10" step="0.5" min="0" oninput="recalculateAll()">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="inp-tdead">Dead Time <span class="unit">tdead [ns]</span></label>
+              <div class="input-group">
+                <input type="number" id="inp-tdead" value="100" step="5" min="0" oninput="recalculateAll()">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="inp-duty">Duty Cycle <span class="unit">D [%]</span></label>
+              <div class="input-group">
+                <input type="number" id="inp-duty" value="50" step="1" min="0" max="100" oninput="recalculateAll()">
+              </div>
+            </div>
+
+          </div>
+        </aside>
+
+        <!-- Right: Comparator Area -->
+        <article class="comparator-section">
+          <div class="comparator-header">
+            <div>
+              <h3>Compare MOSFET Parameters & Losses</h3>
+              <p>Add columns, rename parts, adjust device specs, and compare their estimated loss breakdown instantly.</p>
+            </div>
+          </div>
+          
+          <div class="comparator-scroller">
+            <div id="mosfet-container" style="display: flex; gap: 20px;">
+              <!-- Dynamic MOSFET Columns will be generated here by app.js -->
+            </div>
+            
+            <!-- Add MOSFET Card -->
+            <div id="add-mosfet-btn" class="add-column-card" onclick="addNewMosfetColumn()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-plus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+              <span>Add MOSFET Part</span>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- Tab 2: Definitions Panel -->
+    <section id="def-panel" class="tab-panel">
+      <div class="definitions-container">
+        
+        <div class="def-category">
+          <div class="def-category-header">Operating Parameters</div>
+          <div class="def-list">
+            
+            <div class="def-item">
+              <div class="def-name">Bus Voltage <code>Vbus</code></div>
+              <div class="def-desc">The DC input voltage applied across the drain-source of the high-side switch in buck/half-bridge/full-bridge topologies. It is the voltage present when switching transitions occur.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Load Current <code>Iload</code></div>
+              <div class="def-desc">The switching output/phase current. Used to calculate conduction losses (RMS current approximation) and switching crossover power losses.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Switching Frequency <code>fsw</code></div>
+              <div class="def-desc">The rate at which the MOSFET is toggled on and off per second. Expressed in kilohertz (kHz). Switching losses, gate losses, reverse recovery losses, and output capacitive losses scale linearly with frequency.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Gate Drive Voltage <code>Vgate</code></div>
+              <div class="def-desc">The voltage supplied by the gate driver to charge the MOSFET gate to its fully on-state. The magnitude directly influences gate loss and determines the actual RDS(on) obtained (consult datasheet curves).</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Dead Time <code>tdead</code></div>
+              <div class="def-desc">The blanking time inserted between complementary switches in half-bridge configurations to prevent shoot-through. During this interval, current conducts through the MOSFET body diode.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Duty Cycle <code>D</code></div>
+              <div class="def-desc">The percentage of the switching period during which the target MOSFET is conducting in the on-state. Conduction losses scale proportionally with duty cycle.</div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="def-category">
+          <div class="def-category-header">MOSFET Specific Parameters (from Datasheet)</div>
+          <div class="def-list">
+            
+            <div class="def-item">
+              <div class="def-name">On-Resistance <code>RDS(on)</code></div>
+              <div class="def-desc">The drain-source resistance when the MOSFET is fully turned on. Specified at a specific gate drive voltage (Vgate) and temperature. Lower values reduce conduction loss.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Total Gate Charge <code>Qg</code></div>
+              <div class="def-desc">The total amount of charge (in nanocoulombs, nC) that must be injected into the gate terminal to fully turn on the MOSFET at the specified gate drive voltage. Lower Qg reduces gate drive loss.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Rise Time <code>Tr</code></div>
+              <div class="def-desc">The time required for the drain current to rise to its full load value during turn-on. It represents the overlap period where high voltage and high current exist simultaneously, causing switching loss.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Fall Time <code>Tf</code></div>
+              <div class="def-desc">The time required for the drain current to fall to zero during turn-off. Similar to rise time, it is the primary driver of turn-off switching loss.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Delay Times <code>td(on) / td(off)</code></div>
+              <div class="def-desc">Turn-on and Turn-off delay times represent the time elapsed from the application of gate signal to the start of the switching transition. Though they delay the transition, they do not directly dissipate crossover power.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Reverse Recovery Charge <code>Qrr</code></div>
+              <div class="def-desc">The charge accumulated in the body diode PN-junction during forward conduction that must be swept out when the diode is reverse-biased. Higher Qrr increases reverse recovery loss in hard-switching topologies.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Diode Voltage <code>Vsd</code></div>
+              <div class="def-desc">The forward voltage drop of the internal body diode when conducting. Conduction occurs during the dead-time interval. Lower Vsd reduces dead-time conduction loss.</div>
+            </div>
+
+            <div class="def-item">
+              <div class="def-name">Output Capacitance <code>Coss</code></div>
+              <div class="def-desc">The parasitic capacitance between the drain and source terminals. As the MOSFET switches, this capacitor is charged to Vbus and then fully discharged internally through the channel during turn-on, dissipating energy.</div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Tab 3: Loss Formulas Panel -->
+    <section id="formula-panel" class="tab-panel">
+      <div class="formulas-container">
+        
+        <div class="formula-card">
+          <h3>Conduction Loss <span class="badge">Pcond</span></h3>
+          <div class="formula-block">Pcond = Iload² × RDS(on) × (D / 100)</div>
+          <p>Conduction loss occurs due to the internal resistive voltage drop across the drain-source channel when the MOSFET is fully enhanced and carrying load current.</p>
+          <div class="formula-variables">
+            <div><code>Iload</code>: Load current (A)</div>
+            <div><code>RDS(on)</code>: Drain-source on-resistance (Ω) - *convert from mΩ by dividing by 1000*</div>
+            <div><code>D</code>: Conduction Duty Cycle (%) - *divided by 100*</div>
+          </div>
+          <div class="recommendations-box">
+            <h4><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lightbulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .6 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> Design Recommendation</h4>
+            <ul>
+              <li>Select a MOSFET with a lower <code>RDS(on)</code>. Note that RDS(on) increases significantly with temperature (up to 1.5x–2.0x at 125°C).</li>
+              <li>Provide adequate heatsinking to keep junction temperatures low, preventing thermal runaway and rise in RDS(on).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="formula-card">
+          <h3>Switching Loss <span class="badge">Psw</span></h3>
+          <div class="formula-block">Psw = ½ × Vbus × Iload × (Tr + Tf) × fsw</div>
+          <p>Switching loss is caused by the temporary overlap of drain-source voltage and drain current during the turn-on (rise time <code>Tr</code>) and turn-off (fall time <code>Tf</code>) intervals. During these intervals, the instantaneous power dissipated in the channel spikes dramatically.</p>
+          <div class="formula-variables">
+            <div><code>Vbus</code>: Bus Voltage (V)</div>
+            <div><code>Iload</code>: Load current (A)</div>
+            <div><code>Tr / Tf</code>: Rise and Fall times (s) - *convert from ns by dividing by 1e9*</div>
+            <div><code>fsw</code>: Switching frequency (Hz) - *convert from kHz by multiplying by 1000*</div>
+          </div>
+          <div class="recommendations-box">
+            <h4><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lightbulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .6 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> Design Recommendation</h4>
+            <ul>
+              <li>Use a stronger gate driver to source/sink higher current to charge/discharge the gate faster, reducing <code>Tr</code> and <code>Tf</code>.</li>
+              <li>Decrease switching frequency <code>fsw</code> if switching losses dominate conduction losses.</li>
+              <li>Choose devices with lower gate-drain charge (Crss / Qgd) to speed up transition periods.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="formula-card">
+          <h3>Dead Time Conduction Loss <span class="badge">Pdead</span></h3>
+          <div class="formula-block">Pdead = 2 × Iload × Vsd × tdead × fsw</div>
+          <p>In bridge topologies, dead time is required to prevent shoot-through currents. During dead time, both the high-side and low-side MOSFETs are off. To maintain current continuity, the load current forces the internal body diode to conduct, which has a higher voltage drop (Vsd ≈ 0.7V–1.2V) than the enhanced channel, leading to conduction losses.</p>
+          <div class="formula-variables">
+            <div><code>Iload</code>: Load current (A)</div>
+            <div><code>Vsd</code>: Diode forward drop (V)</div>
+            <div><code>tdead</code>: Dead time (s) - *convert from ns by dividing by 1e9*</div>
+            <div><code>fsw</code>: Switching frequency (Hz) - *convert from kHz by multiplying by 1000*</div>
+          </div>
+          <div class="recommendations-box">
+            <h4><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lightbulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .6 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> Design Recommendation</h4>
+            <ul>
+              <li>Minimize dead time <code>tdead</code> to the minimum safe duration that prevents shoot-through (dynamic gate-sensing or precise microcontroller timers).</li>
+              <li>Add an external Schottky diode in parallel with the MOSFET. Schottky diodes have a lower forward drop (Vsd ≈ 0.4V) and zero reverse recovery time.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="formula-card">
+          <h3>Body Diode Reverse Recovery Loss <span class="badge">Prr</span></h3>
+          <div class="formula-block">Prr = Qrr × Vbus × fsw</div>
+          <p>When the body diode conducts during dead time, a charge <code>Qrr</code> is stored in its PN junction. When the complementary switch turns on, a large reverse current flows to sweep out this charge under the full <code>Vbus</code> voltage. This sweeps energy out, dissipating power primarily in the recovering diode and turning-on switch.</p>
+          <div class="formula-variables">
+            <div><code>Qrr</code>: Reverse recovery charge (C) - *convert from nC by dividing by 1e9*</div>
+            <div><code>Vbus</code>: Bus voltage (V)</div>
+            <div><code>fsw</code>: Switching frequency (Hz) - *convert from kHz by multiplying by 1000*</div>
+          </div>
+          <div class="recommendations-box">
+            <h4><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lightbulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .6 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> Design Recommendation</h4>
+            <ul>
+              <li>Select devices marketed with "Fast Recovery" or specialized body diodes (like Infineon's OptiMOS with integrated Schottky-like diodes).</li>
+              <li>Use Wide-Bandgap semiconductors (GaN or SiC) which exhibit very low or zero reverse recovery charges.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="formula-card">
+          <h3>Gate Drive Loss <span class="badge">Pgate</span></h3>
+          <div class="formula-block">Pgate = Qg × Vgate × fsw</div>
+          <p>To turn the MOSFET on, the gate-source capacitance must be charged to <code>Vgate</code>. To turn it off, this charge must be removed. The power required is dissipated across the entire gate loop (including the gate driver internal resistance, external gate resistor, and internal gate mesh resistance).</p>
+          <div class="formula-variables">
+            <div><code>Qg</code>: Total gate charge (C) - *convert from nC by dividing by 1e9*</div>
+            <div><code>Vgate</code>: Gate drive voltage (V)</div>
+            <div><code>fsw</code>: Switching frequency (Hz) - *convert from kHz by multiplying by 1000*</div>
+          </div>
+          <div class="recommendations-box">
+            <h4><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lightbulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .6 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> Design Recommendation</h4>
+            <ul>
+              <li>Use a logic-level MOSFET or lower gate drive voltage <code>Vgate</code> if the RDS(on) penalty is negligible.</li>
+              <li>Select a MOSFET with a lower gate charge <code>Qg</code> for high frequency operation.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="formula-card">
+          <h3>Output Capacitance Loss <span class="badge">Pcoss</span></h3>
+          <div class="formula-block">Pcoss = ½ × Coss × Vbus² × fsw</div>
+          <p>The drain-source output capacitance <code>Coss</code> is charged to <code>Vbus</code> when the MOSFET is off. When the MOSFET turns on, this electrostatic energy is short-circuited through the channel and dissipated entirely as heat inside the silicon device.</p>
+          <div class="formula-variables">
+            <div><code>Coss</code>: Output capacitance (F) - *convert from pF by dividing by 1e12*</div>
+            <div><code>Vbus</code>: Bus voltage (V)</div>
+            <div><code>fsw</code>: Switching frequency (Hz) - *convert from kHz by multiplying by 1000*</div>
+          </div>
+          <div class="recommendations-box">
+            <h4><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lightbulb"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .6 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> Design Recommendation</h4>
+            <ul>
+              <li>For soft-switching topologies (like LLC, phase-shifted full bridge), Coss energy can be recycled into the tank circuit rather than dissipated.</li>
+              <li>Select devices with lower parasitic output capacitance <code>Coss</code>.</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Standard Tool Footer -->
+    <footer class="tool-footer">
+      <div class="tool-footer-content">
+        <p>&copy; 2026 Engineering Toolkit. All rights reserved.</p>
+        <div class="tool-footer-links">
+          <a href="../../index.html">Home</a>
+          <span class="divider">&middot;</span>
+          <a href="#">Documentation</a>
+          <span class="divider">&middot;</span>
+          <a href="https://github.com" target="_blank">GitHub</a>
+        </div>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- JS Dependencies -->
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/project-manager.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

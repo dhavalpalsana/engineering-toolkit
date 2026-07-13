@@ -1,0 +1,730 @@
+/* ==========================================================================
+   MOSFET Power Loss Calculator - Custom Stylesheet
+   ========================================================================== */
+
+/* Custom CSS variables for loss category colors */
+:root {
+  --color-loss-cond: #0d9488;      /* Teal */
+  --color-loss-sw: #f59e0b;        /* Amber */
+  --color-loss-dead: #2563eb;      /* Blue */
+  --color-loss-rr: #ef4444;        /* Red */
+  --color-loss-gate: #8b5cf6;      /* Purple */
+  --color-loss-coss: #ec4899;      /* Pink */
+  
+  --max-width: 1600px;
+}
+/* Global Reset & Layout Containment */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Base Body Modifications */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.6;
+  overflow-x: hidden;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  position: relative;
+}
+
+/* Premium background decorative glow */
+body::before {
+  content: '';
+  position: fixed;
+  top: -150px;
+  right: -100px;
+  width: 500px;
+  height: 500px;
+  border-radius: var(--radius-full);
+  filter: blur(140px);
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--accent-primary-glow), transparent 70%);
+  opacity: 0.8;
+}
+
+/* Scrollbar styling for a cleaner look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Main Container wrapping */
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  padding-top: 24px;
+  padding-bottom: 60px;
+}
+
+/* Hero Section */
+.hero {
+  margin-bottom: 28px;
+}
+.hero h2 {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.8px;
+  margin-bottom: 6px;
+}
+.hero h2 span {
+  background: linear-gradient(135deg, var(--accent-primary), #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.hero p {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  max-width: 720px;
+}
+
+/* Tab controls */
+.main-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 28px;
+}
+.main-tab {
+  padding: 10px 18px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-muted);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all var(--transition-fast);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.main-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+.main-tab.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+  background: transparent;
+}
+.tab-panel {
+  display: none;
+}
+.tab-panel.active {
+  display: block;
+}
+
+/* Calculator Panel Layout */
+.calculator-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1024px) {
+  .calculator-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Left Column: Operating conditions card */
+.sidebar-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  position: sticky;
+  top: 88px;
+}
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card-header svg {
+  color: var(--accent-primary);
+}
+.card-header h3 {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+.card-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Field styling */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.field label span.unit {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.input-group {
+  position: relative;
+  display: flex;
+}
+.input-group input {
+  width: 100%;
+  background: var(--bg-interactive);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.input-group input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-glow);
+}
+
+/* Comparator Section (Scrollable Horizontal Row) */
+.comparator-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.comparator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.comparator-header h3 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+.comparator-header p {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+.comparator-scroller {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scroll-behavior: smooth;
+}
+
+/* MOSFET Column Card */
+.mosfet-column {
+  width: 230px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.mosfet-column:hover {
+  border-color: var(--accent-primary-hover);
+  box-shadow: var(--shadow-lg);
+}
+
+.mosfet-col-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.mosfet-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mosfet-col-header h4 {
+  font-size: 14px;
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+.mosfet-col-header .part-input {
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  border-bottom: 1px dashed var(--border-color);
+  outline: none;
+  width: 110px;
+}
+.mosfet-col-header .part-input:focus {
+  border-bottom-color: var(--accent-primary);
+}
+.mosfet-col-header .part-select {
+  margin-top: 6px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-interactive);
+  color: var(--text-secondary);
+  width: 100%;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+.mosfet-col-header .part-select:focus {
+  border-color: var(--accent-primary);
+}
+.mosfet-col-header .part-select optgroup {
+  font-weight: bold;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.mosfet-col-header .part-select option {
+  font-weight: normal;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.mosfet-col-header .badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 99px;
+  background: var(--accent-primary-glow);
+  color: var(--accent-primary);
+  font-weight: var(--font-weight-bold);
+  border: 1px solid var(--accent-primary);
+}
+.remove-col-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+.remove-col-btn:hover {
+  color: var(--color-error);
+  background: var(--color-error-bg);
+}
+
+.mosfet-col-inputs {
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 1fr 70px;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+.mosfet-col-inputs .input-lbl {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+}
+.mosfet-col-inputs .input-lbl .unit {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: normal;
+  margin-left: 2px;
+}
+.mosfet-col-inputs .input-lbl p {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: normal;
+  margin: 0;
+}
+.mosfet-col-inputs .mosfet-field-grp {
+  position: relative;
+}
+.mosfet-col-inputs input {
+  width: 100%;
+  background: var(--bg-interactive);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  outline: none;
+  text-align: right;
+}
+
+/* Hide number input spinners for cleaner input columns */
+.mosfet-col-inputs input[type=number]::-webkit-outer-spin-button,
+.mosfet-col-inputs input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.mosfet-col-inputs input[type=number] {
+  -moz-appearance: textfield;
+}
+.mosfet-col-inputs input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+/* MOSFET Results styling */
+.mosfet-col-results {
+  padding: 20px;
+  background: var(--bg-tertiary);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+.total-loss-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.total-loss-box .lbl {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-secondary);
+}
+.total-loss-box .val {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+}
+
+.stacked-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stacked-bar-title {
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  color: var(--text-secondary);
+}
+.stacked-bar {
+  height: 16px;
+  background: var(--border-color);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  display: flex;
+}
+.bar-segment {
+  height: 100%;
+  transition: width var(--transition-normal);
+}
+.bar-segment-cond { background: var(--color-loss-cond); }
+.bar-segment-sw { background: var(--color-loss-sw); }
+.bar-segment-dead { background: var(--color-loss-dead); }
+.bar-segment-rr { background: var(--color-loss-rr); }
+.bar-segment-gate { background: var(--color-loss-gate); }
+.bar-segment-coss { background: var(--color-loss-coss); }
+
+.breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.breakdown-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.breakdown-row-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+}
+.breakdown-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+.breakdown-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.breakdown-dot-cond { background: var(--color-loss-cond); }
+.breakdown-dot-sw { background: var(--color-loss-sw); }
+.breakdown-dot-dead { background: var(--color-loss-dead); }
+.breakdown-dot-rr { background: var(--color-loss-rr); }
+.breakdown-dot-gate { background: var(--color-loss-gate); }
+.breakdown-dot-coss { background: var(--color-loss-coss); }
+
+.breakdown-row-val {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+.breakdown-row-pct {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.breakdown-mini-bar {
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.breakdown-mini-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width var(--transition-normal);
+}
+
+/* Add Column Button Card */
+.add-column-card {
+  width: 230px;
+  flex-shrink: 0;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  cursor: pointer;
+  background: transparent;
+  transition: all var(--transition-fast);
+}
+.add-column-card:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
+  transform: translateY(-2px);
+}
+.add-column-card svg {
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+.add-column-card:hover svg {
+  color: var(--accent-primary);
+}
+.add-column-card span {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+.add-column-card:hover span {
+  color: var(--accent-primary);
+}
+
+/* Definitions Tab Styles */
+.definitions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.def-category {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.def-category-header {
+  padding: 16px 20px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+.def-list {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.def-item {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.def-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+@media (max-width: 640px) {
+  .def-item {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+.def-name {
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.def-name code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-primary);
+  background: var(--accent-primary-glow);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  align-self: start;
+}
+.def-desc {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Loss Formulas Tab Styles */
+.formulas-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.formula-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.formula-card h3 {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.formula-card h3 span.badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 99px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+.formula-block {
+  background: var(--bg-tertiary);
+  border-left: 4px solid var(--accent-primary);
+  padding: 16px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--text-primary);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.formula-card p {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+.formula-variables {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+.formula-variables div {
+  display: flex;
+  gap: 8px;
+}
+.formula-variables code {
+  color: var(--text-primary);
+  font-weight: bold;
+}
+
+.recommendations-box {
+  background: var(--accent-primary-glow);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+.recommendations-box h4 {
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.recommendations-box ul {
+  padding-left: 20px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

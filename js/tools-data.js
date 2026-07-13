@@ -56,6 +56,15 @@ const TOOLS_DATA = [
     releaseDate: "2026-07-07T12:00:00Z"
   },
   {
+    id: "mosfet-power-loss",
+    name: "MOSFET Power Loss Calculator & Comparator",
+    description: "Physics-based semiconductor power loss modeler. Calculate and compare conduction, switching, gate charge, dead-time, and Coss losses side-by-side for multiple devices.",
+    tags: ["electrical", "semiconductor", "power-electronics", "mosfet", "thermal", "efficiency"],
+    icon: "cpu",
+    path: "./tools/mosfet-power-loss/index.html",
+    status: "active"
+  },
+  {
     id: "plot-extractor",
     name: "Plot Data Extractor",
     description: "Upload or paste plot images to digitize and extract coordinates with sub-pixel loupe precision. Supports linear/logarithmic scales, multi-series extraction, regression curve fitting, and CSV lookup table generation.",
