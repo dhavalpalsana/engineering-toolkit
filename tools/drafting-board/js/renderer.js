@@ -1,73 +1,92 @@
 // ==========================================================================
-// Explicit 2D CAD WebGL Viewport Renderer (Phase 2 & 5)
-// High-performance Three.js 2D Orthographic pipeline with GPU line batching
-// Aligned with standard SVG layout coordinates (Y-down) for overlay sync.
-// Dynamic visibility filtering based on CAD Layer Control states.
+// Explicit 2D CAD HTML5 Canvas Viewport Renderer
+// High-performance 2D vector context with hardware-accelerated transforms.
+// Aligned with standard WCS model space coordinates.
+// Dynamic scaling of line widths & text to maintain screen-space clarity.
 // ==========================================================================
 
 class ExplicitCadRenderer {
   constructor(canvas) {
     this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
     const container = canvas.parentElement;
     this.width = container ? container.clientWidth : (canvas.clientWidth || 800);
     this.height = container ? container.clientHeight : (canvas.clientHeight || 600);
-    canvas.width = this.width;
-    canvas.height = this.height;
     
-    this.renderer = new THREE.WebGLRenderer({
-      canvas: canvas,
-      antialias: true,
-      preserveDrawingBuffer: true
-    });
-    this.renderer.setSize(this.width, this.height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Set up canvas buffer resolution for high-DPI retina screens
+    this.resize();
 
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0F0F0F); // Classic dark CAD background
+    // Viewport transform (zoom level & pan offset in pixels)
+    this.zoomLevel = 1.0;
+    this.panOffset = { x: 50, y: 50 };
 
-    // Camera setup (Orthographic, Y-down to align with SVG layout space)
-    const aspect = this.width / this.height;
-    const viewSize = 300; // default visible width in mm
-    this.camera = new THREE.OrthographicCamera(
-      -viewSize * aspect / 2, viewSize * aspect / 2,
-      -viewSize / 2, viewSize / 2,  // Y-down: top is negative, bottom is positive
-      0.1, 1000
-    );
-    this.camera.position.set(150, 100, 500);
-    this.camera.lookAt(150, 100, 0);
-
-    this.drawGroup = new THREE.Group();
-    this.scene.add(this.drawGroup);
-
+    this.currentState = null;
     this.setupEvents();
+  }
+
+  // Convert client cursor coordinates to WCS model coordinates (mm)
+  getMouseWorldPos(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    const screenX = clientX - rect.left;
+    const screenY = clientY - rect.top;
+    return {
+      x: (screenX - this.panOffset.x) / this.zoomLevel,
+      y: (screenY - this.panOffset.y) / this.zoomLevel
+    };
+  }
+
+  // Zoom viewport by a factor, keeping the cursor coordinate stable under the mouse
+  zoom(factor, clientX, clientY) {
+    let mouseX, mouseY;
+    if (clientX !== undefined && clientY !== undefined) {
+      const rect = this.canvas.getBoundingClientRect();
+      mouseX = clientX - rect.left;
+      mouseY = clientY - rect.top;
+    } else {
+      mouseX = this.width / 2;
+      mouseY = this.height / 2;
+    }
+
+    const worldMouse = {
+      x: (mouseX - this.panOffset.x) / this.zoomLevel,
+      y: (mouseY - this.panOffset.y) / this.zoomLevel
+    };
+
+    this.zoomLevel *= factor;
+    // Limit zoom factor
+    this.zoomLevel = Math.max(0.02, Math.min(150, this.zoomLevel));
+
+    this.panOffset.x = mouseX - worldMouse.x * this.zoomLevel;
+    this.panOffset.y = mouseY - worldMouse.y * this.zoomLevel;
+
+    this.render();
+    if (this.onViewChange) this.onViewChange();
   }
 
   setupEvents() {
     let isPanning = false;
     let startMouse = { x: 0, y: 0 };
-    let startCamPos = { x: 0, y: 0 };
+    let startPan = { x: 0, y: 0 };
 
     this.canvas.addEventListener("mousedown", (e) => {
-      isPanning = true;
-      startMouse.x = e.clientX;
-      startMouse.y = e.clientY;
-      startCamPos.x = this.camera.position.x;
-      startCamPos.y = this.camera.position.y;
+      // Pan handling: middle-click, right-click, Shift+Left-click, or Pan mode active
+      const isPanMode = window.editorMode === "pan" || e.shiftKey;
+      if (e.button === 1 || e.button === 2 || isPanMode) {
+        isPanning = true;
+        startMouse.x = e.clientX;
+        startMouse.y = e.clientY;
+        startPan.x = this.panOffset.x;
+        startPan.y = this.panOffset.y;
+        e.preventDefault();
+      }
     });
 
     window.addEventListener("mousemove", (e) => {
       if (isPanning) {
         const dx = e.clientX - startMouse.x;
         const dy = e.clientY - startMouse.y;
-        
-        const viewportWidth = this.camera.right - this.camera.left;
-        const scaleX = viewportWidth / this.width;
-        
-        const viewportHeight = this.camera.bottom - this.camera.top;
-        const scaleY = viewportHeight / this.height;
-
-        this.camera.position.x = startCamPos.x - dx * scaleX;
-        this.camera.position.y = startCamPos.y - dy * scaleY; // match Y direction
+        this.panOffset.x = startPan.x + dx;
+        this.panOffset.y = startPan.y + dy;
         this.render();
         if (this.onViewChange) this.onViewChange();
       }
@@ -77,256 +96,683 @@ class ExplicitCadRenderer {
       isPanning = false;
     });
 
+    this.canvas.addEventListener("contextmenu", (e) => {
+      e.preventDefault(); // disable right-click menu to enable smooth panning
+    });
+
     this.canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
-      
-      const zoomFactor = e.deltaY < 0 ? 0.9 : 1.1;
-      
-      const rect = this.canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      const ndcX = (mouseX / this.width) * 2 - 1;
-      const ndcY = -(mouseY / this.height) * 2 + 1;
-
-      // Unproject mouse coordinate back to WCS model space (Y inverted relative to NDC)
-      const worldX = this.camera.position.x + ndcX * (this.camera.right - this.camera.left) / 2;
-      const worldY = this.camera.position.y - ndcY * (this.camera.bottom - this.camera.top) / 2;
-
-      const aspect = this.width / this.height;
-      const newViewSize = (this.camera.right - this.camera.left) * zoomFactor / aspect;
-      
-      this.camera.left = -newViewSize * aspect / 2;
-      this.camera.right = newViewSize * aspect / 2;
-      this.camera.top = -newViewSize / 2;
-      this.camera.bottom = newViewSize / 2;
-
-      this.camera.position.x = worldX - ndcX * (this.camera.right - this.camera.left) / 2;
-      this.camera.position.y = worldY + ndcY * (this.camera.bottom - this.camera.top) / 2;
-
-      this.camera.updateProjectionMatrix();
-      this.render();
-      if (this.onViewChange) this.onViewChange();
+      const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+      this.zoom(factor, e.clientX, e.clientY);
     }, { passive: false });
-  }
-
-  clearGeometries() {
-    while (this.drawGroup.children.length > 0) {
-      const obj = this.drawGroup.children[0];
-      this.drawGroup.remove(obj);
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach(m => m.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      }
-    }
-  }
-
-  // GPU batched draw-call vector line pipeline with layers visibility filtering
-  updateDrawing(vertices, circles, isClosed, sheetWidth, sheetHeight, layersState, insertions = [], blockDefinitions = {}) {
-    this.clearGeometries();
-
-    const linePoints = [];
-    const colors = [];
-    
-    const addLineSegment = (x1, y1, x2, y2, colorHex) => {
-      const col = new THREE.Color(colorHex);
-      linePoints.push(x1, y1, 0, x2, y2, 0);
-      colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
-    };
-
-    // Default layers state if none is active/passed
-    const ls = layersState || {
-      "PROFILE_OUTLINE": { visible: true, color: "#14b8a6" },
-      "HOLES": { visible: true, color: "#3b82f6" },
-      "CONSTRUCTION": { visible: true, color: "#64748b" },
-      "SHEET_FORMAT": { visible: true, color: "#334155" }
-    };
-
-    // 1. Draw sheet background borders (locked layer equivalent)
-    if (ls["SHEET_FORMAT"] && ls["SHEET_FORMAT"].visible) {
-      const borderCol = ls["SHEET_FORMAT"].color || "#334155";
-      addLineSegment(0, 0, sheetWidth, 0, borderCol);
-      addLineSegment(sheetWidth, 0, sheetWidth, sheetHeight, borderCol);
-      addLineSegment(sheetWidth, sheetHeight, 0, sheetHeight, borderCol);
-      addLineSegment(0, sheetHeight, 0, 0, borderCol);
-
-      addLineSegment(10, 10, sheetWidth - 10, 10, borderCol);
-      addLineSegment(sheetWidth - 10, 10, sheetWidth - 10, sheetHeight - 10, borderCol);
-      addLineSegment(sheetWidth - 10, sheetHeight - 10, 10, sheetHeight - 10, borderCol);
-      addLineSegment(10, sheetHeight - 10, 10, 10, borderCol);
-
-      // Title Block lines
-      const tx = sheetWidth - 110;
-      const ty = sheetHeight - 40;
-      const tw = 100;
-      addLineSegment(tx, ty, tx + tw, ty, borderCol);
-      addLineSegment(tx, ty + 10, tx + tw, ty + 10, borderCol);
-      addLineSegment(tx, ty + 20, tx + tw, ty + 20, borderCol);
-      addLineSegment(tx + 60, ty + 10, tx + 60, ty + 30, borderCol);
-    }
-
-    // 2. Draw active sketch profile outline
-    if (ls["PROFILE_OUTLINE"] && ls["PROFILE_OUTLINE"].visible) {
-      const profileCol = ls["PROFILE_OUTLINE"].color || "#14b8a6";
-      const numVerts = vertices.length;
-      if (numVerts >= 2) {
-        const limit = isClosed ? numVerts : numVerts - 1;
-        for (let i = 0; i < limit; i++) {
-          const p1 = vertices[i];
-          const p2 = vertices[(i + 1) % numVerts];
-          addLineSegment(p1.x, p1.y, p2.x, p2.y, profileCol);
-        }
-      }
-    }
-
-    // 3. Draw circles
-    circles.forEach(c => {
-      const drawLayer = c.construction ? "CONSTRUCTION" : "HOLES";
-      if (ls[drawLayer] && ls[drawLayer].visible) {
-        const color = ls[drawLayer].color || (c.construction ? "#64748b" : "#3b82f6");
-        const segments = 64;
-        const angleStep = (Math.PI * 2) / segments;
-        for (let i = 0; i < segments; i++) {
-          if (c.construction && i % 2 === 0) continue;
-          const theta1 = i * angleStep;
-          const theta2 = (i + 1) * angleStep;
-          addLineSegment(
-            c.cx + c.r * Math.cos(theta1),
-            c.cy + c.r * Math.sin(theta1),
-            c.cx + c.r * Math.cos(theta2),
-            c.cy + c.r * Math.sin(theta2),
-            color
-          );
-        }
-      }
-    });
-
-    // Helper to transform block coordinates
-    const transformPoint = (px, py, ins) => {
-      const rad = ((ins.rotation || 0) * Math.PI) / 180;
-      let sx = px * (ins.scaleX !== undefined ? ins.scaleX : 1);
-      let sy = py * (ins.scaleY !== undefined ? ins.scaleY : 1);
-      let rx = sx * Math.cos(rad) - sy * Math.sin(rad);
-      let ry = sx * Math.sin(rad) + sy * Math.cos(rad);
-      return {
-        x: rx + ins.x,
-        y: ry + ins.y
-      };
-    };
-
-    // Draw Block Insertions
-    insertions.forEach(ins => {
-      const block = blockDefinitions[ins.blockName];
-      if (!block) return;
-      
-      block.entities.forEach(ent => {
-        const drawLayer = ent.layer || "PROFILE_OUTLINE";
-        if (ls[drawLayer] && ls[drawLayer].visible) {
-          const color = ls[drawLayer].color || "#ffffff";
-          
-          if (ent.type === "LINE") {
-            const p1 = transformPoint(ent.x1, ent.y1, ins);
-            const p2 = transformPoint(ent.x2, ent.y2, ins);
-            addLineSegment(p1.x, p1.y, p2.x, p2.y, color);
-          }
-          else if (ent.type === "CIRCLE") {
-            const center = transformPoint(ent.cx, ent.cy, ins);
-            const rScaled = ent.r * Math.abs(ins.scaleX !== undefined ? ins.scaleX : 1);
-            const segments = 64;
-            const angleStep = (Math.PI * 2) / segments;
-            for (let i = 0; i < segments; i++) {
-              const theta1 = i * angleStep;
-              const theta2 = (i + 1) * angleStep;
-              addLineSegment(
-                center.x + rScaled * Math.cos(theta1),
-                center.y + rScaled * Math.sin(theta1),
-                center.x + rScaled * Math.cos(theta2),
-                center.y + rScaled * Math.sin(theta2),
-                color
-              );
-            }
-          }
-        }
-      });
-    });
-
-    // Create and attach single LineSegments geometry
-    if (linePoints.length > 0) {
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute("position", new THREE.Float32BufferAttribute(linePoints, 3));
-      geom.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-
-      const mat = new THREE.LineBasicMaterial({ vertexColors: true });
-      const lineMesh = new THREE.LineSegments(geom, mat);
-      this.drawGroup.add(lineMesh);
-    }
-
-    // 4. Endpoints visualization (only if profile layer is visible)
-    if (ls["PROFILE_OUTLINE"] && ls["PROFILE_OUTLINE"].visible) {
-      vertices.forEach(v => {
-        const size = 1.6;
-        const geom = new THREE.BoxGeometry(size, size, 0.1);
-        const mat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
-        const mesh = new THREE.Mesh(geom, mat);
-        mesh.position.set(v.x, v.y, 0);
-        this.drawGroup.add(mesh);
-      });
-    }
-
-    this.render();
-  }
-
-  // Synchronize SVG overlay viewBox to WebGL camera projection bounds
-  syncSvgOverlay() {
-    const svgOverlay = document.getElementById("sketch-canvas-svg");
-    if (!svgOverlay) return;
-
-    const minX = this.camera.position.x + this.camera.left;
-    const minY = this.camera.position.y + this.camera.top;
-    const width = this.camera.right - this.camera.left;
-    const height = this.camera.bottom - this.camera.top;
-
-    svgOverlay.setAttribute("viewBox", `${minX} ${minY} ${width} ${height}`);
-  }
-
-  render() {
-    this.renderer.render(this.scene, this.camera);
-    this.syncSvgOverlay();
-  }
-
-  resetView(sheetWidth, sheetHeight) {
-    const aspect = this.width / this.height;
-    const viewSize = Math.max(sheetWidth, sheetHeight) * 1.2;
-    this.camera.left = -viewSize * aspect / 2;
-    this.camera.right = viewSize * aspect / 2;
-    this.camera.top = -viewSize / 2;
-    this.camera.bottom = viewSize / 2;
-    this.camera.position.set(sheetWidth / 2, sheetHeight / 2, 500);
-    this.camera.lookAt(sheetWidth / 2, sheetHeight / 2, 0);
-    this.camera.updateProjectionMatrix();
-    this.render();
   }
 
   resize() {
     const container = this.canvas.parentElement;
     this.width = container ? container.clientWidth : (this.canvas.clientWidth || 800);
     this.height = container ? container.clientHeight : (this.canvas.clientHeight || 600);
-    this.canvas.width = this.width;
-    this.canvas.height = this.height;
-
-    const aspect = this.width / this.height;
-    const currentHeight = this.camera.bottom - this.camera.top;
     
-    this.camera.left = -currentHeight * aspect / 2;
-    this.camera.right = currentHeight * aspect / 2;
-    this.camera.updateProjectionMatrix();
-    
-    this.renderer.setSize(this.width, this.height);
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = this.width * dpr;
+    this.canvas.height = this.height * dpr;
+    this.canvas.style.width = this.width + "px";
+    this.canvas.style.height = this.height + "px";
     this.render();
+  }
+
+  resetView(sheetWidth, sheetHeight) {
+    const margin = 40; // margin in pixels
+    const scaleX = (this.width - 2 * margin) / sheetWidth;
+    const scaleY = (this.height - 2 * margin) / sheetHeight;
+    this.zoomLevel = Math.min(scaleX, scaleY);
+
+    const viewW = sheetWidth * this.zoomLevel;
+    const viewH = sheetHeight * this.zoomLevel;
+    this.panOffset.x = (this.width - viewW) / 2;
+    this.panOffset.y = (this.height - viewH) / 2;
+
+    this.render();
+  }
+
+  updateDrawing(state) {
+    this.currentState = state;
+    this.render();
+  }
+
+  render() {
+    if (!this.currentState) return;
+    const state = this.currentState;
+    const ctx = this.ctx;
+    const dpr = window.devicePixelRatio || 1;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, this.width, this.height);
+
+    // Default white background for high-contrast drafting board
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    // Apply camera transformation mapping
+    ctx.translate(this.panOffset.x, this.panOffset.y);
+    ctx.scale(this.zoomLevel, this.zoomLevel);
+
+    // 1. Draw Grid Lines (Dynamic based on zoom level)
+    this.drawGrid(ctx, state.sheetWidth, state.sheetHeight);
+
+    // 2. Draw Page Borders & Title Block
+    const isSheetVisible = state.layers["BACKGROUND"] && state.layers["BACKGROUND"].visible;
+    if (isSheetVisible) {
+      this.drawSheetFormat(ctx, state.sheetWidth, state.sheetHeight);
+    }
+
+    // 3. Draw Construction Lines / Profile Geometry
+    this.drawGeometry(ctx, state);
+
+    // 4. Draw Smart Dimensions & Annotations
+    this.drawDimensions(ctx, state);
+
+    // 5. Draw Ruler Measurement Guide
+    if (state.isMeasuring && state.measureStartPos && state.mousePos) {
+      this.drawMeasurement(ctx, state);
+    }
+
+    // 6. Draw Orthogonal Snapping Line Help Guides
+    if (state.orthoLockEnabled && state.vertices.length > 0 && state.mousePos && !state.isClosed) {
+      this.drawOrthoGuides(ctx, state);
+    }
+
+    // 7. Draw Active Shape Drawing Guides (Circle, Rect, Poly previews)
+    this.drawActiveToolPreviews(ctx, state);
+
+    // 8. Draw Object Snap Targets
+    if (state.hoveredSnapTarget) {
+      this.drawSnapIndicator(ctx, state.hoveredSnapTarget);
+    }
+
+    ctx.restore();
+  }
+
+  // Draw CAD grid layout, fading grids out dynamically when zoomed out
+  drawGrid(ctx, sheetWidth, sheetHeight) {
+    if (window.gridVisible === false) return;
+
+    let minorStep = 10;
+    let majorStep = 50;
+
+    // Adjust grid step size depending on zoom to avoid grid line bloat
+    if (this.zoomLevel < 0.3) {
+      minorStep = 50;
+      majorStep = 250;
+    }
+    if (this.zoomLevel < 0.08) {
+      minorStep = 250;
+      majorStep = 1250;
+    }
+
+    const left = -this.panOffset.x / this.zoomLevel;
+    const right = (this.width - this.panOffset.x) / this.zoomLevel;
+    const top = -this.panOffset.y / this.zoomLevel;
+    const bottom = (this.height - this.panOffset.y) / this.zoomLevel;
+
+    const startX = Math.floor(left / minorStep) * minorStep;
+    const endX = Math.ceil(right / minorStep) * minorStep;
+    const startY = Math.floor(top / minorStep) * minorStep;
+    const endY = Math.ceil(bottom / minorStep) * minorStep;
+
+    ctx.save();
+    
+    // Draw minor grid lines (thin, faint light-grey)
+    ctx.strokeStyle = "#f1f5f9";
+    ctx.lineWidth = 0.5 / this.zoomLevel;
+    ctx.beginPath();
+    for (let x = startX; x <= endX; x += minorStep) {
+      if (x % majorStep === 0) continue;
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+    }
+    for (let y = startY; y <= endY; y += minorStep) {
+      if (y % majorStep === 0) continue;
+      ctx.moveTo(left, y);
+      ctx.lineTo(right, y);
+    }
+    ctx.stroke();
+
+    // Draw major grid lines (slightly thicker, darker grey)
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 1.0 / this.zoomLevel;
+    ctx.beginPath();
+    for (let x = startX; x <= endX; x += minorStep) {
+      if (x % majorStep !== 0) continue;
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+    }
+    for (let y = startY; y <= endY; y += minorStep) {
+      if (y % majorStep !== 0) continue;
+      ctx.moveTo(left, y);
+      ctx.lineTo(right, y);
+    }
+    ctx.stroke();
+
+    // Draw Red X-axis & Green Y-axis coordinate origin lines
+    ctx.lineWidth = 1.5 / this.zoomLevel;
+    ctx.strokeStyle = "rgba(239, 68, 68, 0.4)"; // Red
+    ctx.beginPath();
+    ctx.moveTo(left, 0);
+    ctx.lineTo(right, 0);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(34, 197, 94, 0.4)"; // Green
+    ctx.beginPath();
+    ctx.moveTo(0, top);
+    ctx.lineTo(0, bottom);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // Draw paper sheet layout border and title block
+  drawSheetFormat(ctx, width, height) {
+    ctx.save();
+    
+    // Soft shadow under drawing format border
+    ctx.fillStyle = "rgba(15, 23, 42, 0.08)";
+    ctx.fillRect(4 / this.zoomLevel, 4 / this.zoomLevel, width, height);
+
+    // White blueprint background area
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 1.0 / this.zoomLevel;
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeRect(0, 0, width, height);
+
+    // Inner active boundary sheet margin (10mm offset)
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1.5 / this.zoomLevel;
+    ctx.strokeRect(10, 10, width - 20, height - 20);
+
+    // Title box lines in bottom-right corner
+    const tx = width - 110;
+    const ty = height - 40;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(width - 10, ty);
+    ctx.moveTo(tx, ty + 10);
+    ctx.lineTo(width - 10, ty + 10);
+    ctx.moveTo(tx, ty + 20);
+    ctx.lineTo(width - 10, ty + 20);
+    ctx.moveTo(tx + 60, ty + 10);
+    ctx.lineTo(tx + 60, height - 10);
+    ctx.stroke();
+
+    // Injected text labels
+    ctx.fillStyle = "#1e293b";
+    ctx.font = `${6.5 / this.zoomLevel}px var(--font-sans)`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("TITLE: CAD BLUEPRINT DESIGN", tx + 3, ty + 5);
+    ctx.fillText("SCALE: 1:1", tx + 3, ty + 15);
+    ctx.fillText("UNIT: mm", tx + 63, ty + 15);
+    ctx.fillText("ENGINEER: ANTIGRAVITY COMPASS", tx + 3, ty + 25);
+    
+    ctx.restore();
+  }
+
+  // Draw active drawing geometries
+  drawGeometry(ctx, state) {
+    const isSheetVisible = state.layers["BACKGROUND"] && state.layers["BACKGROUND"].visible;
+    const defaultColor = "#000000";
+
+    // 1. Draw Finalized Profiles
+    if (state.layers["FOREGROUND"] && state.layers["FOREGROUND"].visible) {
+      if (state.profiles) {
+        state.profiles.forEach(prof => {
+          const numVerts = prof.count;
+          if (numVerts >= 2) {
+            const limit = prof.isClosed ? numVerts : numVerts - 1;
+            for (let i = 0; i < limit; i++) {
+              const p1 = state.vertices[prof.startIndex + i];
+              const p2 = state.vertices[prof.startIndex + (i + 1) % numVerts];
+              const isSelected = state.selectedEntity && state.selectedEntity.type === "line" && state.selectedEntity.index === (prof.startIndex + i);
+
+              ctx.beginPath();
+              ctx.moveTo(p1.x, p1.y);
+              ctx.lineTo(p2.x, p2.y);
+              
+              ctx.strokeStyle = isSelected ? "#f97316" : defaultColor;
+              ctx.lineWidth = (isSelected ? 3.5 : 2.2) / this.zoomLevel;
+              ctx.setLineDash([]);
+              ctx.stroke();
+            }
+          }
+        });
+      }
+
+      // 2. Draw Active Open Polyline
+      const activeStart = state.activeProfileStartIndex !== undefined ? state.activeProfileStartIndex : 0;
+      const activeCount = state.vertices.length - activeStart;
+      if (activeCount >= 2) {
+        for (let i = 0; i < activeCount - 1; i++) {
+          const p1 = state.vertices[activeStart + i];
+          const p2 = state.vertices[activeStart + i + 1];
+          const isSelected = state.selectedEntity && state.selectedEntity.type === "line" && state.selectedEntity.index === (activeStart + i);
+
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          
+          ctx.strokeStyle = isSelected ? "#f97316" : defaultColor;
+          ctx.lineWidth = (isSelected ? 3.5 : 2.2) / this.zoomLevel;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 2. Draw Circles
+    state.circles.forEach((c, idx) => {
+      if (state.layers["FOREGROUND"] && state.layers["FOREGROUND"].visible) {
+        const isSelected = state.selectedEntity && state.selectedEntity.type === "circle" && state.selectedEntity.index === idx;
+
+        ctx.beginPath();
+        ctx.arc(c.cx, c.cy, c.r, 0, 2 * Math.PI);
+        
+        ctx.strokeStyle = isSelected ? "#f97316" : (c.construction ? "#64748b" : defaultColor);
+        ctx.lineWidth = (isSelected ? 3.0 : 2.0) / this.zoomLevel;
+        
+        if (c.construction) {
+          ctx.setLineDash([4 / this.zoomLevel, 4 / this.zoomLevel]);
+        } else {
+          ctx.setLineDash([]);
+        }
+        ctx.stroke();
+
+        // Draw standard tapped hole indicators (crosshair marks)
+        if (c.standardHole) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+          ctx.lineWidth = 0.8 / this.zoomLevel;
+          ctx.setLineDash([]);
+          const tick = 3.5 / this.zoomLevel;
+          ctx.beginPath();
+          ctx.moveTo(c.cx - c.r - tick, c.cy);
+          ctx.lineTo(c.cx + c.r + tick, c.cy);
+          ctx.moveTo(c.cx, c.cy - c.r - tick);
+          ctx.lineTo(c.cx, c.cy + c.r + tick);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    });
+
+    // 3. Draw Block Insertions
+    const transformPoint = (px, py, ins) => {
+      const rad = ((ins.rotation || 0) * Math.PI) / 180;
+      let sx = px * (ins.scaleX !== undefined ? ins.scaleX : 1);
+      let sy = py * (ins.scaleY !== undefined ? ins.scaleY : 1);
+      let rx = sx * Math.cos(rad) - sy * Math.sin(rad);
+      let ry = sx * Math.sin(rad) + sy * Math.cos(rad);
+      return { x: rx + ins.x, y: ry + ins.y };
+    };
+
+    state.insertions.forEach((ins, insIdx) => {
+      const block = state.blockDefinitions[ins.blockName];
+      if (!block) return;
+      
+      const isSelected = state.selectedEntity && state.selectedEntity.type === "insertion" && state.selectedEntity.index === insIdx;
+      
+      block.entities.forEach(ent => {
+        if (state.layers["FOREGROUND"] && state.layers["FOREGROUND"].visible) {
+          ctx.strokeStyle = isSelected ? "#f97316" : defaultColor;
+          ctx.lineWidth = (isSelected ? 3.0 : 2.0) / this.zoomLevel;
+          ctx.setLineDash([]);
+          
+          if (ent.type === "LINE") {
+            const p1 = transformPoint(ent.x1, ent.y1, ins);
+            const p2 = transformPoint(ent.x2, ent.y2, ins);
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+          else if (ent.type === "CIRCLE") {
+            const center = transformPoint(ent.cx, ent.cy, ins);
+            const rScaled = ent.r * Math.abs(ins.scaleX !== undefined ? ins.scaleX : 1);
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, rScaled, 0, 2 * Math.PI);
+            ctx.stroke();
+          }
+        }
+      });
+    });
+
+    // 4. Draw Vertex handles (green boxes)
+    if (state.layers["FOREGROUND"] && state.layers["FOREGROUND"].visible) {
+      state.vertices.forEach((v, idx) => {
+        const isSelected = state.selectedEntity && state.selectedEntity.type === "vertex" && state.selectedEntity.index === idx;
+        const halfSize = (isSelected ? 4.0 : 2.2) / this.zoomLevel;
+        
+        ctx.fillStyle = isSelected ? "#f97316" : "#22c55e";
+        ctx.fillRect(v.x - halfSize, v.y - halfSize, halfSize * 2, halfSize * 2);
+        
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 0.6 / this.zoomLevel;
+        ctx.strokeRect(v.x - halfSize, v.y - halfSize, halfSize * 2, halfSize * 2);
+      });
+    }
+  }
+
+  // Draw dimension annotations and leader lines
+  drawDimensions(ctx, state) {
+    state.customDimensions.forEach((dim, idx) => {
+      const p1 = state.vertices[dim.v1];
+      const p2 = state.vertices[dim.v2];
+      if (!p1 || !p2) return;
+      
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 0.1) return;
+
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      const theta = Math.atan2(dy, dx);
+      const normalAngle = theta - Math.PI / 2;
+      
+      const offsetDist = 28 + (idx * 16); // mm offset
+      const o1x = p1.x + offsetDist * Math.cos(normalAngle);
+      const o1y = p1.y + offsetDist * Math.sin(normalAngle);
+      const o2x = p2.x + offsetDist * Math.cos(normalAngle);
+      const o2y = p2.y + offsetDist * Math.sin(normalAngle);
+      const midx = mx + offsetDist * Math.cos(normalAngle);
+      const midy = my + offsetDist * Math.cos(normalAngle);
+
+      const isSelected = state.selectedEntity && state.selectedEntity.type === "dimension" && state.selectedEntity.index === idx;
+      const color = isSelected ? "#f97316" : "#0d9488";
+
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.0 / this.zoomLevel;
+      ctx.setLineDash([]);
+
+      // Extension lines
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(o1x, o1y);
+      ctx.moveTo(p2.x, p2.y);
+      ctx.lineTo(o2x, o2y);
+      ctx.stroke();
+
+      // Dimension line
+      ctx.beginPath();
+      ctx.moveTo(o1x, o1y);
+      ctx.lineTo(o2x, o2y);
+      ctx.stroke();
+
+      // Filled arrowheads at both ends
+      this.drawArrowhead(ctx, o1x, o1y, o2x, o2y);
+      this.drawArrowhead(ctx, o2x, o2y, o1x, o1y);
+
+      // Dimension label text background box mask
+      const labelText = `${Math.round(dim.d !== undefined ? dim.d : len)} mm`;
+      ctx.font = `bold ${10.5 / this.zoomLevel}px var(--font-sans)`;
+      
+      const textWidth = ctx.measureText(labelText).width;
+      const padX = 4.0 / this.zoomLevel;
+      const padY = 2.0 / this.zoomLevel;
+      const boxW = textWidth + 2 * padX;
+      const boxH = 14 / this.zoomLevel;
+
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = isSelected ? "#f97316" : "rgba(148, 163, 184, 0.45)";
+      ctx.lineWidth = 0.5 / this.zoomLevel;
+      ctx.fillRect(midx - boxW / 2, midy - boxH / 2, boxW, boxH);
+      ctx.strokeRect(midx - boxW / 2, midy - boxH / 2, boxW, boxH);
+
+      // Text label centered
+      ctx.fillStyle = isSelected ? "#f97316" : "#0f172a";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(labelText, midx, midy);
+
+      ctx.restore();
+    });
+
+    // Leader annotations for tap fits/clearances
+    state.circles.forEach((c) => {
+      if (c.standardHole) {
+        const thread = window.MetricThreads ? window.MetricThreads[c.standardHole] : null;
+        const pitch = thread ? thread.pitch : "0.8";
+
+        const angle = -Math.PI / 4;
+        const sx = c.cx + c.r * Math.cos(angle);
+        const sy = c.cy + c.r * Math.sin(angle);
+        const ex = sx + 14 / this.zoomLevel;
+        const ey = sy - 14 / this.zoomLevel;
+        const shX = ex + 20 / this.zoomLevel;
+
+        ctx.save();
+        ctx.strokeStyle = "#475569";
+        ctx.lineWidth = 0.8 / this.zoomLevel;
+        ctx.setLineDash([]);
+        
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.lineTo(shX, ey);
+        ctx.stroke();
+
+        this.drawArrowhead(ctx, ex, ey, sx, sy);
+
+        ctx.fillStyle = "#0f172a";
+        ctx.font = `bold ${8 / this.zoomLevel}px var(--font-sans)`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(`${c.standardHole}x${pitch} TAP`, ex + 2 / this.zoomLevel, ey - 1 / this.zoomLevel);
+        ctx.restore();
+      }
+      else if (c.holeTolerance) {
+        const angle = Math.PI / 4;
+        const sx = c.cx + c.r * Math.cos(angle);
+        const sy = c.cy + c.r * Math.sin(angle);
+        const ex = sx + 14 / this.zoomLevel;
+        const ey = sy + 14 / this.zoomLevel;
+        const shX = ex + 20 / this.zoomLevel;
+
+        ctx.save();
+        ctx.strokeStyle = "#475569";
+        ctx.lineWidth = 0.8 / this.zoomLevel;
+        ctx.setLineDash([]);
+        
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.lineTo(shX, ey);
+        ctx.stroke();
+
+        this.drawArrowhead(ctx, ex, ey, sx, sy);
+
+        ctx.fillStyle = "#0f172a";
+        ctx.font = `bold ${8 / this.zoomLevel}px var(--font-sans)`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(`Ø${(c.r * 2).toFixed(1)} ${c.holeTolerance}`, ex + 2 / this.zoomLevel, ey + 2 / this.zoomLevel);
+        ctx.restore();
+      }
+    });
+  }
+
+  // Draw arrow head on vectors
+  drawArrowhead(ctx, x1, y1, x2, y2) {
+    const arrowLen = 5.5 / this.zoomLevel;
+    const arrowWidth = 3.5 / this.zoomLevel;
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return;
+
+    const ux = dx / len;
+    const uy = dy / len;
+    const nx = -uy;
+    const ny = ux;
+
+    const ax = x2 - arrowLen * ux;
+    const ay = y2 - arrowLen * uy;
+
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(ax + arrowWidth * nx, ay + arrowWidth * ny);
+    ctx.lineTo(ax - arrowWidth * nx, ay - arrowWidth * ny);
+    ctx.closePath();
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fill();
+  }
+
+  // Draw active measuring tool guide
+  drawMeasurement(ctx, state) {
+    ctx.save();
+    ctx.strokeStyle = "#22c55e"; // bright green
+    ctx.lineWidth = 1.6 / this.zoomLevel;
+    ctx.setLineDash([3 / this.zoomLevel, 3 / this.zoomLevel]);
+    
+    ctx.beginPath();
+    ctx.moveTo(state.measureStartPos.x, state.measureStartPos.y);
+    ctx.lineTo(state.mousePos.x, state.mousePos.y);
+    ctx.stroke();
+
+    const dx = state.mousePos.x - state.measureStartPos.x;
+    const dy = state.mousePos.y - state.measureStartPos.y;
+    const dist = Math.round(Math.hypot(dx, dy));
+    const mx = (state.measureStartPos.x + state.mousePos.x) / 2;
+    const my = (state.measureStartPos.y + state.mousePos.y) / 2;
+
+    const labelText = `Ruler: ${dist} mm`;
+    ctx.font = `bold ${10 / this.zoomLevel}px var(--font-sans)`;
+    ctx.fillStyle = "#15803d"; // dark green for text contrast
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(labelText, mx, my - 4 / this.zoomLevel);
+    ctx.restore();
+  }
+
+  // Draw OrthoLock projection axis guides
+  drawOrthoGuides(ctx, state) {
+    const last = state.vertices[state.vertices.length - 1];
+    ctx.save();
+    ctx.strokeStyle = "rgba(239, 68, 68, 0.4)"; // subtle red projection guidelines
+    ctx.lineWidth = 1.0 / this.zoomLevel;
+    ctx.setLineDash([3 / this.zoomLevel, 3 / this.zoomLevel]);
+    
+    ctx.beginPath();
+    ctx.moveTo(last.x - 3000, last.y);
+    ctx.lineTo(last.x + 3000, last.y);
+    ctx.moveTo(last.x, last.y - 3000);
+    ctx.lineTo(last.x, last.y + 3000);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Draw temporary placement previews for tools
+  drawActiveToolPreviews(ctx, state) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.lineWidth = 1.5 / this.zoomLevel;
+    ctx.setLineDash([4 / this.zoomLevel, 4 / this.zoomLevel]);
+
+    const activeStart = state.activeProfileStartIndex !== undefined ? state.activeProfileStartIndex : 0;
+    if (state.editorMode === "draw" && state.vertices.length > activeStart && state.mousePos) {
+      const last = state.vertices[state.vertices.length - 1];
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(state.mousePos.x, state.mousePos.y);
+      ctx.stroke();
+    }
+
+    if (state.editorMode === "circle" && state.activeCircleCenter && state.mousePos) {
+      const r = Math.hypot(state.mousePos.x - state.activeCircleCenter.x, state.mousePos.y - state.activeCircleCenter.y);
+      ctx.beginPath();
+      ctx.arc(state.activeCircleCenter.x, state.activeCircleCenter.y, r, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    else if (state.editorMode === "rect" && state.activeRectStart && state.mousePos) {
+      ctx.beginPath();
+      ctx.rect(
+        state.activeRectStart.x, 
+        state.activeRectStart.y, 
+        state.mousePos.x - state.activeRectStart.x, 
+        state.mousePos.y - state.activeRectStart.y
+      );
+      ctx.stroke();
+    }
+    else if (state.editorMode === "poly" && state.activePolyCenter && state.mousePos) {
+      const r = Math.hypot(state.mousePos.x - state.activePolyCenter.x, state.mousePos.y - state.activePolyCenter.y);
+      const step = (2 * Math.PI) / state.polySides;
+      const angle = Math.atan2(state.mousePos.y - state.activePolyCenter.y, state.mousePos.x - state.activePolyCenter.x);
+      
+      ctx.beginPath();
+      for (let i = 0; i < state.polySides; i++) {
+        const theta = angle + i * step;
+        const px = state.activePolyCenter.x + r * Math.cos(theta);
+        const py = state.activePolyCenter.y + r * Math.sin(theta);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Draw object snap target indicators (green squares, yellow triangles, blue circles etc.)
+  drawSnapIndicator(ctx, snap) {
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2.0 / this.zoomLevel;
+
+    // Standard CAD Snap indicator styling
+    ctx.strokeStyle = snap.type === "endpoint" ? "#22c55e" : 
+                      snap.type === "midpoint" ? "#eab308" : 
+                      snap.type === "center" ? "#2563eb" : 
+                      snap.type === "intersection" ? "#ef4444" : "#ec4899";
+
+    const size = 4.5 / this.zoomLevel;
+
+    if (snap.type === "endpoint") {
+      ctx.strokeRect(snap.x - size, snap.y - size, size * 2, size * 2);
+    }
+    else if (snap.type === "midpoint") {
+      ctx.beginPath();
+      ctx.moveTo(snap.x, snap.y - size);
+      ctx.lineTo(snap.x + size, snap.y + size);
+      ctx.lineTo(snap.x - size, snap.y + size);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    else if (snap.type === "center") {
+      ctx.beginPath();
+      ctx.arc(snap.x, snap.y, size, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    else if (snap.type === "intersection") {
+      ctx.beginPath();
+      ctx.moveTo(snap.x - size, snap.y - size);
+      ctx.lineTo(snap.x + size, snap.y + size);
+      ctx.moveTo(snap.x + size, snap.y - size);
+      ctx.lineTo(snap.x - size, snap.y + size);
+      ctx.stroke();
+    }
+    else {
+      // Draw diamond for tangent and others
+      ctx.beginPath();
+      ctx.moveTo(snap.x, snap.y - size);
+      ctx.lineTo(snap.x + size, snap.y);
+      ctx.lineTo(snap.x, snap.y + size);
+      ctx.lineTo(snap.x - size, snap.y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 }
 

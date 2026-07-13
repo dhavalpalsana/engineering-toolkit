@@ -13,6 +13,10 @@ body {
   position: relative;
 }
 
+.hidden {
+  display: none !important;
+}
+
 /* Premium background decorative glow */
 body::before {
   content: '';
@@ -665,6 +669,45 @@ body::before {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+.group-buttons .tool-btn {
+  width: auto;
+  height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-tertiary);
+  backdrop-filter: none;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.group-buttons .tool-btn i,
+.group-buttons .tool-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2px;
+  color: inherit;
+}
+
+.group-buttons .tool-btn.active {
+  background: var(--accent-primary);
+  color: var(--bg-primary) !important;
+  border-color: var(--accent-primary);
+}
+
+.group-buttons .tool-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
 }
 
 /* MIDDLE INTERACTIVE WORKSPACE */

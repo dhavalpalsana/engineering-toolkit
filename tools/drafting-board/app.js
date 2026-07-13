@@ -1,5 +1,7 @@
 // ==========================================================================
-// 2D Engineering Drafting Board - Parametric CAD Core Engine
+// 2D Engineering Drafting Board - Rebuilt Core CAD Engine
+// High-performance 2D HTML5 Canvas coordinate-based CAD engine.
+// Integrated with R-Tree spatial indexing for fast selection and snapping.
 // ==========================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -7,27 +9,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const ParallelKeys = window.ParallelKeys || {};
 
   // --- Drawing State ---
-  let sketchVertices = []; // Coordinates array in mm
-  let sketchCircles = [];  // Circle entities: [{ cx, cy, r, construction: false }]
+  let sketchVertices = []; // Coordinates array in mm: [{ x, y }]
+  let sketchProfiles = [];  // Finalized profiles: [{ startIndex, count, isClosed }]
+  let activeProfileStartIndex = 0; // Index in sketchVertices of active open polyline
+  let sketchCircles = [];  // Circle entities: [{ cx, cy, r, construction, standardHole, holeTolerance }]
   let sketchInsertions = []; // Block instances: [{ blockName, x, y, scaleX, scaleY, rotation }]
   let blockDefinitions = {
     "M4_SCREW": {
       basePoint: { x: 0, y: 0 },
-      entities: [
-        { type: "CIRCLE", cx: 0, cy: 0, r: 2, layer: "HOLES" }
-      ]
+      entities: [{ type: "CIRCLE", cx: 0, cy: 0, r: 2, layer: "HOLES" }]
     },
     "M5_SCREW": {
       basePoint: { x: 0, y: 0 },
-      entities: [
-        { type: "CIRCLE", cx: 0, cy: 0, r: 2.5, layer: "HOLES" }
-      ]
+      entities: [{ type: "CIRCLE", cx: 0, cy: 0, r: 2.5, layer: "HOLES" }]
     },
     "M6_SCREW": {
       basePoint: { x: 0, y: 0 },
-      entities: [
-        { type: "CIRCLE", cx: 0, cy: 0, r: 3, layer: "HOLES" }
-      ]
+      entities: [{ type: "CIRCLE", cx: 0, cy: 0, r: 3, layer: "HOLES" }]
     },
     "TSLOT_2020": {
       basePoint: { x: 0, y: 0 },
@@ -40,223 +38,419 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
   let isSketchClosed = false;
-  let gridSnap = 10;       // Snap resolution in mm
   let selectedVertexIndex = -1;
   let mousePos = { x: 0, y: 0 };
   
-  // CAD Tools Mode variables
-  let editorMode = "draw"; // "draw", "circle", "fillet", "offset", "dimension", "measure"
-  let customDimensions = []; // [{ v1: index1, v2: index2 }]
-  let selectedVertexA = -1; // Vertex A for custom dimension selection
-  let selectedVertexB = -1; // Vertex B for custom dimension selection
+  // CAD Tools Mode
+  let editorMode = "draw"; // "draw", "circle", "rect", "poly", "fillet", "dimension", "measure", "pan", "insert_block"
+  window.editorMode = "draw";
+  let customDimensions = [];  // [{ v1, v2, d }]
+  let selectedVertexA = -1;  // For smart dimensioning
+  let selectedVertexB = -1;
   let measureStartPos = null; // Ruler start coordinate
-  let measureEndPos = null; // Ruler end coordinate
+  let measureEndPos = null;   // Ruler end coordinate
   let isMeasuring = false;
 
-  // Circles drawing state
+  // Shapes drawing states
   let activeCircleCenter = null;
-  let activeCircleRadius = 0;
-
-  // Rect & Poly drawing state
-  let polySides = 3;
   let activeRectStart = null;
   let activePolyCenter = null;
-
-  // Selection & snapping
-  let selectedEntity = null; // { type: 'line'|'circle'|'vertex', index: number }
-  let hoveredSnapTarget = null; // { x, y, type: 'endpoint'|'midpoint'|'center' }
+  let polySides = 6;
   
+  // Selection and Snap Hover
+  let selectedEntity = null; // { type: 'line'|'circle'|'vertex'|'dimension'|'insertion', index: number }
+  let hoveredSnapTarget = null; // { x, y, type, index }
   let shiftPressed = false;
 
-  // Sheet layout format config (A4 landscape is default)
+  // Sheet configuration
   let sheetSize = "A4";
   let sheetWidth = 297;
   let sheetHeight = 210;
 
-  // WebGL Render pipeline states (Phase 2)
-  let webglRenderer = null;
-  let activeRenderMode = "webgl";
+  // Unified Renderer
+  let webglRenderer = null; // represents our 2D canvas context renderer class instance
 
-  // Layer Control configuration (Phase 5)
+  // Layer Configuration
   let layers = {
-    "PROFILE_OUTLINE": { color: "#14b8a6", visible: true, frozen: false },
-    "HOLES": { color: "#3b82f6", visible: true, frozen: false },
-    "CONSTRUCTION": { color: "#64748b", visible: true, frozen: false },
-    "SHEET_FORMAT": { color: "#334155", visible: false, frozen: false }
+    "FOREGROUND": { color: "#000000", visible: true, frozen: false },
+    "BACKGROUND": { color: "#475569", visible: true, frozen: false }
   };
   let activeBlockToInsert = null;
 
-  // Viewport Zoom & Pan state
-  let zoomLevel = 1.0;
-  let panOffset = { x: 0, y: 0 };
-  let isPanning = false;
-  let panStart = { x: 0, y: 0 };
+  // Status Toggles
+  window.orthoLockEnabled = false;
+  window.gridVisible = true;
+  window.snapEnabled = true;
 
-  // --- Theme/UI Boot ---
-  const svg = document.getElementById("sketch-canvas-svg");
-  const canvasEl = document.getElementById("three-cad-canvas");
+  // --- Canvas setup ---
+  const canvasEl = document.getElementById("cad-canvas");
 
-  function snapToGrid(x, y, snap) {
-    if (window.snapEnabled === false) {
-      return { x: x, y: y };
-    }
-    return {
-      x: Math.round(x / snap) * snap,
-      y: Math.round(y / snap) * snap
+  // --- RBush Spatial Indexing Fallback (Ensures offline compatibility) ---
+  if (typeof window.RBush === "undefined") {
+    window.RBush = class RBush {
+      constructor() {
+        this.items = [];
+      }
+      insert(item) {
+        this.items.push(item);
+      }
+      load(items) {
+        this.items = [...items];
+      }
+      clear() {
+        this.items = [];
+      }
+      search(bbox) {
+        return this.items.filter(item => {
+          return item.minX <= bbox.maxX && item.maxX >= bbox.minX &&
+                 item.minY <= bbox.maxY && item.maxY >= bbox.minY;
+        });
+      }
     };
   }
 
-  function getMousePos(canvasEl, evt) {
-    if (webglRenderer) {
-      const rect = webglRenderer.canvas.getBoundingClientRect();
-      const mouseX = evt.clientX - rect.left;
-      const mouseY = evt.clientY - rect.top;
+  // Active Spatial Indexes
+  let entitySpatialIndex = new window.RBush();
+  let snapSpatialIndex = new window.RBush();
 
-      // Normalize device coordinates (-1 to 1)
-      const ndcX = (mouseX / webglRenderer.width) * 2 - 1;
-      const ndcY = -(mouseY / webglRenderer.height) * 2 + 1;
-
-      const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
-      vector.unproject(webglRenderer.camera);
-      return {
-        x: Math.round(vector.x),
-        y: Math.round(vector.y)
-      };
-    }
-    return { x: 0, y: 0 };
+  // Returns exact world coordinates (grid snapping is disabled)
+  function snapToGrid(x, y) {
+    return { x: x, y: y };
   }
 
-  // Track shift key for Ortho Lock
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Shift") shiftPressed = true;
-  });
-  window.addEventListener("keyup", (e) => {
-    if (e.key === "Shift") shiftPressed = false;
-  });
+  // --- Spatial Index Builder ---
+  function rebuildSpatialIndexes() {
+    entitySpatialIndex.clear();
+    snapSpatialIndex.clear();
 
-  // --- State Share / Export Helpers (Required by Header) ---
-  window.shareLink = () => {
-    const state = {
-      vertices: sketchVertices,
-      circles: sketchCircles,
-      customDimensions,
-      isSketchClosed
-    };
-    const encoded = btoa(JSON.stringify(state));
-    const url = `${window.location.origin}${window.location.pathname}?design=${encoded}`;
-    navigator.clipboard.writeText(url).then(() => {
-      alert("Sharing link copied to clipboard!");
-    }).catch(err => {
-      console.error("Failed to copy share link:", err);
+    const entityItems = [];
+    const snapItems = [];
+
+    // 1. Index Vertices
+    sketchVertices.forEach((v, idx) => {
+      // Entity hit target
+      entityItems.push({
+        minX: v.x - 8, minY: v.y - 8, maxX: v.x + 8, maxY: v.y + 8,
+        type: "vertex", index: idx, x: v.x, y: v.y
+      });
+      // Snap endpoint
+      snapItems.push({
+        minX: v.x - 1, minY: v.y - 1, maxX: v.x + 1, maxY: v.y + 1,
+        type: "endpoint", index: idx, x: v.x, y: v.y
+      });
     });
-  };
 
-  window.exportJSON = () => {
-    const state = {
-      vertices: sketchVertices,
-      circles: sketchCircles,
-      customDimensions,
-      isSketchClosed
+    // Helper to index segments for a range
+    const indexSegments = (start, count, isClosed) => {
+      if (count < 2) return;
+      const limit = isClosed ? count : count - 1;
+      for (let i = 0; i < limit; i++) {
+        const idx1 = start + i;
+        const idx2 = start + (i + 1) % count;
+        const p1 = sketchVertices[idx1];
+        const p2 = sketchVertices[idx2];
+        if (!p1 || !p2) continue;
+        
+        const minX = Math.min(p1.x, p2.x);
+        const minY = Math.min(p1.y, p2.y);
+        const maxX = Math.max(p1.x, p2.x);
+        const maxY = Math.max(p1.y, p2.y);
+
+        entityItems.push({
+          minX: minX - 8, minY: minY - 8, maxX: maxX + 8, maxY: maxY + 8,
+          type: "line", index: idx1, p1, p2
+        });
+
+        // Midpoint snap target
+        const mx = (p1.x + p2.x) / 2;
+        const my = (p1.y + p2.y) / 2;
+        snapItems.push({
+          minX: mx - 1, minY: my - 1, maxX: mx + 1, maxY: my + 1,
+          type: "midpoint", index: idx1, x: mx, y: my
+        });
+      }
     };
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "drafting_drawing.json";
-    a.click();
-  };
 
-  window.importJSON = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target.result;
-        if (file.name.toLowerCase().endsWith(".dxf")) {
-          const db = new DxfDatabase();
-          db.parse(text);
-          
-          sketchVertices = [];
-          sketchCircles = [];
-          sketchInsertions = [];
-          customDimensions = [];
-          
-          // Map entities to WCS layout
-          db.entities.forEach(ent => {
-            if (ent.type === "LINE") {
-              if (sketchVertices.length === 0) {
-                sketchVertices.push({ x: ent.x1, y: ent.y1 });
-                sketchVertices.push({ x: ent.x2, y: ent.y2 });
-              } else {
-                const last = sketchVertices[sketchVertices.length - 1];
-                if (Math.hypot(last.x - ent.x1, last.y - ent.y1) < 1.0) {
-                  sketchVertices.push({ x: ent.x2, y: ent.y2 });
-                } else {
-                  sketchVertices.push({ x: ent.x1, y: ent.y1 });
-                  sketchVertices.push({ x: ent.x2, y: ent.y2 });
-                }
+    // 2. Index Line Segments across all profiles
+    sketchProfiles.forEach(prof => {
+      indexSegments(prof.startIndex, prof.count, prof.isClosed);
+    });
+
+    // Index active open polyline segments
+    const activeStart = activeProfileStartIndex;
+    const activeCount = sketchVertices.length - activeStart;
+    indexSegments(activeStart, activeCount, false);
+
+    // 3. Index Circles
+    sketchCircles.forEach((c, idx) => {
+      // Bounding box of circumference
+      entityItems.push({
+        minX: c.cx - c.r - 8, minY: c.cy - c.r - 8, maxX: c.cx + c.r + 8, maxY: c.cy + c.r + 8,
+        type: "circle", index: idx, cx: c.cx, cy: c.cy, r: c.r
+      });
+
+      // Center snap target
+      snapItems.push({
+        minX: c.cx - 1, minY: c.cy - 1, maxX: c.cx + 1, maxY: c.cy + 1,
+        type: "center", index: idx, x: c.cx, y: c.cy
+      });
+    });
+
+    // 4. Index Block Insertions
+    sketchInsertions.forEach((ins, idx) => {
+      const def = blockDefinitions[ins.blockName];
+      if (!def) return;
+      
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const transformPoint = (px, py) => {
+        const rad = ((ins.rotation || 0) * Math.PI) / 180;
+        let sx = px * (ins.scaleX !== undefined ? ins.scaleX : 1);
+        let sy = py * (ins.scaleY !== undefined ? ins.scaleY : 1);
+        let rx = sx * Math.cos(rad) - sy * Math.sin(rad);
+        let ry = sx * Math.sin(rad) + sy * Math.cos(rad);
+        return { x: rx + ins.x, y: ry + ins.y };
+      };
+
+      def.entities.forEach(ent => {
+        if (ent.type === "LINE") {
+          const pt1 = transformPoint(ent.x1, ent.y1);
+          const pt2 = transformPoint(ent.x2, ent.y2);
+          minX = Math.min(minX, pt1.x, pt2.x);
+          minY = Math.min(minY, pt1.y, pt2.y);
+          maxX = Math.max(maxX, pt1.x, pt2.x);
+          maxY = Math.max(maxY, pt1.y, pt2.y);
+        } else if (ent.type === "CIRCLE") {
+          const ctr = transformPoint(ent.cx, ent.cy);
+          const r = ent.r * Math.abs(ins.scaleX !== undefined ? ins.scaleX : 1);
+          minX = Math.min(minX, ctr.x - r);
+          minY = Math.min(minY, ctr.y - r);
+          maxX = Math.max(maxX, ctr.x + r);
+          maxY = Math.max(maxY, ctr.y + r);
+        }
+      });
+
+      if (minX !== Infinity) {
+        entityItems.push({
+          minX: minX - 8, minY: minY - 8, maxX: maxX + 8, maxY: maxY + 8,
+          type: "insertion", index: idx, ins
+        });
+      }
+    });
+
+    // 5. Index Dimensions
+    customDimensions.forEach((dim, idx) => {
+      const p1 = sketchVertices[dim.v1];
+      const p2 = sketchVertices[dim.v2];
+      if (!p1 || !p2) return;
+
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      const theta = Math.atan2(dy, dx);
+      const normalAngle = theta - Math.PI / 2;
+      const offsetDist = 28 + (idx * 16);
+      const midx = mx + offsetDist * Math.cos(normalAngle);
+      const midy = my + offsetDist * Math.sin(normalAngle);
+
+      entityItems.push({
+        minX: midx - 22, minY: midy - 8, maxX: midx + 22, maxY: midy + 8,
+        type: "dimension", index: idx
+      });
+    });
+
+    // 6. Dynamic Intersections, Tangents, and Perpendicular Snaps
+    if (window.snapEnabled) {
+      // Intersections
+      if (n >= 4) {
+        for (let i = 0; i < limit; i++) {
+          for (let j = i + 2; j < limit; j++) {
+            if (i === 0 && j === limit - 1) continue;
+            const p1 = sketchVertices[i];
+            const p2 = sketchVertices[(i + 1) % n];
+            const q1 = sketchVertices[j];
+            const q2 = sketchVertices[(j + 1) % n];
+            
+            const d = (p2.x - p1.x) * (q2.y - q1.y) - (p2.y - p1.y) * (q2.x - q1.x);
+            if (Math.abs(d) > 1e-6) {
+              const u = ((q1.x - p1.x) * (q2.y - q1.y) - (q1.y - p1.y) * (q2.x - q1.x)) / d;
+              const v = ((q1.x - p1.x) * (p2.y - p1.y) - (q1.y - p1.y) * (p2.x - p1.x)) / d;
+              if (u >= 0 && u <= 1 && v >= 0 && v <= 1) {
+                const ix = p1.x + u * (p2.x - p1.x);
+                const iy = p1.y + u * (p2.y - p1.y);
+                snapItems.push({
+                  minX: ix - 1, minY: iy - 1, maxX: ix + 1, maxY: iy + 1,
+                  type: "intersection", index: [i, j], x: Math.round(ix), y: Math.round(iy)
+                });
               }
             }
-            else if (ent.type === "CIRCLE") {
-              sketchCircles.push({ cx: ent.cx, cy: ent.cy, r: ent.r, construction: ent.layer === "CONSTRUCTION" });
-            }
-            else if (ent.type === "INSERT") {
-              sketchInsertions.push({
-                blockName: ent.blockName,
-                x: ent.x,
-                y: ent.y,
-                scaleX: ent.scaleX !== undefined ? ent.scaleX : 1,
-                scaleY: ent.scaleY !== undefined ? ent.scaleY : 1,
-                rotation: ent.rotation !== undefined ? ent.rotation : 0
-              });
-            }
-          });
-          
-          // Load definitions from blocks table
-          if (db.blocks) {
-            Object.keys(db.blocks).forEach(name => {
-              blockDefinitions[name] = db.blocks[name];
-            });
-          }
-          
-          isSketchClosed = (sketchVertices.length >= 3 && 
-            Math.hypot(sketchVertices[0].x - sketchVertices[sketchVertices.length - 1].x, 
-                       sketchVertices[0].y - sketchVertices[sketchVertices.length - 1].y) < 10);
-                       
-          drawSketchCanvas();
-          updateLiveProperties();
-        } else {
-          const data = JSON.parse(text);
-          if (data.vertices) {
-            sketchVertices = data.vertices;
-            sketchCircles = data.circles || [];
-            sketchInsertions = data.insertions || [];
-            customDimensions = data.customDimensions || [];
-            isSketchClosed = !!data.isSketchClosed;
-            drawSketchCanvas();
-            updateLiveProperties();
-          } else {
-            alert("Invalid file format.");
           }
         }
-      } catch (err) {
-        console.error(err);
-        alert("Failed to parse file.");
       }
-      event.target.value = "";
-    };
-    reader.readAsText(file);
-  };
 
-  // --- Project Manager Hook Registration (Auth Integration) ---
+      // Tangent and Perpendicular projections relative to last vertex
+      if (sketchVertices.length > 0) {
+        const last = sketchVertices[sketchVertices.length - 1];
+
+        // Tangents
+        sketchCircles.forEach((c, idx) => {
+          const d = Math.hypot(last.x - c.cx, last.y - c.cy);
+          if (d > c.r + 1e-3) {
+            const a = Math.atan2(last.y - c.cy, last.x - c.cx);
+            const theta = Math.acos(c.r / d);
+            
+            const t1x = c.cx + c.r * Math.cos(a + theta);
+            const t1y = c.cy + c.r * Math.sin(a + theta);
+            const t2x = c.cx + c.r * Math.cos(a - theta);
+            const t2y = c.cy + c.r * Math.sin(a - theta);
+
+            snapItems.push({
+              minX: t1x - 1, minY: t1y - 1, maxX: t1x + 1, maxY: t1y + 1,
+              type: "tangent", index: idx, x: Math.round(t1x), y: Math.round(t1y)
+            });
+            snapItems.push({
+              minX: t2x - 1, minY: t2y - 1, maxX: t2x + 1, maxY: t2y + 1,
+              type: "tangent", index: idx, x: Math.round(t2x), y: Math.round(t2y)
+            });
+          }
+        });
+
+        // Perpendiculars
+        for (let i = 0; i < limit; i++) {
+          const p1 = sketchVertices[i];
+          const p2 = sketchVertices[(i + 1) % n];
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const lenSq = dx * dx + dy * dy;
+          if (lenSq > 1e-6) {
+            const u = ((last.x - p1.x) * dx + (last.y - p1.y) * dy) / lenSq;
+            if (u >= 0 && u <= 1) {
+              const px = p1.x + u * dx;
+              const py = p1.y + u * dy;
+              snapItems.push({
+                minX: px - 1, minY: py - 1, maxX: px + 1, maxY: py + 1,
+                type: "perpendicular", index: i, x: Math.round(px), y: Math.round(py)
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (entityItems.length > 0) entitySpatialIndex.load(entityItems);
+    if (snapItems.length > 0) snapSpatialIndex.load(snapItems);
+  }
+
+  // --- Selection Query (Hit Test) ---
+  function findEntityAt(pos) {
+    const queryBox = {
+      minX: pos.x - 8, minY: pos.y - 8, maxX: pos.x + 8, maxY: pos.y + 8
+    };
+
+    const candidates = entitySpatialIndex.search(queryBox);
+    let bestEntity = null;
+    let minDist = 8;
+
+    candidates.forEach(cand => {
+      let dist = Infinity;
+      if (cand.type === "vertex") {
+        dist = Math.hypot(pos.x - cand.x, pos.y - cand.y);
+      }
+      else if (cand.type === "line") {
+        dist = getDistanceToSegment(pos, cand.p1, cand.p2);
+      }
+      else if (cand.type === "circle") {
+        const distToCenter = Math.hypot(pos.x - cand.cx, pos.y - cand.cy);
+        dist = Math.abs(distToCenter - cand.r);
+        if (distToCenter < dist) dist = distToCenter; // also check center click
+      }
+      else if (cand.type === "insertion") {
+        dist = Math.hypot(pos.x - cand.ins.x, pos.y - cand.ins.y);
+      }
+      else if (cand.type === "dimension") {
+        dist = 0; // high priority click inside text label box
+      }
+
+      if (dist < minDist) {
+        minDist = dist;
+        bestEntity = { type: cand.type, index: cand.index };
+      }
+    });
+
+    return bestEntity;
+  }
+
+  function getDistanceToSegment(p, a, b) {
+    const A = p.x - a.x;
+    const B = p.y - a.y;
+    const C = b.x - a.x;
+    const D = b.y - a.y;
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    let param = -1;
+    if (lenSq !== 0) param = dot / lenSq;
+
+    let xx, yy;
+    if (param < 0) {
+      xx = a.x;
+      yy = a.y;
+    } else if (param > 1) {
+      xx = b.x;
+      yy = b.y;
+    } else {
+      xx = a.x + param * C;
+      yy = a.y + param * D;
+    }
+    return Math.hypot(p.x - xx, p.y - yy);
+  }
+
+  // --- Snap Query ---
+  function findSnapTarget(pos) {
+    if (!window.snapEnabled) return null;
+
+    const queryBox = {
+      minX: pos.x - 14, minY: pos.y - 14, maxX: pos.x + 14, maxY: pos.y + 14
+    };
+
+    const candidates = snapSpatialIndex.search(queryBox);
+    let bestTarget = null;
+    let minDist = 14;
+
+    candidates.forEach(cand => {
+      const dist = Math.hypot(pos.x - cand.x, pos.y - cand.y);
+      if (dist < minDist) {
+        minDist = dist;
+        bestTarget = cand;
+      }
+    });
+
+    return bestTarget;
+  }
+
+  // --- Keyboard tracking for Ortho Lock ---
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Shift") {
+      shiftPressed = true;
+      drawSketchCanvas();
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "Shift") {
+      shiftPressed = false;
+      drawSketchCanvas();
+    }
+  });
+
   window.projectManagerConfig = {
     toolId: "drafting-board",
     getInputs: () => ({
       vertices: sketchVertices,
+      profiles: sketchProfiles,
+      activeProfileStartIndex: activeProfileStartIndex,
       circles: sketchCircles,
       insertions: sketchInsertions,
       customDimensions,
-      isSketchClosed
+      isSketchClosed // keep for legacy parser support
     }),
     setInputs: (data) => {
       if (data && data.vertices) {
@@ -264,14 +458,29 @@ document.addEventListener("DOMContentLoaded", () => {
         sketchCircles = data.circles || [];
         sketchInsertions = data.insertions || [];
         customDimensions = data.customDimensions || [];
-        isSketchClosed = !!data.isSketchClosed;
+        
+        // Backwards compatibility for older single-profile files
+        if (data.profiles) {
+          sketchProfiles = data.profiles;
+          activeProfileStartIndex = data.activeProfileStartIndex !== undefined ? data.activeProfileStartIndex : sketchVertices.length;
+        } else {
+          const legacyClosed = !!data.isSketchClosed;
+          if (legacyClosed && sketchVertices.length >= 3) {
+            sketchProfiles = [{ startIndex: 0, count: sketchVertices.length, isClosed: true }];
+            activeProfileStartIndex = sketchVertices.length;
+          } else {
+            sketchProfiles = [];
+            activeProfileStartIndex = 0;
+          }
+        }
+        rebuildSpatialIndexes();
         drawSketchCanvas();
         updateLiveProperties();
       }
     }
   };
 
-  // Check URL params on boot
+  // URL boot loading
   const urlParams = new URLSearchParams(window.location.search);
   const designParam = urlParams.get("design");
   if (designParam) {
@@ -279,19 +488,52 @@ document.addEventListener("DOMContentLoaded", () => {
       const decoded = JSON.parse(atob(designParam));
       window.projectManagerConfig.setInputs(decoded);
     } catch (err) {
-      console.error("Failed to parse boot URL param:", err);
+      console.error("Failed to parse URL design param:", err);
     }
   }
 
-  // --- UI Control Triggers ---
-  window.changeGridSnap = () => {
-    gridSnap = parseInt(document.getElementById("grid-snap-select").value) || 10;
+  // --- Viewport Settings Toggles ---
+  window.toggleSnap = () => {
+    window.snapEnabled = !window.snapEnabled;
+    document.getElementById("snap-toggle").classList.toggle("active", window.snapEnabled);
+    rebuildSpatialIndexes();
     drawSketchCanvas();
   };
 
+  window.toggleOrtho = () => {
+    window.orthoLockEnabled = !window.orthoLockEnabled;
+    document.getElementById("ortho-toggle").classList.toggle("active", window.orthoLockEnabled);
+    drawSketchCanvas();
+  };
+
+  window.toggleGrid = () => {
+    window.gridVisible = !window.gridVisible;
+    document.getElementById("grid-toggle").classList.toggle("active", window.gridVisible);
+    drawSketchCanvas();
+  };
+
+
+  window.changeSheetSize = () => {
+    sheetSize = document.getElementById("sheet-size-select").value;
+    if (sheetSize === "A4") {
+      sheetWidth = 297;
+      sheetHeight = 210;
+    } else if (sheetSize === "A3") {
+      sheetWidth = 420;
+      sheetHeight = 297;
+    }
+    if (webglRenderer) {
+      webglRenderer.resetView(sheetWidth, sheetHeight);
+    }
+  };
+
+  // --- Reset / Clear board ---
   window.clearSketchCanvas = () => {
     sketchVertices = [];
+    sketchProfiles = [];
+    activeProfileStartIndex = 0;
     sketchCircles = [];
+    sketchInsertions = [];
     isSketchClosed = false;
     customDimensions = [];
     selectedVertexA = -1;
@@ -300,25 +542,38 @@ document.addEventListener("DOMContentLoaded", () => {
     measureEndPos = null;
     isMeasuring = false;
     selectedEntity = null;
+    
+    rebuildSpatialIndexes();
     showEntityInspector();
     drawSketchCanvas();
     updateLiveProperties();
   };
 
   window.undoSketchPoint = () => {
-    if (isSketchClosed) {
-      isSketchClosed = false;
-    } else {
+    const activeStart = activeProfileStartIndex;
+    if (sketchVertices.length > activeStart) {
       sketchVertices.pop();
+    } else if (sketchProfiles.length > 0) {
+      const lastProf = sketchProfiles.pop();
+      activeProfileStartIndex = lastProf.startIndex;
     }
     customDimensions = customDimensions.filter(d => d.v1 < sketchVertices.length && d.v2 < sketchVertices.length);
+    rebuildSpatialIndexes();
     drawSketchCanvas();
     updateLiveProperties();
   };
 
   window.closeSketchShape = () => {
-    if (sketchVertices.length >= 3) {
-      isSketchClosed = true;
+    const activeStart = activeProfileStartIndex;
+    const activeCount = sketchVertices.length - activeStart;
+    if (activeCount >= 3) {
+      sketchProfiles.push({
+        startIndex: activeStart,
+        count: activeCount,
+        isClosed: true
+      });
+      activeProfileStartIndex = sketchVertices.length;
+      rebuildSpatialIndexes();
       drawSketchCanvas();
       updateLiveProperties();
     } else {
@@ -326,132 +581,179 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-
-
-  // --- Export DXF & SVG Vector Blueprints ---
-  window.exportSVGDrawing = () => {
-    if (sketchVertices.length < 2) {
-      alert("Please draw a shape first to export.");
-      return;
+  // --- Render Dispatcher ---
+  function drawSketchCanvas(drawCursorLine = false) {
+    if (webglRenderer) {
+      webglRenderer.updateDrawing({
+        vertices: sketchVertices,
+        profiles: sketchProfiles,
+        activeProfileStartIndex: activeProfileStartIndex,
+        circles: sketchCircles,
+        isClosed: isSketchClosed,
+        sheetWidth,
+        sheetHeight,
+        layers,
+        insertions: sketchInsertions,
+        blockDefinitions,
+        selectedEntity,
+        hoveredSnapTarget,
+        drawCursorLine,
+        mousePos,
+        customDimensions,
+        measureStartPos,
+        measureEndPos,
+        isMeasuring,
+        editorMode,
+        polySides,
+        activeCircleCenter,
+        activeRectStart,
+        activePolyCenter,
+        orthoLockEnabled: window.orthoLockEnabled || shiftPressed
+      });
     }
-    
-    const exportSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    exportSvg.setAttribute("viewBox", `0 0 ${sheetWidth} ${sheetHeight}`);
-    exportSvg.setAttribute("width", sheetWidth);
-    exportSvg.setAttribute("height", sheetHeight);
-    exportSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    exportSvg.style.background = "#0c0f1d";
-    
-    exportSvg.innerHTML = `
-      <defs>
-        <marker id="arrow-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 10 0 L 0 5 L 10 10 z" fill="var(--accent-primary)" />
-        </marker>
-        <marker id="arrow-end" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-primary)" />
-        </marker>
-      </defs>
-    `;
-    
-    renderToViewport(exportSvg, false);
-    exportSvg.querySelectorAll(".sk-handle, .sk-handle-selected, .sk-snap-indicator, .sk-align-guide").forEach(el => el.remove());
-    
-    const svgData = new XMLSerializer().serializeToString(exportSvg);
-    const blob = new Blob([svgData], { type: "image/svg+xml" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "drafting_profile.svg";
-    a.click();
-  };
+  }
 
-  window.exportDXFDrawing = () => {
-    if (sketchVertices.length < 2) {
-      alert("Please draw a shape first to export.");
-      return;
-    }
-    
-    const db = new DxfDatabase();
-    
-    // Add layers
-    db.addLayer("PROFILE_OUTLINE", 3, "CONTINUOUS");
-    db.addLayer("HOLES", 1, "CONTINUOUS");
-    db.addLayer("CONSTRUCTION", 2, "DASHED");
-    db.addLayer("SHEET_FORMAT", 7, "CONTINUOUS");
-    
-    // 1. Export boundary outline lines
+  // --- Smart Dimension & Fillet Modifiers ---
+  function applyFillet(vertexIdx, radius) {
     const n = sketchVertices.length;
-    const limit = isSketchClosed ? n : n - 1;
-    for (let i = 0; i < limit; i++) {
-      const p1 = sketchVertices[i];
-      const p2 = sketchVertices[(i + 1) % n];
-      db.entities.push({
-        type: "LINE",
-        layer: "PROFILE_OUTLINE",
-        x1: p1.x, y1: p1.y,
-        x2: p2.x, y2: p2.y
-      });
+    if (n < 3) return;
+
+    const prevIdx = (vertexIdx - 1 + n) % n;
+    const nextIdx = (vertexIdx + 1) % n;
+
+    const p = sketchVertices[vertexIdx];
+    const p1 = sketchVertices[prevIdx];
+    const p2 = sketchVertices[nextIdx];
+
+    // Direction vectors
+    const v1 = { x: p1.x - p.x, y: p1.y - p.y };
+    const v2 = { x: p2.x - p.x, y: p2.y - p.y };
+
+    const len1 = Math.hypot(v1.x, v1.y);
+    const len2 = Math.hypot(v2.x, v2.y);
+    if (len1 < 1e-3 || len2 < 1e-3) return;
+
+    // Unit vectors
+    const u1 = { x: v1.x / len1, y: v1.y / len1 };
+    const u2 = { x: v2.x / len2, y: v2.y / len2 };
+
+    const theta = Math.acos(u1.x * u2.x + u1.y * u2.y);
+    const filletDist = radius / Math.tan(theta / 2);
+
+    if (filletDist > len1 || filletDist > len2) {
+      alert("Fillet radius too large for connecting segments.");
+      return;
     }
 
-    // 2. Export circle holes
+    // Tangent points on segment
+    const pt1 = { x: Math.round(p.x + filletDist * u1.x), y: Math.round(p.y + filletDist * u1.y) };
+    const pt2 = { x: Math.round(p.x + filletDist * u2.x), y: Math.round(p.y + filletDist * u2.y) };
+
+    // Insert new vertices in outline
+    sketchVertices.splice(vertexIdx, 1, pt1, pt2);
+    isSketchClosed = true;
+
+    selectedEntity = null;
+    rebuildSpatialIndexes();
+    drawSketchCanvas();
+    updateLiveProperties();
+  }
+
+
+
+  // --- Real-time Profile Properties Telemetry ---
+  function updateLiveProperties() {
+    let totalArea = 0;
+    let sumAreaY = 0;
+    let sumAreaX = 0;
+    let listIxx = [];
+    let listCentroids = [];
+    let listAreas = [];
+
+    // 1. Process Finalized Profiles
+    sketchProfiles.forEach(prof => {
+      const profVerts = sketchVertices.slice(prof.startIndex, prof.startIndex + prof.count);
+      const props = calculatePolygonProperties(profVerts);
+      if (props.A > 0.1) {
+        listAreas.push(props.A);
+        listCentroids.push({ x: props.xc, y: props.yc });
+        listIxx.push(props.Iz);
+        totalArea += props.A;
+        sumAreaY += props.yc * props.A;
+        sumAreaX += props.xc * props.A;
+      }
+    });
+
+    // 2. Process Active Drafting Profile (if closed or enough vertices)
+    const activeStart = activeProfileStartIndex;
+    const activeCount = sketchVertices.length - activeStart;
+    if (activeCount >= 3) {
+      const activeVerts = sketchVertices.slice(activeStart);
+      const props = calculatePolygonProperties(activeVerts);
+      if (props.A > 0.1) {
+        listAreas.push(props.A);
+        listCentroids.push({ x: props.xc, y: props.yc });
+        listIxx.push(props.Iz);
+        totalArea += props.A;
+        sumAreaY += props.yc * props.A;
+        sumAreaX += props.xc * props.A;
+      }
+    }
+
+    // 3. Subtract Circular cutout holes globally
     sketchCircles.forEach(c => {
-      db.entities.push({
-        type: "CIRCLE",
-        layer: c.construction ? "CONSTRUCTION" : "HOLES",
-        cx: c.cx, cy: c.cy, r: c.r
-      });
+      if (c.construction) return;
+      const holeArea = Math.PI * c.r * c.r;
+      totalArea -= holeArea;
+      sumAreaY -= c.cy * holeArea;
+      sumAreaX -= c.cx * holeArea;
     });
 
-    // 3. Export Sheet Format borders & title block on separate layer
-    // Outer border
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 0, y1: 0, x2: sheetWidth, y2: 0 });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth, y1: 0, x2: sheetWidth, y2: sheetHeight });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth, y1: sheetHeight, x2: 0, y2: sheetHeight });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 0, y1: sheetHeight, x2: 0, y2: 0 });
-    
-    // Inner border
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 10, y1: 10, x2: sheetWidth - 10, y2: 10 });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth - 10, y1: 10, x2: sheetWidth - 10, y2: sheetHeight - 10 });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth - 10, y1: sheetHeight - 10, x2: 10, y2: sheetHeight - 10 });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 10, y1: sheetHeight - 10, x2: 10, y2: 10 });
-    
-    // Title block lines
-    const tx = sheetWidth - 110;
-    const ty = sheetHeight - 40;
-    const tw = 100;
-    const th = 30;
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx, y1: ty, x2: tx + tw, y2: ty });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx, y1: ty + 10, x2: tx + tw, y2: ty + 10 });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx, y1: ty + 20, x2: tx + tw, y2: ty + 20 });
-    db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: tx + 60, y1: ty + 10, x2: tx + 60, y2: ty + 30 });
+    if (totalArea < 0.1) {
+      document.getElementById("sk-area").textContent = "0.0 cm²";
+      document.getElementById("sk-inertia").textContent = "0.0 cm⁴";
+      document.getElementById("sk-centroid").textContent = "0.0 mm";
+      document.getElementById("sk-height").textContent = "0.0 mm";
+      return;
+    }
 
-    // 2.5 Export block insertions and copy definitions to blocks database
-    db.blocks = Object.assign({}, blockDefinitions);
-    sketchInsertions.forEach(ins => {
-      db.entities.push({
-        type: "INSERT",
-        blockName: ins.blockName,
-        layer: "PROFILE_OUTLINE",
-        x: ins.x,
-        y: ins.y,
-        scaleX: ins.scaleX !== undefined ? ins.scaleX : 1,
-        scaleY: ins.scaleY !== undefined ? ins.scaleY : 1,
-        rotation: ins.rotation !== undefined ? ins.rotation : 0
-      });
+    const netYc = sumAreaY / totalArea;
+    const netXc = sumAreaX / totalArea;
+
+    // Parallel Axis Theorem for centroidal Moment of Inertia Iz
+    let netIz = 0;
+    listAreas.forEach((area, idx) => {
+      const yc = listCentroids[idx].y;
+      const Iz = listIxx[idx];
+      netIz += Iz + area * Math.pow(yc - netYc, 2);
     });
 
-    const dxf = db.export();
+    sketchCircles.forEach(c => {
+      if (c.construction) return;
+      const holeArea = Math.PI * c.r * c.r;
+      const Ic = (Math.PI * Math.pow(c.r, 4)) / 4.0;
+      const Ic_shifted = Ic + holeArea * Math.pow(c.cy - netYc, 2);
+      netIz -= Ic_shifted;
+    });
 
-    const blob = new Blob([dxf], { type: "application/dxf" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "drafting_profile.dxf";
-    a.click();
-  };
+    // Bounding height across all coordinates
+    let ymin = Infinity;
+    let ymax = -Infinity;
+    sketchVertices.forEach(v => {
+      ymin = Math.min(ymin, v.y);
+      ymax = Math.max(ymax, v.y);
+    });
+    const height = ymin !== Infinity ? ymax - ymin : 0;
 
-  // --- Math/Shoelace Property Solver supporting cutout holes ---
+    document.getElementById("sk-area").textContent = `${(totalArea / 100).toFixed(1)} cm²`;
+    document.getElementById("sk-inertia").textContent = `${(Math.max(0, netIz) / 10000).toFixed(1)} cm⁴`;
+    document.getElementById("sk-centroid").textContent = `${netYc.toFixed(1)} mm`;
+    document.getElementById("sk-height").textContent = `${height.toFixed(1)} mm`;
+  }
+
   function calculatePolygonProperties(vertices) {
     const n = vertices.length;
-    if (n < 3) return { A: 0, yc: 0, Iz: 0, height: 0 };
+    if (n < 3) return { A: 0, xc: 0, yc: 0, Iz: 0, height: 0 };
     
     let areaOuter = 0;
     let cxOuter = 0;
@@ -468,7 +770,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     areaOuter = areaOuter / 2.0;
     if (Math.abs(areaOuter) < 0.1) {
-      return { A: 0, yc: 0, Iz: 0, height: 0 };
+      return { A: 0, xc: 0, yc: 0, Iz: 0, height: 0 };
     }
     
     cxOuter = cxOuter / (6.0 * areaOuter);
@@ -490,981 +792,318 @@ document.addEventListener("DOMContentLoaded", () => {
       Ixx_originOuter += term1 * term2;
     }
     Ixx_originOuter = Math.abs(Ixx_originOuter / 12.0);
-    
     let IzOuter = Ixx_originOuter - areaOuter * cyOuter * cyOuter;
     
-    // Subtract circular holes
-    let netArea = areaOuter;
-    let netMomentSumY = cyOuter * areaOuter;
-    let netMomentSumX = cxOuter * areaOuter;
-    
-    const activeHoles = sketchCircles.filter(c => !c.construction);
-    
-    activeHoles.forEach(c => {
-      const aHole = Math.PI * c.r * c.r;
-      netArea -= aHole;
-      netMomentSumY -= c.cy * aHole;
-      netMomentSumX -= c.cx * aHole;
-    });
-    
-    if (netArea < 0.1) netArea = 0.1;
-    
-    const ycNet = netMomentSumY / netArea;
-    const xcNet = netMomentSumX / netArea;
-    
-    // Parallel axis translation for outer shape
-    const dOuter = ycNet - cyOuter;
-    let netIz = IzOuter + areaOuter * dOuter * dOuter;
-    
-    // Subtract circle moments about the composite neutral axis
-    activeHoles.forEach(c => {
-      const aHole = Math.PI * c.r * c.r;
-      const iHoleOwn = (Math.PI * Math.pow(c.r, 4)) / 4.0;
-      const dHole = ycNet - c.cy;
-      const iHoleComposite = iHoleOwn + aHole * dHole * dHole;
-      netIz -= iHoleComposite;
-    });
-    
-    if (netIz < 0.1) netIz = 0.1;
-    const height = ymax - ymin;
-    
     return {
-      A: netArea / 100.0,      // mm² to cm²
-      yc: ycNet,
-      Iz: netIz / 10000.0,     // mm⁴ to cm⁴
-      height: height           // mm
+      A: areaOuter,
+      xc: cxOuter,
+      yc: cyOuter,
+      Iz: Math.max(0, IzOuter),
+      height: Math.max(0, ymax - ymin)
     };
   }
 
-  function updateLiveProperties() {
-    const props = calculatePolygonProperties(sketchVertices);
-    
-    if (isSketchClosed && props.A > 0) {
-      document.getElementById("sk-area").textContent = `${props.A.toFixed(1)} cm²`;
-      document.getElementById("sk-inertia").textContent = `${props.Iz.toFixed(1)} cm⁴`;
-      document.getElementById("sk-centroid").textContent = `${props.yc.toFixed(1)} mm`;
-      document.getElementById("sk-height").textContent = `${props.height.toFixed(1)} mm`;
-    } else {
-      document.getElementById("sk-area").textContent = "0.0 cm²";
-      document.getElementById("sk-inertia").textContent = "0.0 cm⁴";
-      document.getElementById("sk-centroid").textContent = "0.0 mm";
-      document.getElementById("sk-height").textContent = "0.0 mm";
-    }
-  }
-
-  function renderLayerManager() {
-    const container = document.getElementById("layer-manager-list");
-    if (!container) return;
-    container.innerHTML = "";
-    
-    Object.keys(layers).forEach(layerName => {
-      const layer = layers[layerName];
-      
-      const row = document.createElement("div");
-      row.style = "display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(30, 41, 59, 0.4); border-radius: var(--radius-sm); border: 1px solid var(--border-color);";
-      
-      const nameSpan = document.createElement("span");
-      nameSpan.textContent = layerName;
-      nameSpan.style = "font-weight: 500; color: var(--text-primary);";
-      
-      const controlsDiv = document.createElement("div");
-      controlsDiv.style = "display: flex; align-items: center; gap: 8px;";
-      
-      // Color dot indicator
-      const dot = document.createElement("span");
-      dot.style = `width: 8px; height: 8px; border-radius: 50%; background-color: ${layer.color}; display: inline-block;`;
-      
-      // Visible toggle button
-      const visBtn = document.createElement("button");
-      visBtn.style = "background: none; border: none; padding: 2px; cursor: pointer; color: " + (layer.visible ? "var(--accent-primary)" : "var(--text-muted)");
-      visBtn.innerHTML = layer.visible 
-        ? `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>` 
-        : `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-      visBtn.title = layer.visible ? "Hide Layer" : "Show Layer";
-      visBtn.onclick = () => {
-        layer.visible = !layer.visible;
-        renderLayerManager();
-        drawSketchCanvas();
-      };
-      
-      // Freeze toggle button
-      const freezeBtn = document.createElement("button");
-      freezeBtn.style = "background: none; border: none; padding: 2px; cursor: pointer; color: " + (layer.frozen ? "#38bdf8" : "var(--text-muted)");
-      freezeBtn.innerHTML = layer.frozen 
-        ? `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>` 
-        : `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
-      freezeBtn.title = layer.frozen ? "Unfreeze Layer" : "Freeze Layer (Lock Editing)";
-      freezeBtn.onclick = () => {
-        layer.frozen = !layer.frozen;
-        renderLayerManager();
-        drawSketchCanvas();
-      };
-      
-      controlsDiv.appendChild(dot);
-      controlsDiv.appendChild(visBtn);
-      controlsDiv.appendChild(freezeBtn);
-      
-      row.appendChild(nameSpan);
-      row.appendChild(controlsDiv);
-      
-      container.appendChild(row);
-    });
-  }
-
-  // --- Drawing Sheet Format Background Overlay ---
-  function drawSheetFormat(svgElement) {
-    // 1. Draw Paper background rectangle (white sheet)
-    const paper = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    paper.setAttribute("x", 0);
-    paper.setAttribute("y", 0);
-    paper.setAttribute("width", sheetWidth);
-    paper.setAttribute("height", sheetHeight);
-    paper.setAttribute("fill", "#ffffff");
-    paper.setAttribute("stroke", "var(--border-color)");
-    paper.setAttribute("stroke-width", 2);
-    svgElement.appendChild(paper);
-
-    // 2. Draw Outer Margin border (10mm indent)
-    const border = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    border.setAttribute("x", 10);
-    border.setAttribute("y", 10);
-    border.setAttribute("width", sheetWidth - 20);
-    border.setAttribute("height", sheetHeight - 20);
-    border.setAttribute("fill", "none");
-    border.setAttribute("stroke", "var(--text-primary)");
-    border.setAttribute("stroke-width", 1.5);
-    svgElement.appendChild(border);
-
-    // 3. Draw standard zone subdivisions ticks and labels (A-D, 1-4)
-    // Horizontal zones (1, 2, 3, 4)
-    const zonesX = 4;
-    const zoneW = (sheetWidth - 20) / zonesX;
-    for (let i = 1; i < zonesX; i++) {
-      const x = 10 + i * zoneW;
-      const tickTop = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      tickTop.setAttribute("x1", x); tickTop.setAttribute("y1", 10);
-      tickTop.setAttribute("x2", x); tickTop.setAttribute("y2", 14);
-      tickTop.setAttribute("stroke", "var(--text-primary)");
-      svgElement.appendChild(tickTop);
-
-      const tickBot = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      tickBot.setAttribute("x1", x); tickBot.setAttribute("y1", sheetHeight - 10);
-      tickBot.setAttribute("x2", x); tickBot.setAttribute("y2", sheetHeight - 14);
-      tickBot.setAttribute("stroke", "var(--text-primary)");
-      svgElement.appendChild(tickBot);
-    }
-
-    // Vertical zones (A, B, C, D)
-    const zonesY = 4;
-    const zoneH = (sheetHeight - 20) / zonesY;
-    for (let i = 1; i < zonesY; i++) {
-      const y = 10 + i * zoneH;
-      const tickLeft = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      tickLeft.setAttribute("x1", 10); tickLeft.setAttribute("y1", y);
-      tickLeft.setAttribute("x2", 14); tickLeft.setAttribute("y2", y);
-      tickLeft.setAttribute("stroke", "var(--text-primary)");
-      svgElement.appendChild(tickLeft);
-
-      const tickRight = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      tickRight.setAttribute("x1", sheetWidth - 10); tickRight.setAttribute("y1", y);
-      tickRight.setAttribute("x2", sheetWidth - 14); tickRight.setAttribute("y2", y);
-      tickRight.setAttribute("stroke", "var(--text-primary)");
-      svgElement.appendChild(tickRight);
-    }
-
-    // 4. Draw standard Title Block (bottom-right)
-    // Box dimensions: width 100mm, height 30mm
-    const tx = sheetWidth - 110;
-    const ty = sheetHeight - 40;
-    const tw = 100;
-    const th = 30;
-
-    const tbOuter = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    tbOuter.setAttribute("x", tx);
-    tbOuter.setAttribute("y", ty);
-    tbOuter.setAttribute("width", tw);
-    tbOuter.setAttribute("height", th);
-    tbOuter.setAttribute("fill", "var(--bg-secondary)");
-    tbOuter.setAttribute("stroke", "var(--text-primary)");
-    tbOuter.setAttribute("stroke-width", 1.5);
-    svgElement.appendChild(tbOuter);
-
-    // Divisions inside title block
-    const divH1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    divH1.setAttribute("x1", tx); divH1.setAttribute("y1", ty + 10);
-    divH1.setAttribute("x2", tx + tw); divH1.setAttribute("y2", ty + 10);
-    divH1.setAttribute("stroke", "var(--text-primary)");
-    svgElement.appendChild(divH1);
-
-    const divH2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    divH2.setAttribute("x1", tx); divH2.setAttribute("y1", ty + 20);
-    divH2.setAttribute("x2", tx + tw); divH2.setAttribute("y2", ty + 20);
-    divH2.setAttribute("stroke", "var(--text-primary)");
-    svgElement.appendChild(divH2);
-
-    const divV1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    divV1.setAttribute("x1", tx + 60); divV1.setAttribute("y1", ty + 10);
-    divV1.setAttribute("x2", tx + 60); divV1.setAttribute("y2", ty + 30);
-    divV1.setAttribute("stroke", "var(--text-primary)");
-    svgElement.appendChild(divV1);
-
-    // Add Texts
-    const addText = (text, x, y, size, weight = "normal", anchor = "start") => {
-      const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      txt.setAttribute("x", x);
-      txt.setAttribute("y", y);
-      txt.setAttribute("font-size", size);
-      txt.setAttribute("font-family", "var(--font-sans)");
-      txt.setAttribute("font-weight", weight);
-      txt.setAttribute("text-anchor", anchor);
-      txt.setAttribute("fill", "var(--text-primary)");
-      txt.textContent = text;
-      svgElement.appendChild(txt);
-    };
-
-    addText("ENGINEERING TOOLKIT CAD", tx + 5, ty + 7, 5, "bold");
-    addText("DWG NO: ET-DRAFT-001", tx + 5, ty + 16, 4);
-    addText(`SCALE: 1:1`, tx + 65, ty + 16, 4);
-    addText(`SIZE: ${sheetSize}  SHEET 1 OF 1`, tx + 5, ty + 26, 4);
-    addText("APPROVED", tx + 65, ty + 26, 4, "bold");
-  }
-
-  // --- SVG Viewport Rendering ---
-  function drawSketchCanvas(drawCursorLine = false) {
-    if (!svg) return;
-
-    if (activeRenderMode === "webgl" && webglRenderer) {
-      // 1. Update the high-performance WebGL vector geometry
-      webglRenderer.updateDrawing(sketchVertices, sketchCircles, isSketchClosed, sheetWidth, sheetHeight, layers, sketchInsertions, blockDefinitions);
-      
-      // 2. Clear the SVG overlay except for defs marker definitions
-      svg.innerHTML = `
-        <defs>
-          <marker id="arrow-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 10 0 L 0 5 L 10 10 z" fill="var(--accent-primary)" />
-          </marker>
-          <marker id="arrow-end" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-primary)" />
-          </marker>
-        </defs>
-      `;
-      
-      // 3. Render all coordinates, annotations, dimensions, and snap helpers directly into the SVG root!
-      renderToViewport(svg, drawCursorLine);
-      
-      // 4. Update the SVG viewBox viewport transformation mapping
-      webglRenderer.syncSvgOverlay();
-      return;
-    }
-
-    svg.setAttribute("viewBox", `0 0 ${sheetWidth} ${sheetHeight}`);
-    svg.innerHTML = `
-      <defs>
-        <marker id="arrow-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 10 0 L 0 5 L 10 10 z" fill="var(--accent-primary)" />
-        </marker>
-        <marker id="arrow-end" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-primary)" />
-        </marker>
-      </defs>
-    `;
-    
-    const viewportG = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    viewportG.setAttribute("transform", `translate(${panOffset.x}, ${panOffset.y}) scale(${zoomLevel})`);
-    svg.appendChild(viewportG);
-
-    renderToViewport(viewportG, drawCursorLine);
-  }
-
-  function renderToViewport(svg, drawCursorLine) {
-    
-    // --- 1. Draw Paper Sheet Format (Borders, Title block, Subdivisions) ---
-    const rootSvg = svg.tagName === "svg" ? svg : svg.ownerSVGElement;
-    if (layers["SHEET_FORMAT"] && layers["SHEET_FORMAT"].visible) {
-      if (rootSvg) rootSvg.style.background = "#ffffff";
-      drawSheetFormat(svg);
-    } else {
-      if (rootSvg) rootSvg.style.background = "#0c0f1d";
-    }
-
-    // --- 2. Draw Bounded Grid Lines (avoiding title block) ---
-    if (window.gridVisible !== false) {
-      const majorStep = 50;
-      const minorStep = 10;
-      const margin = 10;
-
-      for (let x = margin + minorStep; x < sheetWidth - margin; x += minorStep) {
-        const isInsideTitleBlockX = (x > sheetWidth - 110);
-        const lineX = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        lineX.setAttribute("x1", x);
-        lineX.setAttribute("y1", margin);
-        lineX.setAttribute("x2", x);
-        lineX.setAttribute("y2", isInsideTitleBlockX ? sheetHeight - 40 : sheetHeight - margin);
-        lineX.setAttribute("class", x % majorStep === 0 ? "sk-grid-major" : "sk-grid-minor");
-        svg.appendChild(lineX);
-      }
-      
-      for (let y = margin + minorStep; y < sheetHeight - margin; y += minorStep) {
-        const isInsideTitleBlockY = (y > sheetHeight - 40);
-        const lineY = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        lineY.setAttribute("x1", margin);
-        lineY.setAttribute("y1", y);
-        lineY.setAttribute("x2", isInsideTitleBlockY ? sheetWidth - 110 : sheetWidth - margin);
-        lineY.setAttribute("y2", y);
-        lineY.setAttribute("class", y % majorStep === 0 ? "sk-grid-major" : "sk-grid-minor");
-        svg.appendChild(lineY);
-      }
-    }
-    
-    // Draw Polygon Outline/Shaded Area
-    if (sketchVertices.length > 0) {
-      if (isSketchClosed) {
-        const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-        let pointsStr = sketchVertices.map(p => `${p.x},${p.y}`).join(" ");
-        poly.setAttribute("points", pointsStr);
-        poly.setAttribute("class", "sk-polygon");
-        svg.appendChild(poly);
-      } else {
-        const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-        let pointsStr = sketchVertices.map(p => `${p.x},${p.y}`).join(" ");
-        if (drawCursorLine && mousePos) {
-          pointsStr += ` ${mousePos.x},${mousePos.y}`;
-        }
-        polyline.setAttribute("points", pointsStr);
-        polyline.setAttribute("class", "sk-polyline");
-        svg.appendChild(polyline);
-        
-        // Alignment guides
-        if (drawCursorLine && mousePos && sketchVertices.length > 0) {
-          const last = sketchVertices[sketchVertices.length - 1];
-          const isH = Math.abs(mousePos.y - last.y) < 15;
-          const isV = Math.abs(mousePos.x - last.x) < 15;
-          if (isH) {
-            const hLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            hLine.setAttribute("x1", 0); hLine.setAttribute("y1", last.y);
-            hLine.setAttribute("x2", 500); hLine.setAttribute("y2", last.y);
-            hLine.setAttribute("class", "sk-align-guide");
-            svg.appendChild(hLine);
-          }
-          if (isV) {
-            const vLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            vLine.setAttribute("x1", last.x); vLine.setAttribute("y1", 0);
-            vLine.setAttribute("x2", last.x); vLine.setAttribute("y2", 500);
-            vLine.setAttribute("class", "sk-align-guide");
-            svg.appendChild(vLine);
-          }
-        }
+  // --- Interaction / State Machine Mouse Listeners ---
+  function initSketcherEvents() {
+    canvasEl.addEventListener("mousedown", (e) => {
+      // Pan handling: middle/right click or active Pan mode
+      const isPanMode = editorMode === "pan" || e.shiftKey;
+      if (e.button === 1 || e.button === 2 || (e.button === 0 && isPanMode)) {
+        return; // Panning handled inside ExplicitCadRenderer
       }
 
-      // Draw Line Segments for Selection Highlight
-      const numVerts = sketchVertices.length;
-      const limit = isSketchClosed ? numVerts : numVerts - 1;
-      for (let i = 0; i < limit; i++) {
-        const p1 = sketchVertices[i];
-        const p2 = sketchVertices[(i + 1) % numVerts];
-        const lineEl = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        lineEl.setAttribute("x1", p1.x);
-        lineEl.setAttribute("y1", p1.y);
-        lineEl.setAttribute("x2", p2.x);
-        lineEl.setAttribute("y2", p2.y);
-        
-        let className = "sk-line-segment";
-        if (selectedEntity && selectedEntity.type === "line" && selectedEntity.index === i) {
-          className += " selected";
-        }
-        lineEl.setAttribute("class", className);
-        lineEl.setAttribute("data-line-index", i);
-        svg.appendChild(lineEl);
+      const pos = webglRenderer.getMouseWorldPos(e.clientX, e.clientY);
+
+      // Sizer locked layers check
+      if (["draw", "circle", "rect", "poly", "fillet"].includes(editorMode) && layers["FOREGROUND"].frozen) {
+        alert("The FOREGROUND layer is frozen.");
+        return;
       }
-    }
 
-    // Draw Circle Cutouts
-    sketchCircles.forEach((c, idx) => {
-      const circleEl = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      circleEl.setAttribute("cx", c.cx);
-      circleEl.setAttribute("cy", c.cy);
-      circleEl.setAttribute("r", c.r);
-      
-      let className = "sk-circle";
-      if (c.construction) className += " sk-construction";
-      if (selectedEntity && selectedEntity.type === "circle" && selectedEntity.index === idx) {
-        className += " selected";
-      }
-      circleEl.setAttribute("class", className);
-      circleEl.setAttribute("data-circle-index", idx);
-      svg.appendChild(circleEl);
-    });
-
-    // Draw Block Insertions
-    sketchInsertions.forEach((ins, insIdx) => {
-      const def = blockDefinitions[ins.blockName];
-      if (!def) return;
-      
-      const groupEl = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      groupEl.setAttribute("transform", `translate(${ins.x}, ${ins.y}) rotate(${ins.rotation || 0}) scale(${ins.scaleX !== undefined ? ins.scaleX : 1}, ${ins.scaleY !== undefined ? ins.scaleY : 1})`);
-      groupEl.setAttribute("data-insertion-index", insIdx);
-      groupEl.style.cursor = "pointer";
-      
-      let isInsSelected = selectedEntity && selectedEntity.type === "insertion" && selectedEntity.index === insIdx;
-      
-      def.entities.forEach(ent => {
-        const drawLayer = ent.layer || "PROFILE_OUTLINE";
-        if (layers[drawLayer] && layers[drawLayer].visible) {
-          let color = layers[drawLayer].color || "var(--text-primary)";
-          if (isInsSelected) {
-            color = "#f97316"; // Highlight selected block instances
-          }
-          
-          if (ent.type === "LINE") {
-            const lineEl = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            lineEl.setAttribute("x1", ent.x1);
-            lineEl.setAttribute("y1", ent.y1);
-            lineEl.setAttribute("x2", ent.x2);
-            lineEl.setAttribute("y2", ent.y2);
-            lineEl.setAttribute("stroke", color);
-            lineEl.setAttribute("stroke-width", 2.2);
-            lineEl.setAttribute("data-insertion-index", insIdx);
-            groupEl.appendChild(lineEl);
-          }
-          else if (ent.type === "CIRCLE") {
-            const circleEl = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            circleEl.setAttribute("cx", ent.cx);
-            circleEl.setAttribute("cy", ent.cy);
-            circleEl.setAttribute("r", ent.r);
-            circleEl.setAttribute("fill", isInsSelected ? "rgba(249, 115, 22, 0.15)" : "none");
-            circleEl.setAttribute("stroke", color);
-            circleEl.setAttribute("stroke-width", 2.2);
-            circleEl.setAttribute("data-insertion-index", insIdx);
-            groupEl.appendChild(circleEl);
-          }
-        }
-      });
-      svg.appendChild(groupEl);
-    });
-
-    // Draw active circle guide during placement
-    if (editorMode === "circle" && activeCircleCenter && mousePos) {
-      const cGuide = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      const r = Math.hypot(mousePos.x - activeCircleCenter.x, mousePos.y - activeCircleCenter.y);
-      cGuide.setAttribute("cx", activeCircleCenter.x);
-      cGuide.setAttribute("cy", activeCircleCenter.y);
-      cGuide.setAttribute("r", r);
-      cGuide.setAttribute("class", "sk-polyline");
-      svg.appendChild(cGuide);
-    }
-
-    // Draw active rectangle guide during placement
-    if (editorMode === "rect" && activeRectStart && mousePos) {
-      const rGuide = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-      const pts = [
-        `${activeRectStart.x},${activeRectStart.y}`,
-        `${mousePos.x},${activeRectStart.y}`,
-        `${mousePos.x},${mousePos.y}`,
-        `${activeRectStart.x},${mousePos.y}`
-      ].join(" ");
-      rGuide.setAttribute("points", pts);
-      rGuide.setAttribute("class", "sk-polyline");
-      svg.appendChild(rGuide);
-    }
-
-    // Draw active polygon guide during placement
-    if (editorMode === "poly" && activePolyCenter && mousePos) {
-      const pGuide = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-      const radius = Math.hypot(mousePos.x - activePolyCenter.x, mousePos.y - activePolyCenter.y);
-      const angleStep = (2 * Math.PI) / polySides;
-      const startAngle = Math.atan2(mousePos.y - activePolyCenter.y, mousePos.x - activePolyCenter.x);
-      const pts = [];
-      for (let i = 0; i < polySides; i++) {
-        const angle = startAngle + i * angleStep;
-        pts.push(`${Math.round(activePolyCenter.x + radius * Math.cos(angle))},${Math.round(activePolyCenter.y + radius * Math.sin(angle))}`);
-      }
-      pGuide.setAttribute("points", pts.join(" "));
-      pGuide.setAttribute("class", "sk-polyline");
-      svg.appendChild(pGuide);
-    }
-    
-    // Draw Custom Dimensions
-    customDimensions.forEach((dim, dimIdx) => {
-      const p1 = sketchVertices[dim.v1];
-      const p2 = sketchVertices[dim.v2];
-      if (!p1 || !p2) return;
-      
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const len = Math.hypot(dx, dy);
-      
-      if (len > 0.1) {
-        const mx = (p1.x + p2.x) / 2;
-        const my = (p1.y + p2.y) / 2;
-        const theta = Math.atan2(dy, dx);
-        const normalAngle = theta - Math.PI / 2;
-        
-        const offsetDist = 32 + (dimIdx * 18); 
-        
-        const o1x = p1.x + offsetDist * Math.cos(normalAngle);
-        const o1y = p1.y + offsetDist * Math.sin(normalAngle);
-        const o2x = p2.x + offsetDist * Math.cos(normalAngle);
-        const o2y = p2.y + offsetDist * Math.sin(normalAngle);
-        const midx = mx + offsetDist * Math.cos(normalAngle);
-        const midy = my + offsetDist * Math.cos(normalAngle);
-        
-        // Extension lines
-        const ext1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        ext1.setAttribute("x1", p1.x); ext1.setAttribute("y1", p1.y);
-        ext1.setAttribute("x2", o1x); ext1.setAttribute("y2", o1y);
-        ext1.setAttribute("class", "sk-dim-ext");
-        svg.appendChild(ext1);
-        
-        const ext2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        ext2.setAttribute("x1", p2.x); ext2.setAttribute("y1", p2.y);
-        ext2.setAttribute("x2", o2x); ext2.setAttribute("y2", o2y);
-        ext2.setAttribute("class", "sk-dim-ext");
-        svg.appendChild(ext2);
-        
-        // Dimension line
-        const dimLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        dimLine.setAttribute("x1", o1x); dimLine.setAttribute("y1", o1y);
-        dimLine.setAttribute("x2", o2x); dimLine.setAttribute("y2", o2y);
-        
-        let className = "sk-dim-line";
-        if (selectedEntity && selectedEntity.type === "dimension" && selectedEntity.index === dimIdx) {
-          className += " selected";
-        }
-        dimLine.setAttribute("class", className);
-        dimLine.setAttribute("data-dim-index", dimIdx);
-        dimLine.style.cursor = "pointer";
-        svg.appendChild(dimLine);
-        
-        // Text background
-        const txtBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        txtBg.setAttribute("x", midx - 22); txtBg.setAttribute("y", midy - 8);
-        txtBg.setAttribute("width", 44); txtBg.setAttribute("height", 16);
-        txtBg.setAttribute("rx", 3);
-        txtBg.setAttribute("fill", "var(--bg-secondary)");
-        txtBg.setAttribute("stroke", "var(--border-color)");
-        txtBg.setAttribute("stroke-width", "0.5");
-        txtBg.setAttribute("data-dim-index", dimIdx);
-        txtBg.style.cursor = "pointer";
-        svg.appendChild(txtBg);
-        
-        // Text label
-        const dimTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        dimTxt.setAttribute("x", midx); dimTxt.setAttribute("y", midy + 4);
-        dimTxt.setAttribute("class", "sk-dim-lbl");
-        dimTxt.setAttribute("data-dim-index", dimIdx);
-        dimTxt.style.cursor = "pointer";
-        dimTxt.textContent = `${dim.d !== undefined ? Math.round(dim.d) : Math.round(len)}mm`;
-        svg.appendChild(dimTxt);
-      }
-    });
-
-    // --- Draw Tapped Holes & Clearance Fits Leader Annotations (Phase 5) ---
-    sketchCircles.forEach((c) => {
-      if (c.standardHole) {
-        const thread = MetricThreads[c.standardHole];
-        if (!thread) return;
-
-        const angle = -Math.PI / 4; // 45 deg up-right
-        const sx = c.cx + c.r * Math.cos(angle);
-        const sy = c.cy + c.r * Math.sin(angle);
-        const ex = sx + 20;
-        const ey = sy - 20;
-        const shX = ex + 25;
-
-        // Leader line
-        const leader = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        leader.setAttribute("x1", sx); leader.setAttribute("y1", sy);
-        leader.setAttribute("x2", ex); leader.setAttribute("y2", ey);
-        leader.setAttribute("stroke", "var(--accent-primary)");
-        leader.setAttribute("stroke-width", 0.8);
-        leader.setAttribute("marker-start", "url(#arrow-start)");
-        svg.appendChild(leader);
-
-        // Horizontal shoulder line
-        const shoulder = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        shoulder.setAttribute("x1", ex); shoulder.setAttribute("y1", ey);
-        shoulder.setAttribute("x2", shX); shoulder.setAttribute("y2", ey);
-        shoulder.setAttribute("stroke", "var(--accent-primary)");
-        shoulder.setAttribute("stroke-width", 0.8);
-        svg.appendChild(shoulder);
-
-        // Text labels above shoulder
-        addTextToViewport(svg, `${c.standardHole}x${thread.pitch} TAPPED`, ex + 2, ey - 9, 3.5, "bold", "start");
-        addTextToViewport(svg, `TAP DRILL: Ø${thread.tapDrill} mm`, ex + 2, ey - 5, 3.0, "normal", "start");
-        addTextToViewport(svg, `TORQUE: ${thread.maxTorque} N-m`, ex + 2, ey - 1, 3.0, "normal", "start");
-      }
-      else if (c.holeTolerance) {
-        const angle = Math.PI / 4; // 45 deg down-right
-        const sx = c.cx + c.r * Math.cos(angle);
-        const sy = c.cy + c.r * Math.sin(angle);
-        const ex = sx + 20;
-        const ey = sy + 20;
-        const shX = ex + 25;
-
-        // Leader line
-        const leader = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        leader.setAttribute("x1", sx); leader.setAttribute("y1", sy);
-        leader.setAttribute("x2", ex); leader.setAttribute("y2", ey);
-        leader.setAttribute("stroke", "var(--accent-primary)");
-        leader.setAttribute("stroke-width", 0.8);
-        leader.setAttribute("marker-start", "url(#arrow-start)");
-        svg.appendChild(leader);
-
-        // Horizontal shoulder line
-        const shoulder = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        shoulder.setAttribute("x1", ex); shoulder.setAttribute("y1", ey);
-        shoulder.setAttribute("x2", shX); shoulder.setAttribute("y2", ey);
-        shoulder.setAttribute("stroke", "var(--accent-primary)");
-        shoulder.setAttribute("stroke-width", 0.8);
-        svg.appendChild(shoulder);
-
-        // Fit label
-        addTextToViewport(svg, `Ø${(c.r * 2).toFixed(1)} ${c.holeTolerance}`, ex + 2, ey - 2, 3.5, "bold", "start");
-      }
-    });
-
-    // Draw measuring ruler
-    if (editorMode === "measure" && measureStartPos) {
-      const dotStart = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      dotStart.setAttribute("cx", measureStartPos.x);
-      dotStart.setAttribute("cy", measureStartPos.y);
-      dotStart.setAttribute("r", "4");
-      dotStart.setAttribute("fill", "#22c55e");
-      svg.appendChild(dotStart);
-      
-      let targetPos = null;
-      if (isMeasuring && mousePos) {
-        targetPos = mousePos;
-      } else if (!isMeasuring && measureEndPos) {
-        targetPos = measureEndPos;
-        const dotEnd = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        dotEnd.setAttribute("cx", measureEndPos.x);
-        dotEnd.setAttribute("cy", measureEndPos.y);
-        dotEnd.setAttribute("r", "4");
-        dotEnd.setAttribute("fill", "#22c55e");
-        svg.appendChild(dotEnd);
-      }
-      
-      if (targetPos) {
-        const dx = targetPos.x - measureStartPos.x;
-        const dy = targetPos.y - measureStartPos.y;
-        const dist = Math.hypot(dx, dy);
-        
-        const mLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        mLine.setAttribute("x1", measureStartPos.x); mLine.setAttribute("y1", measureStartPos.y);
-        mLine.setAttribute("x2", targetPos.x); mLine.setAttribute("y2", targetPos.y);
-        mLine.setAttribute("class", "sk-measure-line");
-        svg.appendChild(mLine);
-        
-        const midX = (measureStartPos.x + targetPos.x) / 2;
-        const midY = (measureStartPos.y + targetPos.y) / 2;
-        
-        const txtBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        txtBg.setAttribute("x", midX - 30); txtBg.setAttribute("y", midY - 9);
-        txtBg.setAttribute("width", 60); txtBg.setAttribute("height", 18);
-        txtBg.setAttribute("rx", 3);
-        txtBg.setAttribute("fill", "var(--bg-secondary)");
-        txtBg.setAttribute("stroke", "#22c55e");
-        txtBg.setAttribute("stroke-width", "0.8");
-        svg.appendChild(txtBg);
-        
-        const mTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        mTxt.setAttribute("x", midX); mTxt.setAttribute("y", midY + 4);
-        mTxt.setAttribute("class", "sk-measure-lbl");
-        mTxt.textContent = `${Math.round(dist)} mm`;
-        svg.appendChild(mTxt);
-      }
-    }
-    
-    // Draw vertex handles
-    sketchVertices.forEach((pt, idx) => {
-      const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      handle.setAttribute("cx", pt.x);
-      handle.setAttribute("cy", pt.y);
-      handle.setAttribute("r", "5");
-      
-      let className = "sk-handle";
-      if (selectedEntity && selectedEntity.type === "vertex" && selectedEntity.index === idx) {
-        className += " sk-handle-selected";
-      }
-      handle.setAttribute("class", className);
-      handle.setAttribute("data-index", idx);
-      svg.appendChild(handle);
-    });
-
-    // Draw snap indicator if present
-    if (hoveredSnapTarget) {
-      const x = hoveredSnapTarget.x;
-      const y = hoveredSnapTarget.y;
-      if (hoveredSnapTarget.type === "endpoint") {
-        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        rect.setAttribute("x", x - 4);
-        rect.setAttribute("y", y - 4);
-        rect.setAttribute("width", 8);
-        rect.setAttribute("height", 8);
-        rect.setAttribute("class", "sk-snap-indicator sk-snap-endpoint");
-        svg.appendChild(rect);
-      } else if (hoveredSnapTarget.type === "midpoint") {
-        const tri = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-        tri.setAttribute("points", `${x},${y-5} ${x-5},${y+4} ${x+5},${y+4}`);
-        tri.setAttribute("class", "sk-snap-indicator sk-snap-midpoint");
-        svg.appendChild(tri);
-      } else if (hoveredSnapTarget.type === "center") {
-        const circ = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circ.setAttribute("cx", x);
-        circ.setAttribute("cy", y);
-        circ.setAttribute("r", 5);
-        circ.setAttribute("class", "sk-snap-indicator sk-snap-center");
-        svg.appendChild(circ);
-      } else if (hoveredSnapTarget.type === "intersection") {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `M ${x-4} ${y-4} L ${x+4} ${y+4} M ${x+4} ${y-4} L ${x-4} ${y+4}`);
-        path.setAttribute("class", "sk-snap-indicator sk-snap-intersection");
-        svg.appendChild(path);
-      } else if (hoveredSnapTarget.type === "tangent") {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `M ${x} ${y-4} A 4 4 0 1 1 ${x} ${y+4} A 4 4 0 1 1 ${x} ${y-4} M ${x-5} ${y-4} L ${x+5} ${y-4}`);
-        path.setAttribute("class", "sk-snap-indicator sk-snap-tangent");
-        svg.appendChild(path);
-      } else if (hoveredSnapTarget.type === "perpendicular") {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", `M ${x-4} ${y} L ${x} ${y} L ${x} ${y-4}`);
-        path.setAttribute("class", "sk-snap-indicator sk-snap-perpendicular");
-        svg.appendChild(path);
-      }
-    }
-  }
-
-
-
-  function addTextToViewport(svgElement, text, x, y, size, weight = "normal", anchor = "start") {
-    const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    txt.setAttribute("x", x);
-    txt.setAttribute("y", y);
-    txt.setAttribute("font-size", size);
-    txt.setAttribute("font-family", "var(--font-sans)");
-    txt.setAttribute("font-weight", weight);
-    txt.setAttribute("text-anchor", anchor);
-    txt.setAttribute("fill", "var(--text-primary)");
-    txt.textContent = text;
-    svgElement.appendChild(txt);
-  }
-
-  // --- Snap Engine ---
-  function findSnapTarget(pos) {
-    let bestTarget = null;
-    let minDist = 14;
-    
-    // 1. Endpoint snap (Vertices)
-    sketchVertices.forEach((v, idx) => {
-      const dist = Math.hypot(pos.x - v.x, pos.y - v.y);
-      if (dist < minDist) {
-        minDist = dist;
-        bestTarget = { x: v.x, y: v.y, type: "endpoint", index: idx };
-      }
-    });
-    
-    // 2. Midpoint snap (Line segments)
-    const n = sketchVertices.length;
-    const limit = isSketchClosed ? n : n - 1;
-    for (let i = 0; i < limit; i++) {
-      const p1 = sketchVertices[i];
-      const p2 = sketchVertices[(i + 1) % n];
-      const mx = (p1.x + p2.x) / 2;
-      const my = (p1.y + p2.y) / 2;
-      const dist = Math.hypot(pos.x - mx, pos.y - my);
-      if (dist < minDist) {
-        minDist = dist;
-        bestTarget = { x: mx, y: my, type: "midpoint", index: i };
-      }
-    }
-    
-    // 3. Center snap (Circle centers)
-    sketchCircles.forEach((c, idx) => {
-      const dist = Math.hypot(pos.x - c.cx, pos.y - c.cy);
-      if (dist < minDist) {
-        minDist = dist;
-        bestTarget = { x: c.cx, y: c.cy, type: "center", index: idx };
-      }
-    });
-
-    // 4. Intersection snap (Line segment crossings)
-    if (n >= 4) {
-      for (let i = 0; i < limit; i++) {
-        for (let j = i + 2; j < limit; j++) {
-          // Skip adjacent segments or duplicate comparisons
-          if (i === 0 && j === limit - 1) continue;
-          const p1 = sketchVertices[i];
-          const p2 = sketchVertices[(i + 1) % n];
-          const q1 = sketchVertices[j];
-          const q2 = sketchVertices[(j + 1) % n];
-          
-          const d = (p2.x - p1.x) * (q2.y - q1.y) - (p2.y - p1.y) * (q2.x - q1.x);
-          if (Math.abs(d) > 1e-6) {
-            const u = ((q1.x - p1.x) * (q2.y - q1.y) - (q1.y - p1.y) * (q2.x - q1.x)) / d;
-            const v = ((q1.x - p1.x) * (p2.y - p1.y) - (q1.y - p1.y) * (p2.x - p1.x)) / d;
-            if (u >= 0 && u <= 1 && v >= 0 && v <= 1) {
-              const ix = p1.x + u * (p2.x - p1.x);
-              const iy = p1.y + u * (p2.y - p1.y);
-              const dist = Math.hypot(pos.x - ix, pos.y - iy);
-              if (dist < minDist) {
-                minDist = dist;
-                bestTarget = { x: Math.round(ix), y: Math.round(iy), type: "intersection", index: [i, j] };
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // 5. Tangency point snap (Point to Circle tangents)
-    if (sketchVertices.length > 0) {
-      const lastPt = sketchVertices[sketchVertices.length - 1];
-      sketchCircles.forEach((c, idx) => {
-        const d = Math.hypot(lastPt.x - c.cx, lastPt.y - c.cy);
-        if (d > c.r + 1e-3) {
-          const a = Math.atan2(lastPt.y - c.cy, lastPt.x - c.cx);
-          const theta = Math.acos(c.r / d);
-          
-          const t1x = c.cx + c.r * Math.cos(a + theta);
-          const t1y = c.cy + c.r * Math.sin(a + theta);
-          const t2x = c.cx + c.r * Math.cos(a - theta);
-          const t2y = c.cy + c.r * Math.sin(a - theta);
-          
-          const dist1 = Math.hypot(pos.x - t1x, pos.y - t1y);
-          if (dist1 < minDist) {
-            minDist = dist1;
-            bestTarget = { x: Math.round(t1x), y: Math.round(t1y), type: "tangent", index: idx };
-          }
-          
-          const dist2 = Math.hypot(pos.x - t2x, pos.y - t2y);
-          if (dist2 < minDist) {
-            minDist = dist2;
-            bestTarget = { x: Math.round(t2x), y: Math.round(t2y), type: "tangent", index: idx };
-          }
-        }
-      });
-    }
-
-    // 6. Perpendicular projection snap (Last point onto Line segment)
-    if (sketchVertices.length > 0) {
-      const lastPt = sketchVertices[sketchVertices.length - 1];
-      for (let i = 0; i < limit; i++) {
-        const p1 = sketchVertices[i];
-        const p2 = sketchVertices[(i + 1) % n];
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const lenSq = dx * dx + dy * dy;
-        if (lenSq > 0.1) {
-          const u = ((lastPt.x - p1.x) * dx + (lastPt.y - p1.y) * dy) / lenSq;
-          if (u >= 0 && u <= 1) {
-            const qx = p1.x + u * dx;
-            const qy = p1.y + u * dy;
-            const dist = Math.hypot(pos.x - qx, pos.y - qy);
-            if (dist < minDist) {
-              minDist = dist;
-              bestTarget = { x: Math.round(qx), y: Math.round(qy), type: "perpendicular", index: i };
-            }
-          }
-        }
-      }
-    }
-    
-    return bestTarget;
-  }
-
-  // --- Fillet Splice Command ---
-  function applyFillet(index, radius) {
-    const n = sketchVertices.length;
-    if (n < 3) return;
-    
-    const p1 = sketchVertices[(index - 1 + n) % n];
-    const p = sketchVertices[index];
-    const p2 = sketchVertices[(index + 1) % n];
-    
-    const v1 = { x: p1.x - p.x, y: p1.y - p.y };
-    const v2 = { x: p2.x - p.x, y: p2.y - p.y };
-    
-    const len1 = Math.hypot(v1.x, v1.y);
-    const len2 = Math.hypot(v2.x, v2.y);
-    
-    if (len1 < 0.1 || len2 < 0.1) return;
-    
-    const maxRadius = Math.min(len1, len2) * 0.45;
-    const r = Math.min(radius, maxRadius);
-    
-    const u1 = { x: v1.x / len1, y: v1.y / len1 };
-    const u2 = { x: v2.x / len2, y: v2.y / len2 };
-    
-    const t1 = { x: Math.round(p.x + u1.x * r), y: Math.round(p.y + u1.y * r) };
-    const t2 = { x: Math.round(p.x + u2.x * r), y: Math.round(p.y + u2.y * r) };
-    
-    sketchVertices.splice(index, 1, t1, t2);
-    drawSketchCanvas();
-    updateLiveProperties();
-  }
-
-  // --- Offset Outline Command ---
-  window.offsetPolygon = (offsetDist) => {
-    if (sketchVertices.length < 3) return;
-    const n = sketchVertices.length;
-    const newVerts = [];
-    for (let i = 0; i < n; i++) {
-      const p1 = sketchVertices[(i - 1 + n) % n];
-      const p = sketchVertices[i];
-      const p2 = sketchVertices[(i + 1) % n];
-      
-      const v1 = { x: p.x - p1.x, y: p.y - p1.y };
-      const v2 = { x: p2.x - p.x, y: p2.y - p.y };
-      
-      const len1 = Math.hypot(v1.x, v1.y);
-      const len2 = Math.hypot(v2.x, v2.y);
-      if (len1 < 0.1 || len2 < 0.1) {
-        newVerts.push({ x: p.x, y: p.y });
-        continue;
-      }
-      
-      const n1 = { x: -v1.y / len1, y: v1.x / len1 };
-      const n2 = { x: -v2.y / len2, y: v2.x / len2 };
-      
-      const bisectorX = n1.x + n2.x;
-      const bisectorY = n1.y + n2.y;
-      const bisLen = Math.hypot(bisectorX, bisectorY);
-      
-      if (bisLen < 0.1) {
-        newVerts.push({ x: p.x + n1.x * offsetDist, y: p.y + n1.y * offsetDist });
-      } else {
-        const cosHalfAngle = (n1.x * bisectorX + n1.y * bisectorY) / bisLen;
-        const distScale = offsetDist / cosHalfAngle;
-        newVerts.push({
-          x: Math.round(p.x + (bisectorX / bisLen) * distScale),
-          y: Math.round(p.y + (bisectorY / bisLen) * distScale)
+      // ── BLOCK INSERTION ──
+      if (editorMode === "insert_block" && activeBlockToInsert) {
+        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y);
+        sketchInsertions.push({
+          blockName: activeBlockToInsert,
+          x: snapPt.x, y: snapPt.y,
+          scaleX: 1, scaleY: 1, rotation: 0
         });
+        activeBlockToInsert = null;
+        setEditorMode("draw");
+        
+        rebuildSpatialIndexes();
+        drawSketchCanvas();
+        updateLiveProperties();
+        return;
       }
-    }
-    sketchVertices = newVerts;
-    drawSketchCanvas();
-    updateLiveProperties();
-  };
 
-  window.triggerOffsetProfile = () => {
-    const val = parseFloat(document.getElementById("global-offset-val").value) || 10;
-    offsetPolygon(val);
-  };
+      // Coordinate click hit check
+      const clicked = findEntityAt(pos);
 
-  // --- Dynamic Sidebar Entity Inspector ---
+      // ── SMART DIMENSION / SELECTION ──
+      if (editorMode === "dimension") {
+        if (clicked) {
+          if (clicked.type === "vertex") {
+            if (selectedVertexA === -1) {
+              selectedVertexA = clicked.index;
+              document.getElementById("sketcher-instruction").textContent = "Smart Dim: Click second vertex corner.";
+            } else {
+              selectedVertexB = clicked.index;
+              if (selectedVertexA !== selectedVertexB) {
+                const exists = customDimensions.some(d => 
+                  (d.v1 === selectedVertexA && d.v2 === selectedVertexB) ||
+                  (d.v1 === selectedVertexB && d.v2 === selectedVertexA)
+                );
+                if (!exists) {
+                  const p1 = sketchVertices[selectedVertexA];
+                  const p2 = sketchVertices[selectedVertexB];
+                  const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                  customDimensions.push({ v1: selectedVertexA, v2: selectedVertexB, d: Math.round(len) });
+                }
+              }
+              selectedVertexA = -1;
+              selectedVertexB = -1;
+              document.getElementById("sketcher-instruction").textContent = "Smart Dim: Click node, line, or circle.";
+            }
+            selectedEntity = clicked;
+          } else {
+            selectedEntity = clicked;
+          }
+        } else {
+          selectedEntity = null;
+        }
+        rebuildSpatialIndexes();
+        showEntityInspector();
+        drawSketchCanvas();
+        return;
+      }
+
+      // ── FILLET CORNER ──
+      if (editorMode === "fillet") {
+        if (clicked && clicked.type === "vertex") {
+          const rPrompt = prompt("Enter fillet radius in mm:", "10");
+          if (rPrompt !== null) {
+            const rad = parseFloat(rPrompt);
+            if (!isNaN(rad) && rad > 0) {
+              applyFillet(clicked.index, rad);
+            }
+          }
+        }
+        return;
+      }
+
+      // ── MEASURE RULER ──
+      if (editorMode === "measure") {
+        const snapped = snapToGrid(pos.x, pos.y);
+        if (!isMeasuring) {
+          measureStartPos = snapped;
+          measureEndPos = null;
+          isMeasuring = true;
+          document.getElementById("sketcher-instruction").textContent = "Move mouse and click to end measurement.";
+        } else {
+          measureEndPos = snapped;
+          isMeasuring = false;
+          const dist = Math.round(Math.hypot(measureEndPos.x - measureStartPos.x, measureEndPos.y - measureStartPos.y));
+          document.getElementById("sketcher-instruction").textContent = `Measured Distance: ${dist} mm.`;
+        }
+        drawSketchCanvas();
+        return;
+      }
+
+      // ── CIRCLE DRAWING ──
+      if (editorMode === "circle") {
+        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y);
+        if (!activeCircleCenter) {
+          activeCircleCenter = snapPt;
+        } else {
+          const radius = Math.round(Math.hypot(snapPt.x - activeCircleCenter.x, snapPt.y - activeCircleCenter.y));
+          if (radius > 1) {
+            sketchCircles.push({
+              cx: activeCircleCenter.x,
+              cy: activeCircleCenter.y,
+              r: radius,
+              construction: false
+            });
+          }
+          activeCircleCenter = null;
+          rebuildSpatialIndexes();
+          drawSketchCanvas();
+          updateLiveProperties();
+        }
+        return;
+      }
+
+      // ── RECTANGLE DRAWING ──
+      if (editorMode === "rect") {
+        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y);
+        if (!activeRectStart) {
+          activeRectStart = snapPt;
+        } else {
+          const startIdx = sketchVertices.length;
+          sketchVertices.push(
+            { x: activeRectStart.x, y: activeRectStart.y },
+            { x: snapPt.x, y: activeRectStart.y },
+            { x: snapPt.x, y: snapPt.y },
+            { x: activeRectStart.x, y: snapPt.y }
+          );
+          sketchProfiles.push({
+            startIndex: startIdx,
+            count: 4,
+            isClosed: true
+          });
+          activeProfileStartIndex = sketchVertices.length;
+          activeRectStart = null;
+          rebuildSpatialIndexes();
+          drawSketchCanvas();
+          updateLiveProperties();
+        }
+        return;
+      }
+
+      // ── POLYGON DRAWING ──
+      if (editorMode === "poly") {
+        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y);
+        if (!activePolyCenter) {
+          activePolyCenter = snapPt;
+        } else {
+          const radius = Math.round(Math.hypot(snapPt.x - activePolyCenter.x, snapPt.y - activePolyCenter.y));
+          if (radius > 2) {
+            const step = (2 * Math.PI) / polySides;
+            const angle = Math.atan2(snapPt.y - activePolyCenter.y, snapPt.x - activePolyCenter.x);
+            const startIdx = sketchVertices.length;
+            for (let i = 0; i < polySides; i++) {
+              const theta = angle + i * step;
+              sketchVertices.push({
+                x: Math.round(activePolyCenter.x + radius * Math.cos(theta)),
+                y: Math.round(activePolyCenter.y + radius * Math.sin(theta))
+              });
+            }
+            sketchProfiles.push({
+              startIndex: startIdx,
+              count: polySides,
+              isClosed: true
+            });
+            activeProfileStartIndex = sketchVertices.length;
+          }
+          activePolyCenter = null;
+          rebuildSpatialIndexes();
+          drawSketchCanvas();
+          updateLiveProperties();
+        }
+        return;
+      }
+
+      // ── LINE DRAWING / IDLE SELECT ──
+      if (editorMode === "draw") {
+        if (clicked && clicked.type === "vertex") {
+          // Select corner handle for dragging
+          selectedVertexIndex = clicked.index;
+          selectedEntity = clicked;
+          showEntityInspector();
+          return;
+        }
+
+        let snapPt = snapToGrid(pos.x, pos.y);
+        if (hoveredSnapTarget) snapPt = hoveredSnapTarget;
+
+        const activeStart = activeProfileStartIndex;
+        const activeCount = sketchVertices.length - activeStart;
+
+        // Ortho angle lock
+        if ((shiftPressed || window.orthoLockEnabled) && activeCount > 0) {
+          const last = sketchVertices[sketchVertices.length - 1];
+          const dx = Math.abs(snapPt.x - last.x);
+          const dy = Math.abs(snapPt.y - last.y);
+          if (dx > dy) snapPt.y = last.y;
+          else snapPt.x = last.x;
+        }
+
+        // Closed loop checker
+        if (activeCount >= 3) {
+          const start = sketchVertices[activeStart];
+          if (Math.hypot(snapPt.x - start.x, snapPt.y - start.y) < 14) {
+            sketchProfiles.push({
+              startIndex: activeStart,
+              count: activeCount,
+              isClosed: true
+            });
+            activeProfileStartIndex = sketchVertices.length;
+            rebuildSpatialIndexes();
+            drawSketchCanvas();
+            updateLiveProperties();
+            return;
+          }
+        }
+
+        sketchVertices.push(snapPt);
+        rebuildSpatialIndexes();
+        drawSketchCanvas();
+        updateLiveProperties();
+      }
+    });
+
+    canvasEl.addEventListener("mousemove", (e) => {
+      const pos = webglRenderer.getMouseWorldPos(e.clientX, e.clientY);
+      const rawSnapped = snapToGrid(pos.x, pos.y);
+      
+      const snapObj = findSnapTarget(pos);
+      hoveredSnapTarget = snapObj;
+
+      let finalSnapped = snapObj ? snapObj : rawSnapped;
+
+      // Update Coordinate HUD Display
+      document.getElementById("coords-display").textContent = `X: ${finalSnapped.x.toFixed(0)} | Y: ${finalSnapped.y.toFixed(0)} mm`;
+
+      mousePos = finalSnapped;
+
+      // Handle active vertex dragging
+      if (editorMode === "draw" && selectedVertexIndex !== -1) {
+        if (layers["FOREGROUND"].frozen) return;
+        sketchVertices[selectedVertexIndex] = finalSnapped;
+        runConstraintSolver(selectedVertexIndex);
+        rebuildSpatialIndexes();
+        updateLiveProperties();
+      }
+
+      // Always redraw canvas on mousemove to update snap targets, crosshairs, and shapes
+      drawSketchCanvas(editorMode === "draw");
+    });
+
+    canvasEl.addEventListener("mouseup", (e) => {
+      selectedVertexIndex = -1;
+    });
+
+    // Escape cancels actions
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        selectedEntity = null;
+        activeCircleCenter = null;
+        activeRectStart = null;
+        activePolyCenter = null;
+        isMeasuring = false;
+        
+        showEntityInspector();
+        drawSketchCanvas();
+      }
+    });
+
+  }
+
+  // --- Inspector View Controller ---
   function showEntityInspector() {
     const panel = document.getElementById("sidebar-inspector-section");
     const container = document.getElementById("inspector-fields-container");
     if (!panel || !container) return;
 
-    // ── ACTIVE SIZING MODULE CALCULATOR OVERLAYS (Phase 5) ──
+    panel.classList.remove("hidden");
+
+    // Sizer Calculator Overlay Checks
     if (window.activeSizerModule) {
       panel.classList.remove("hidden");
       if (window.activeSizerModule === "BUSBAR") {
         container.innerHTML = `
           <div class="inspector-fields">
-            <div class="inspector-title">Busbar Sizing Calculator</div>
+            <div class="inspector-title">Busbar Sizer</div>
             <div class="inspector-row">
               <label>Target Current (A)</label>
               <input type="number" id="busbar-current" value="800" step="50" onchange="runBusbarSizer()">
@@ -1481,12 +1120,12 @@ document.addEventListener("DOMContentLoaded", () => {
               <input type="number" id="busbar-temp" value="30" step="5" onchange="runBusbarSizer()">
             </div>
             <div class="inspector-row" style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-              <span class="prop-label">Sized Width:</span>
-              <span class="prop-val" id="busbar-width-res" style="font-weight: bold; color: var(--accent-primary);">80 mm</span>
+              <span>Sized Width:</span>
+              <span id="busbar-width-res" style="font-weight: bold; color: var(--accent-primary);">80 mm</span>
             </div>
             <div class="inspector-row">
-              <span class="prop-label">Sized Thickness:</span>
-              <span class="prop-val" id="busbar-thick-res" style="font-weight: bold; color: var(--accent-primary);">12 mm</span>
+              <span>Sized Thickness:</span>
+              <span id="busbar-thick-res" style="font-weight: bold; color: var(--accent-primary);">12 mm</span>
             </div>
             <button class="action-btn primary" onclick="redraftBusbarGeometry()" style="width: 100%; margin-top: 12px; height: 32px; font-size: 11px;">
               Redraft Busbar Profile
@@ -1494,7 +1133,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         `;
         runBusbarSizer();
-      } 
+      }
       else if (window.activeSizerModule === "THERMAL") {
         container.innerHTML = `
           <div class="inspector-fields">
@@ -1512,12 +1151,12 @@ document.addEventListener("DOMContentLoaded", () => {
               <input type="number" id="cable-loss" value="3.0" step="0.5" onchange="runCableSizer()">
             </div>
             <div class="inspector-row" style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-              <span class="prop-label">Req. Conductor Area:</span>
-              <span class="prop-val" id="cable-area-res" style="font-weight: bold; color: var(--accent-primary);">35 mm²</span>
+              <span>Req. Area:</span>
+              <span id="cable-area-res" style="font-weight: bold; color: var(--accent-primary);">35 mm²</span>
             </div>
             <div class="inspector-row">
-              <span class="prop-label">Conductor Diameter:</span>
-              <span class="prop-val" id="cable-diam-res" style="font-weight: bold; color: var(--accent-primary);">6.7 mm</span>
+              <span>Conductor Diameter:</span>
+              <span id="cable-diam-res" style="font-weight: bold; color: var(--accent-primary);">6.7 mm</span>
             </div>
             <button class="action-btn primary" onclick="redraftCableGeometry()" style="width: 100%; margin-top: 12px; height: 32px; font-size: 11px;">
               Redraft Conductor Circle
@@ -1525,7 +1164,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         `;
         runCableSizer();
-      } 
+      }
       else if (window.activeSizerModule === "BEAM") {
         container.innerHTML = `
           <div class="inspector-fields">
@@ -1539,8 +1178,8 @@ document.addEventListener("DOMContentLoaded", () => {
               <input type="number" id="beam-length" value="3000" step="200" onchange="runBeamSizer()">
             </div>
             <div class="inspector-row" style="margin-top: 8px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-              <span class="prop-label">Max Deflection:</span>
-              <span class="prop-val" id="beam-deflect-res" style="font-weight: bold; color: #ef4444;">12.4 mm</span>
+              <span>Max Deflection:</span>
+              <span id="beam-deflect-res" style="font-weight: bold; color: #ef4444;">12.4 mm</span>
             </div>
             <button class="action-btn primary" onclick="redraftBeamDeflection()" style="width: 100%; margin-top: 12px; height: 32px; font-size: 11px;">
               Plot Bending Deflection
@@ -1553,34 +1192,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (!selectedEntity) {
-      // Show default Global Offset tools when no entity is selected
-      panel.classList.remove("hidden");
-      container.innerHTML = `
-        <div class="inspector-fields">
-          <div class="inspector-title">Global Profile Tools</div>
-          <div class="inspector-row">
-            <label>Offset Boundary (mm)</label>
-            <input type="number" id="global-offset-val" value="10" step="5">
-          </div>
-          <button class="action-btn primary" onclick="triggerOffsetProfile()" style="width:100%; margin-top:6px; height:32px;">
-            Apply Offset Outline
-          </button>
-        </div>
-      `;
+      panel.classList.add("hidden");
+      container.innerHTML = "";
       return;
     }
 
-    panel.classList.remove("hidden");
     container.innerHTML = "";
-
     const idx = selectedEntity.index;
 
     if (selectedEntity.type === "circle") {
       const c = sketchCircles[idx];
       if (!c) return;
-      
+
       const diam = c.r * 2;
-      let keywayInfo = "No standard recommendation";
+      let keywayInfo = "No standard keyway recommendation";
       for (const range in ParallelKeys) {
         const [minD, maxD] = range.split("-").map(Number);
         if (diam >= minD && diam <= maxD) {
@@ -1592,7 +1217,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       container.innerHTML = `
         <div class="inspector-fields">
-          <div class="inspector-title">Circle Entity (Hole/Shaft)</div>
+          <div class="inspector-title">Circle Entity</div>
           <div class="inspector-row">
             <label>Center X (mm)</label>
             <input type="number" value="${c.cx}" onchange="updateSelectedEntityParam('cx', this.value)">
@@ -1605,37 +1230,33 @@ document.addEventListener("DOMContentLoaded", () => {
             <label>Diameter (mm)</label>
             <input type="number" value="${c.r * 2}" onchange="updateSelectedEntityParam('diameter', this.value)">
           </div>
-          
           <div class="inspector-row">
-            <label>Standard Tapped Hole</label>
-            <select onchange="updateSelectedEntityParam('standardHole', this.value)">
-              <option value="">None (Custom)</option>
-              <option value="M3" ${c.standardHole === "M3" ? "selected" : ""}>M3 x 0.5</option>
-              <option value="M4" ${c.standardHole === "M4" ? "selected" : ""}>M4 x 0.7</option>
-              <option value="M5" ${c.standardHole === "M5" ? "selected" : ""}>M5 x 0.8</option>
-              <option value="M6" ${c.standardHole === "M6" ? "selected" : ""}>M6 x 1.0</option>
-              <option value="M8" ${c.standardHole === "M8" ? "selected" : ""}>M8 x 1.25</option>
-              <option value="M10" ${c.standardHole === "M10" ? "selected" : ""}>M10 x 1.5</option>
-              <option value="M12" ${c.standardHole === "M12" ? "selected" : ""}>M12 x 1.75</option>
-            </select>
-          </div>
-
-          <div class="inspector-row">
-            <label>ISO Clearance Fit (Hole)</label>
-            <select onchange="updateSelectedEntityParam('holeTolerance', this.value)">
+            <label>Standard Tapped</label>
+            <select onchange="updateSelectedEntityParam('standardHole', this.value)" class="form-select" style="width: 100px; height: 32px; font-size: 11px;">
               <option value="">None</option>
-              <option value="H7" ${c.holeTolerance === "H7" ? "selected" : ""}>H7 (Close Fit)</option>
-              <option value="H8" ${c.holeTolerance === "H8" ? "selected" : ""}>H8 (Medium Fit)</option>
-              <option value="H11" ${c.holeTolerance === "H11" ? "selected" : ""}>H11 (Free Fit)</option>
+              <option value="M3" ${c.standardHole === "M3" ? "selected" : ""}>M3</option>
+              <option value="M4" ${c.standardHole === "M4" ? "selected" : ""}>M4</option>
+              <option value="M5" ${c.standardHole === "M5" ? "selected" : ""}>M5</option>
+              <option value="M6" ${c.standardHole === "M6" ? "selected" : ""}>M6</option>
+              <option value="M8" ${c.standardHole === "M8" ? "selected" : ""}>M8</option>
+              <option value="M10" ${c.standardHole === "M10" ? "selected" : ""}>M10</option>
+              <option value="M12" ${c.standardHole === "M12" ? "selected" : ""}>M12</option>
             </select>
           </div>
-
-          <div class="inspector-row" style="margin-top: 6px; padding: 6px; background: var(--bg-secondary); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">ISO 773 Keyway Recommendation</div>
-            <div style="font-size: 11px; margin-top: 2px; font-family: var(--font-mono);">${keywayInfo}</div>
+          <div class="inspector-row">
+            <label>Clearance Fit</label>
+            <select onchange="updateSelectedEntityParam('holeTolerance', this.value)" class="form-select" style="width: 100px; height: 32px; font-size: 11px;">
+              <option value="">None</option>
+              <option value="H7" ${c.holeTolerance === "H7" ? "selected" : ""}>H7</option>
+              <option value="H8" ${c.holeTolerance === "H8" ? "selected" : ""}>H8</option>
+              <option value="H11" ${c.holeTolerance === "H11" ? "selected" : ""}>H11</option>
+            </select>
           </div>
-
-          <div class="inspector-checkbox-row" style="margin-top: 10px;">
+          <div style="margin-top: 6px; padding: 6px; background: var(--bg-tertiary); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="font-size: 9px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">ISO 773 Shaft Keyway Recommended</div>
+            <div style="font-size: 10px; margin-top: 2px; font-family: var(--font-mono); color: var(--text-secondary);">${keywayInfo}</div>
+          </div>
+          <div class="inspector-checkbox-row">
             <input type="checkbox" id="c-construction" ${c.construction ? 'checked' : ''} onchange="updateSelectedEntityParam('construction', this.checked)">
             <label for="c-construction">Construction Line (No Mass)</label>
           </div>
@@ -1644,44 +1265,25 @@ document.addEventListener("DOMContentLoaded", () => {
           </button>
         </div>
       `;
-    } 
+    }
     else if (selectedEntity.type === "line") {
       const p1 = sketchVertices[idx];
       const p2 = sketchVertices[(idx + 1) % sketchVertices.length];
       if (!p1 || !p2) return;
       const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
       container.innerHTML = `
         <div class="inspector-fields">
           <div class="inspector-title">Line Segment</div>
           <div class="inspector-row">
-            <label>Segment Length</label>
+            <label>Length (mm)</label>
             <input type="number" value="${Math.round(len)}" onchange="updateSelectedEntityParam('lineLength', this.value)">
           </div>
-          <div style="font-size:11px; color:var(--text-muted); margin-top: 4px;">
-            Connected: Node ${idx} to Node ${(idx+1)%sketchVertices.length}
+          <div style="font-size:10px; color:var(--text-muted); margin-top: 4px;">
+            Span: Node ${idx} to Node ${(idx+1)%sketchVertices.length}
           </div>
           <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
             Delete Corner Node
-          </button>
-        </div>
-      `;
-    } 
-    else if (selectedEntity.type === "dimension") {
-      const dim = customDimensions[idx];
-      if (!dim) return;
-      const v1 = sketchVertices[dim.v1];
-      const v2 = sketchVertices[dim.v2];
-      const len = v1 && v2 ? Math.hypot(v2.x - v1.x, v2.y - v1.y) : 0;
-      const dVal = dim.d !== undefined ? dim.d : len;
-      container.innerHTML = `
-        <div class="inspector-fields">
-          <div class="inspector-title">Distance Dimension</div>
-          <div class="inspector-row">
-            <label>Dimension (mm)</label>
-            <input type="number" value="${Math.round(dVal)}" onchange="updateSelectedEntityParam('dimensionValue', this.value)">
-          </div>
-          <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
-            Delete Dimension
           </button>
         </div>
       `;
@@ -1693,15 +1295,31 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="inspector-fields">
           <div class="inspector-title">Vertex Handle</div>
           <div class="inspector-row">
-            <label>Coordinate X</label>
+            <label>Coord X (mm)</label>
             <input type="number" value="${v.x}" onchange="updateSelectedEntityParam('x', this.value)">
           </div>
           <div class="inspector-row">
-            <label>Coordinate Y</label>
+            <label>Coord Y (mm)</label>
             <input type="number" value="${v.y}" onchange="updateSelectedEntityParam('y', this.value)">
           </div>
           <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
-            Delete Node
+            Delete Corner Node
+          </button>
+        </div>
+      `;
+    }
+    else if (selectedEntity.type === "dimension") {
+      const dim = customDimensions[idx];
+      if (!dim) return;
+      container.innerHTML = `
+        <div class="inspector-fields">
+          <div class="inspector-title">Smart Dimension</div>
+          <div class="inspector-row">
+            <label>Value (mm)</label>
+            <input type="number" value="${dim.d}" onchange="updateSelectedEntityParam('dimensionValue', this.value)">
+          </div>
+          <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
+            Delete Dimension
           </button>
         </div>
       `;
@@ -1711,7 +1329,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!ins) return;
       container.innerHTML = `
         <div class="inspector-fields">
-          <div class="inspector-title">Block Reference: ${ins.blockName}</div>
+          <div class="inspector-title">Block Instance: ${ins.blockName}</div>
           <div class="inspector-row">
             <label>Position X</label>
             <input type="number" value="${ins.x}" onchange="updateSelectedEntityParam('insX', this.value)">
@@ -1724,26 +1342,19 @@ document.addEventListener("DOMContentLoaded", () => {
             <label>Rotation (°)</label>
             <input type="number" value="${ins.rotation}" onchange="updateSelectedEntityParam('insRotation', this.value)">
           </div>
-          <div class="inspector-row">
-            <label>Scale X</label>
-            <input type="number" value="${ins.scaleX}" step="0.1" onchange="updateSelectedEntityParam('insScaleX', this.value)">
-          </div>
-          <div class="inspector-row">
-            <label>Scale Y</label>
-            <input type="number" value="${ins.scaleY}" step="0.1" onchange="updateSelectedEntityParam('insScaleY', this.value)">
-          </div>
           <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
-            Delete Block Reference
+            Delete Block
           </button>
         </div>
       `;
     }
   }
 
+  // --- Inspector Modify Parameter Handler ---
   window.updateSelectedEntityParam = (param, val) => {
     if (!selectedEntity) return;
     const idx = selectedEntity.index;
-    
+
     if (selectedEntity.type === "circle") {
       const c = sketchCircles[idx];
       if (param === "cx") c.cx = Math.round(parseFloat(val));
@@ -1761,13 +1372,13 @@ document.addEventListener("DOMContentLoaded", () => {
         c.holeTolerance = val;
       }
       runConstraintSolver();
-    } 
+    }
     else if (selectedEntity.type === "vertex") {
       const v = sketchVertices[idx];
       if (param === "x") v.x = Math.round(parseFloat(val));
       if (param === "y") v.y = Math.round(parseFloat(val));
       runConstraintSolver(idx);
-    } 
+    }
     else if (selectedEntity.type === "line") {
       if (param === "lineLength") {
         const p1 = sketchVertices[idx];
@@ -1780,15 +1391,13 @@ document.addEventListener("DOMContentLoaded", () => {
           const ratio = newLen / len;
           p2.x = Math.round(p1.x + dx * ratio);
           p2.y = Math.round(p1.y + dy * ratio);
-          
-          // Promote line segment length to a parametric constraint/custom dimension
+
+          // Add to custom dimension constraints
           const nextIdx = (idx + 1) % sketchVertices.length;
           let dim = customDimensions.find(d => (d.v1 === idx && d.v2 === nextIdx) || (d.v1 === nextIdx && d.v2 === idx));
-          if (dim) {
-            dim.d = newLen;
-          } else {
-            customDimensions.push({ v1: idx, v2: nextIdx, d: newLen });
-          }
+          if (dim) dim.d = newLen;
+          else customDimensions.push({ v1: idx, v2: nextIdx, d: newLen });
+          
           runConstraintSolver(idx);
         }
       }
@@ -1804,578 +1413,47 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     else if (selectedEntity.type === "insertion") {
       const ins = sketchInsertions[idx];
-      if (ins) {
-        if (param === "insX") ins.x = Math.round(parseFloat(val));
-        if (param === "insY") ins.y = Math.round(parseFloat(val));
-        if (param === "insRotation") ins.rotation = parseFloat(val);
-        if (param === "insScaleX") ins.scaleX = parseFloat(val);
-        if (param === "insScaleY") ins.scaleY = parseFloat(val);
-      }
+      if (param === "insX") ins.x = Math.round(parseFloat(val));
+      if (param === "insY") ins.y = Math.round(parseFloat(val));
+      if (param === "insRotation") ins.rotation = Math.round(parseFloat(val));
     }
-    
+
+    rebuildSpatialIndexes();
     drawSketchCanvas();
     updateLiveProperties();
     showEntityInspector();
   };
 
+  // --- Delete Selected ---
   window.deleteSelectedEntity = () => {
     if (!selectedEntity) return;
     const idx = selectedEntity.index;
+
     if (selectedEntity.type === "circle") {
       sketchCircles.splice(idx, 1);
-    } else if (selectedEntity.type === "dimension") {
-      customDimensions.splice(idx, 1);
-    } else if (selectedEntity.type === "insertion") {
-      sketchInsertions.splice(idx, 1);
-    } else {
-      // Vertex or Line deletes vertex
+    }
+    else if (selectedEntity.type === "vertex" || selectedEntity.type === "line") {
       sketchVertices.splice(idx, 1);
+      // If polyline gets too short, unclose shape
       if (sketchVertices.length < 3) isSketchClosed = false;
+      // Filter out invalid dimensions
+      customDimensions = customDimensions.filter(d => d.v1 < sketchVertices.length && d.v2 < sketchVertices.length);
     }
+    else if (selectedEntity.type === "dimension") {
+      customDimensions.splice(idx, 1);
+    }
+    else if (selectedEntity.type === "insertion") {
+      sketchInsertions.splice(idx, 1);
+    }
+
     selectedEntity = null;
+    rebuildSpatialIndexes();
     drawSketchCanvas();
     updateLiveProperties();
     showEntityInspector();
   };
 
-  // --- Mouse & Touch Events Handler ---
-  function initSketcherEvents() {
-    console.log("Binding WebGL canvas mouse listeners...");
-    canvasEl.addEventListener("mousedown", (e) => {
-      console.log("mousedown fired on canvas:", e.target);
-      
-      // Pan handling: middle-click or pan-mode left-click
-      if (e.button === 1 || (e.button === 0 && editorMode === "pan")) {
-        isPanning = true;
-        panStart = { x: e.clientX, y: e.clientY };
-        e.preventDefault();
-        return;
-      }
-
-      const pos = getMousePos(canvasEl, e);
-      console.log("Relative coordinate position:", pos);
-
-      // Block modification interaction if target layers are frozen (Phase 5)
-      if (editorMode === "circle" && layers["HOLES"].frozen) {
-        alert("The HOLES layer is frozen / locked.");
-        return;
-      }
-      if ((editorMode === "draw" || editorMode === "rect" || editorMode === "poly" || editorMode === "fillet") && layers["PROFILE_OUTLINE"].frozen) {
-        alert("The PROFILE_OUTLINE layer is frozen / locked.");
-        return;
-      }
-
-      // ── BLOCK INSTANTIATION MODE (Phase 5) ──
-      if (editorMode === "insert_block" && activeBlockToInsert) {
-        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
-        
-        sketchInsertions.push({
-          blockName: activeBlockToInsert,
-          x: snapPt.x,
-          y: snapPt.y,
-          scaleX: 1,
-          scaleY: 1,
-          rotation: 0
-        });
-        
-        activeBlockToInsert = null;
-        setEditorMode("draw");
-        drawSketchCanvas();
-        updateLiveProperties();
-        return;
-      }
-      
-      // Determine click targets
-      const targetCircleIndex = e.target.getAttribute("data-circle-index");
-      const targetLineIndex = e.target.getAttribute("data-line-index");
-      const targetVertexIndex = e.target.getAttribute("data-index");
-      const targetDimIndex = e.target.getAttribute("data-dim-index");
-      const targetInsertionIndex = e.target.getAttribute("data-insertion-index") || e.target.closest("g")?.getAttribute("data-insertion-index");
-
-      // ── SMART DIMENSION / SELECT MODE ──
-      if (editorMode === "dimension") {
-        if (targetInsertionIndex !== null && targetInsertionIndex !== undefined) {
-          selectedEntity = { type: "insertion", index: parseInt(targetInsertionIndex) };
-          showEntityInspector();
-          drawSketchCanvas();
-          return;
-        }
-        if (targetDimIndex !== null) {
-          selectedEntity = { type: "dimension", index: parseInt(targetDimIndex) };
-          showEntityInspector();
-          drawSketchCanvas();
-          return;
-        }
-        if (targetVertexIndex !== null) {
-          const clickedIdx = parseInt(targetVertexIndex);
-          if (selectedVertexA === -1) {
-            selectedVertexA = clickedIdx;
-            document.getElementById("sketcher-instruction").textContent = "Smart Dim: Click the second vertex.";
-          } else {
-            selectedVertexB = clickedIdx;
-            if (selectedVertexA !== selectedVertexB) {
-              const exists = customDimensions.some(d => 
-                (d.v1 === selectedVertexA && d.v2 === selectedVertexB) ||
-                (d.v1 === selectedVertexB && d.v2 === selectedVertexA)
-              );
-              if (!exists) {
-                const p1 = sketchVertices[selectedVertexA];
-                const p2 = sketchVertices[selectedVertexB];
-                const len = p1 && p2 ? Math.hypot(p2.x - p1.x, p2.y - p1.y) : 0;
-                customDimensions.push({ v1: selectedVertexA, v2: selectedVertexB, d: Math.round(len) });
-              }
-            }
-            selectedVertexA = -1;
-            selectedVertexB = -1;
-            document.getElementById("sketcher-instruction").textContent = "Smart Dim: Click node, line or circle.";
-          }
-          selectedEntity = { type: "vertex", index: clickedIdx };
-          showEntityInspector();
-          drawSketchCanvas();
-        } 
-        else if (targetCircleIndex !== null) {
-          selectedEntity = { type: "circle", index: parseInt(targetCircleIndex) };
-          showEntityInspector();
-          drawSketchCanvas();
-        } 
-        else if (targetLineIndex !== null) {
-          selectedEntity = { type: "line", index: parseInt(targetLineIndex) };
-          showEntityInspector();
-          drawSketchCanvas();
-        } 
-        else {
-          selectedEntity = null;
-          showEntityInspector();
-          drawSketchCanvas();
-        }
-        return;
-      }
-
-      // ── FILLET CORNER MODE ──
-      if (editorMode === "fillet") {
-        if (targetVertexIndex !== null) {
-          const clickedIdx = parseInt(targetVertexIndex);
-          const rPrompt = prompt("Enter fillet radius in mm:", "10");
-          if (rPrompt !== null) {
-            const rad = parseFloat(rPrompt);
-            if (!isNaN(rad) && rad > 0) {
-              applyFillet(clickedIdx, rad);
-            }
-          }
-        }
-        return;
-      }
-
-      // ── RULER MEASURE MODE ──
-      if (editorMode === "measure") {
-        const snapped = snapToGrid(pos.x, pos.y, gridSnap);
-        if (!isMeasuring) {
-          measureStartPos = snapped;
-          measureEndPos = null;
-          isMeasuring = true;
-          document.getElementById("sketcher-instruction").textContent = "Move mouse and click to end measurement.";
-        } else {
-          measureEndPos = snapped;
-          isMeasuring = false;
-          const dist = Math.round(Math.hypot(measureEndPos.x - measureStartPos.x, measureEndPos.y - measureStartPos.y));
-          document.getElementById("sketcher-instruction").textContent = `Measured Distance: ${dist} mm.`;
-        }
-        drawSketchCanvas();
-        return;
-      }
-
-      // ── CIRCLE DRAWING MODE ──
-      if (editorMode === "circle") {
-        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
-        activeCircleCenter = snapPt;
-        return;
-      }
-
-      // ── RECTANGLE DRAWING MODE ──
-      if (editorMode === "rect") {
-        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
-        activeRectStart = snapPt;
-        return;
-      }
-
-      // ── POLYGON DRAWING MODE ──
-      if (editorMode === "poly") {
-        const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
-        activePolyCenter = snapPt;
-        return;
-      }
-
-      // ── POLYLINE DRAWING MODE ──
-      if (editorMode === "draw") {
-        if (targetVertexIndex !== null) {
-          selectedVertexIndex = parseInt(targetVertexIndex);
-          selectedEntity = { type: "vertex", index: selectedVertexIndex };
-          showEntityInspector();
-          return;
-        }
-        
-        if (isSketchClosed) return;
-        
-        // Ortho Snap assistance
-        let snapPt = snapToGrid(pos.x, pos.y, gridSnap);
-        if (hoveredSnapTarget) {
-          snapPt = hoveredSnapTarget;
-        }
-        
-        if ((shiftPressed || window.orthoLockEnabled) && sketchVertices.length > 0) {
-          const last = sketchVertices[sketchVertices.length - 1];
-          const dx = Math.abs(snapPt.x - last.x);
-          const dy = Math.abs(snapPt.y - last.y);
-          if (dx > dy) {
-            snapPt.y = last.y; // horizontal lock
-          } else {
-            snapPt.x = last.x; // vertical lock
-          }
-        }
-        
-        // Loop closure checker
-        if (sketchVertices.length >= 3) {
-          const start = sketchVertices[0];
-          if (Math.hypot(snapPt.x - start.x, snapPt.y - start.y) < 15) {
-            isSketchClosed = true;
-            drawSketchCanvas();
-            updateLiveProperties();
-            return;
-          }
-        }
-        
-        sketchVertices.push(snapPt);
-        drawSketchCanvas();
-        updateLiveProperties();
-      }
-    });
-    
-    canvasEl.addEventListener("mousemove", (e) => {
-      if (isPanning) return;
-
-      const pos = getMousePos(canvasEl, e);
-      const rawSnapped = snapToGrid(pos.x, pos.y, gridSnap);
-      
-      // Update Intelli-Snap tracker
-      const snapObj = findSnapTarget(pos);
-      hoveredSnapTarget = snapObj;
-
-      let finalSnapped = snapObj ? snapObj : rawSnapped;
-      
-      // Update CAD Status Coordinate Displays
-      document.getElementById("coords-display").textContent = `X: ${finalSnapped.x.toFixed(0)} | Y: ${finalSnapped.y.toFixed(0)} mm`;
-
-      if (editorMode === "draw") {
-        if (selectedVertexIndex !== -1) {
-          if (layers["PROFILE_OUTLINE"].frozen) return;
-          sketchVertices[selectedVertexIndex] = finalSnapped;
-          runConstraintSolver(selectedVertexIndex);
-          drawSketchCanvas();
-          updateLiveProperties();
-        } else {
-          mousePos = finalSnapped;
-          if (!isSketchClosed && sketchVertices.length > 0) {
-            drawSketchCanvas(true);
-          }
-        }
-      } 
-      else if (editorMode === "circle" && activeCircleCenter) {
-        mousePos = finalSnapped;
-        drawSketchCanvas();
-      }
-      else if (editorMode === "rect" && activeRectStart) {
-        mousePos = finalSnapped;
-        drawSketchCanvas();
-      }
-      else if (editorMode === "poly" && activePolyCenter) {
-        mousePos = finalSnapped;
-        drawSketchCanvas();
-      }
-      else if (editorMode === "measure" && isMeasuring) {
-        mousePos = finalSnapped;
-        drawSketchCanvas();
-      }
-    });
-    
-    canvasEl.addEventListener("mouseup", (e) => {
-      if (isPanning) {
-        isPanning = false;
-        return;
-      }
-
-      const pos = getMousePos(canvasEl, e);
-      const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y, gridSnap);
-
-      if (editorMode === "circle" && activeCircleCenter) {
-        const radius = Math.round(Math.hypot(snapPt.x - activeCircleCenter.x, snapPt.y - activeCircleCenter.y));
-        if (radius > 2) {
-          sketchCircles.push({
-            cx: activeCircleCenter.x,
-            cy: activeCircleCenter.y,
-            r: radius,
-            construction: false
-          });
-        }
-        activeCircleCenter = null;
-        drawSketchCanvas();
-        updateLiveProperties();
-      }
-      else if (editorMode === "rect" && activeRectStart) {
-        const radiusX = Math.abs(snapPt.x - activeRectStart.x);
-        const radiusY = Math.abs(snapPt.y - activeRectStart.y);
-        if (radiusX > 2 && radiusY > 2) {
-          sketchVertices = [
-            { x: activeRectStart.x, y: activeRectStart.y },
-            { x: snapPt.x, y: activeRectStart.y },
-            { x: snapPt.x, y: snapPt.y },
-            { x: activeRectStart.x, y: snapPt.y }
-          ];
-          isSketchClosed = true;
-        }
-        activeRectStart = null;
-        drawSketchCanvas();
-        updateLiveProperties();
-      }
-      else if (editorMode === "poly" && activePolyCenter) {
-        const radius = Math.round(Math.hypot(snapPt.x - activePolyCenter.x, snapPt.y - activePolyCenter.y));
-        if (radius > 4) {
-          const angleStep = (2 * Math.PI) / polySides;
-          const startAngle = Math.atan2(snapPt.y - activePolyCenter.y, snapPt.x - activePolyCenter.x);
-          sketchVertices = [];
-          for (let i = 0; i < polySides; i++) {
-            const angle = startAngle + i * angleStep;
-            sketchVertices.push({
-              x: Math.round(activePolyCenter.x + radius * Math.cos(angle)),
-              y: Math.round(activePolyCenter.y + radius * Math.sin(angle))
-            });
-          }
-          isSketchClosed = true;
-        }
-        activePolyCenter = null;
-        drawSketchCanvas();
-        updateLiveProperties();
-      }
-      
-      selectedVertexIndex = -1;
-    });
-
-    // ESC to reset tool selection
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        selectedEntity = null;
-        activeCircleCenter = null;
-        isMeasuring = false;
-        showEntityInspector();
-        drawSketchCanvas();
-      }
-    });
-
-    // Command CLI Input Event Listener (Phase 3)
-    const cliInput = document.getElementById("command-cli-input");
-    if (cliInput) {
-      cliInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          const val = cliInput.value;
-          cliInput.value = "";
-          
-          const lastPt = sketchVertices.length > 0 ? sketchVertices[sketchVertices.length - 1] : null;
-
-          const addNodeFn = (x, y) => {
-            sketchVertices.push({ x, y });
-            drawSketchCanvas();
-            updateLiveProperties();
-          };
-
-          const addCircleFn = (cx, cy, r) => {
-            sketchCircles.push({ cx, cy, r, construction: false });
-            drawSketchCanvas();
-            updateLiveProperties();
-          };
-
-          const responseMsg = processCommandText(
-            val,
-            (mode) => setEditorMode(mode),
-            () => editorMode,
-            lastPt,
-            addNodeFn,
-            addCircleFn,
-            clearSketchCanvas,
-            undoSketchPoint,
-            closeSketchShape
-          );
-          
-          const statusText = document.getElementById("cad-status-text");
-          if (statusText && responseMsg) {
-            statusText.textContent = responseMsg;
-          }
-        }
-      });
-    }
-  }
-
-  // --- CAD Viewport Scaling Helpers ---
-  window.zoomViewport = (factor) => {
-    if (webglRenderer) {
-      const aspect = webglRenderer.width / webglRenderer.height;
-      const width = (webglRenderer.camera.right - webglRenderer.camera.left) / factor;
-      
-      webglRenderer.camera.left = -width / 2;
-      webglRenderer.camera.right = width / 2;
-      webglRenderer.camera.top = -width / aspect / 2;
-      webglRenderer.camera.bottom = width / aspect / 2;
-      webglRenderer.camera.updateProjectionMatrix();
-      webglRenderer.render();
-    }
-  };
-
-  window.resetViewport = () => {
-    if (webglRenderer) {
-      webglRenderer.resetView(sheetWidth, sheetHeight);
-    }
-  };
-
-  window.changeSheetSize = () => {
-    const select = document.getElementById("sheet-size-select");
-    if (!select) return;
-    sheetSize = select.value;
-    if (sheetSize === "A4") {
-      sheetWidth = 297;
-      sheetHeight = 210;
-    } else if (sheetSize === "A3") {
-      sheetWidth = 420;
-      sheetHeight = 297;
-    }
-    if (webglRenderer) {
-      webglRenderer.resetView(sheetWidth, sheetHeight);
-    }
-    drawSketchCanvas();
-    updateLiveProperties();
-  };
-
-
-
-
-  // --- CAD Editor Toolbar Switcher ---
-  window.setEditorMode = (mode) => {
-    editorMode = mode;
-    window.activeSizerModule = null;
-    document.querySelectorAll(".tool-btn").forEach(btn => btn.classList.remove("active"));
-    document.querySelectorAll(".viewport-btn").forEach(btn => btn.classList.remove("active"));
-    
-    if (mode === "draw") document.getElementById("tool-draw-btn")?.classList.add("active");
-    else if (mode === "circle") document.getElementById("tool-circle-btn")?.classList.add("active");
-    else if (mode === "rect") document.getElementById("tool-rect-btn")?.classList.add("active");
-    else if (mode === "poly") {
-      document.getElementById("tool-poly-btn")?.classList.add("active");
-      const input = prompt("Enter number of polygon sides:", polySides);
-      const parsed = parseInt(input);
-      if (!isNaN(parsed) && parsed >= 3 && parsed <= 20) {
-        polySides = parsed;
-      }
-    }
-    else if (mode === "fillet") document.getElementById("tool-fillet-btn")?.classList.add("active");
-    else if (mode === "offset") document.getElementById("tool-offset-btn")?.classList.add("active");
-    else if (mode === "dimension") document.getElementById("tool-dimension-btn")?.classList.add("active");
-    else if (mode === "measure") document.getElementById("tool-measure-btn")?.classList.add("active");
-    else if (mode === "pan") {
-      const panBtn = document.getElementById("vp-pan");
-      if (panBtn) panBtn.classList.add("active");
-    }
-    
-    selectedVertexA = -1;
-    selectedVertexB = -1;
-    measureStartPos = null;
-    measureEndPos = null;
-    isMeasuring = false;
-    selectedEntity = null;
-    
-    const instr = document.getElementById("sketcher-instruction");
-    const statusText = document.getElementById("cad-status-text");
-
-    if (mode === "draw") {
-      instr.textContent = "Profile Mode: Click the grid to plot vertices. Click start node to close the loop.";
-      statusText.textContent = "Status: Drawing Profile";
-    } else if (mode === "circle") {
-      instr.textContent = "Circle Mode: Click center point, drag outward, and release to place circular cutout.";
-      statusText.textContent = "Status: Circle / Hole Creator";
-    } else if (mode === "rect") {
-      instr.textContent = "Rectangle Mode: Click first corner, drag diagonal, and release to draw a rectangle.";
-      statusText.textContent = "Status: Rectangle Creator";
-    } else if (mode === "poly") {
-      instr.textContent = `Polygon Mode (${polySides}-sided): Click center point, drag outward, and release to place.`;
-      statusText.textContent = `Status: Drawing ${polySides}-sided Polygon`;
-    } else if (mode === "fillet") {
-      instr.textContent = "Fillet Mode: Click any corner node handle on the canvas to round it.";
-      statusText.textContent = "Status: Fillet / Round Modifier";
-    } else if (mode === "offset") {
-      instr.textContent = "Offset Mode: Use the sidebar tool to offset the profile boundary by a thickness.";
-      statusText.textContent = "Status: Profile Offsetting";
-    } else if (mode === "dimension") {
-      instr.textContent = "Smart Dimension: Click any line segment, circle, or click two nodes to create dimensions.";
-      statusText.textContent = "Status: Inspection & Dimensioning";
-    } else if (mode === "measure") {
-      instr.textContent = "Measure Mode: Click any point to start measuring. Click second point to resolve distance.";
-      statusText.textContent = "Status: Dynamic Ruler Tool";
-    } else if (mode === "pan") {
-      instr.textContent = "Pan Mode: Left-click and drag on the canvas to move the viewport.";
-      statusText.textContent = "Status: Panning Viewport";
-    }
-    
-    showEntityInspector();
-    drawSketchCanvas();
-  };
-
-  // Bind subpage theme toggle click event
-  const themeToggleBtn = document.getElementById("theme-toggle");
-  if (themeToggleBtn) {
-    themeToggleBtn.addEventListener("click", () => {
-      const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-      const newTheme = currentTheme === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", newTheme);
-      localStorage.setItem("theme", newTheme);
-    });
-  }
-
-  window.activeSizerModule = null;
-  window.orthoLockEnabled = true;
-  window.gridVisible = true;
-  window.snapEnabled = true;
-
-  window.switchRibbonTab = (tabName) => {
-    document.querySelectorAll(".ribbon-tab-btn").forEach(btn => btn.classList.remove("active"));
-    const activeBtn = document.getElementById("ribbon-tab-" + tabName.toLowerCase());
-    if (activeBtn) activeBtn.classList.add("active");
-    
-    document.querySelectorAll(".ribbon-panel").forEach(panel => panel.classList.remove("active"));
-    const activePanel = document.getElementById("ribbon-panel-" + tabName);
-    if (activePanel) activePanel.classList.add("active");
-  };
-
-  window.switchSheetTab = (tabName) => {
-    document.querySelectorAll(".sheet-tab-btn").forEach(btn => btn.classList.remove("active"));
-    const activeBtn = document.getElementById("sheet-tab-" + tabName.toLowerCase());
-    if (activeBtn) activeBtn.classList.add("active");
-  };
-
-  window.toggleStatusSetting = (setting) => {
-    if (setting === "ortho") {
-      window.orthoLockEnabled = !window.orthoLockEnabled;
-      const btn = document.getElementById("toggle-ortho-btn");
-      if (btn) btn.classList.toggle("active", window.orthoLockEnabled);
-    }
-    else if (setting === "grid") {
-      window.gridVisible = !window.gridVisible;
-      const btn = document.getElementById("toggle-grid-btn");
-      if (btn) btn.classList.toggle("active", window.gridVisible);
-      drawSketchCanvas();
-    }
-    else if (setting === "snap") {
-      window.snapEnabled = !window.snapEnabled;
-      const btn = document.getElementById("toggle-snap-btn");
-      if (btn) btn.classList.toggle("active", window.snapEnabled);
-    }
-  };
-
+  // --- Inspector view sizers ---
   window.openSizer = (moduleName) => {
     window.activeSizerModule = moduleName;
     selectedEntity = null;
@@ -2402,8 +1480,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.redraftBusbarGeometry = () => {
-    if (layers["PROFILE_OUTLINE"].frozen) {
-      alert("PROFILE_OUTLINE layer is frozen / locked.");
+    if (layers["FOREGROUND"].frozen) {
+      alert("FOREGROUND layer is locked.");
       return;
     }
     const w = window.sizedBusbarWidth || 80;
@@ -2422,6 +1500,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ];
     isSketchClosed = true;
     
+    rebuildSpatialIndexes();
     drawSketchCanvas();
     updateLiveProperties();
   };
@@ -2443,8 +1522,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.redraftCableGeometry = () => {
-    if (layers["HOLES"].frozen) {
-      alert("HOLES layer is frozen / locked.");
+    if (layers["FOREGROUND"].frozen) {
+      alert("FOREGROUND layer is locked.");
       return;
     }
     const d = window.sizedCableDiam || 6.7;
@@ -2454,12 +1533,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const cy = Math.round(sheetHeight / 2);
     
     sketchCircles.push({
-      cx: cx,
-      cy: cy,
-      r: r,
+      cx: cx, cy: cy, r: r,
       construction: false
     });
     
+    rebuildSpatialIndexes();
     drawSketchCanvas();
     updateLiveProperties();
   };
@@ -2477,8 +1555,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.redraftBeamDeflection = () => {
-    if (layers["PROFILE_OUTLINE"].frozen) {
-      alert("PROFILE_OUTLINE layer is frozen / locked.");
+    if (layers["FOREGROUND"].frozen) {
+      alert("FOREGROUND layer is locked.");
       return;
     }
     const dMax = window.sizedBeamDeflection || 12;
@@ -2488,7 +1566,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const scaleY = 2.0; 
     
     sketchVertices = [];
-    
     const segments = 20;
     for (let i = 0; i <= segments; i++) {
       const x = (i / segments) * L;
@@ -2507,34 +1584,391 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     isSketchClosed = false;
     
+    rebuildSpatialIndexes();
     drawSketchCanvas();
     updateLiveProperties();
   };
 
-  // Populate global offset panel initially and boot canvas
-  const webglCanvas = document.getElementById("three-cad-canvas");
-  if (webglCanvas && typeof ExplicitCadRenderer !== "undefined") {
-    webglRenderer = new ExplicitCadRenderer(webglCanvas);
-    webglRenderer.onViewChange = () => {
-      drawSketchCanvas();
-    };
-    window.addEventListener("resize", () => {
-      webglRenderer.resize();
-      drawSketchCanvas();
-    });
-  }
+  // --- Ribbon Toolbar Tabs switcher ---
+  window.switchRibbonTab = (tabName) => {
+    document.querySelectorAll(".ribbon-tab-btn").forEach(btn => btn.classList.remove("active"));
+    const activeBtn = document.getElementById(`tab-${tabName}-btn`);
+    if (activeBtn) activeBtn.classList.add("active");
 
+    document.querySelectorAll(".ribbon-panel").forEach(p => p.classList.remove("active"));
+    const activePanel = document.getElementById(`panel-${tabName}`);
+    if (activePanel) activePanel.classList.add("active");
+  };
+
+  window.setEditorMode = (mode) => {
+    if (editorMode === "draw" && mode !== "draw") {
+      const activeStart = activeProfileStartIndex;
+      const activeCount = sketchVertices.length - activeStart;
+      if (activeCount >= 2) {
+        sketchProfiles.push({
+          startIndex: activeStart,
+          count: activeCount,
+          isClosed: false
+        });
+      } else {
+        sketchVertices.splice(activeStart);
+      }
+      activeProfileStartIndex = sketchVertices.length;
+    }
+
+    editorMode = mode;
+    window.editorMode = mode;
+    document.querySelectorAll(".tool-btn").forEach(btn => btn.classList.remove("active"));
+    
+    const activeBtn = document.getElementById(`tool-${mode}-btn`);
+    if (activeBtn) activeBtn.classList.add("active");
+
+    // instruction bubble updates
+    const instr = document.getElementById("sketcher-instruction");
+    const statusText = document.getElementById("cad-status-text");
+    if (!instr || !statusText) return;
+
+    if (mode === "draw") {
+      instr.textContent = "Line Tool: Click coordinate or snap handle to draw contiguous line segments.";
+      statusText.textContent = "Status: Drafting Polyline Outline";
+    } else if (mode === "circle") {
+      instr.textContent = "Circle Tool: Click to place center, drag diagonal and release to specify radius.";
+      statusText.textContent = "Status: Circle/Hole Creator";
+    } else if (mode === "rect") {
+      instr.textContent = "Rectangle Tool: Click starting corner, drag diagonally, and release to draw.";
+      statusText.textContent = "Status: Rectangle Creator";
+    } else if (mode === "poly") {
+      instr.textContent = `Polygon Tool (${polySides} sides): Click center, drag outward, and release to draw.`;
+      statusText.textContent = `Status: Polygon Creator`;
+    } else if (mode === "fillet") {
+      instr.textContent = "Fillet Tool: Click connecting node handle corner to round it.";
+      statusText.textContent = "Status: Fillet Modifier";
+
+    } else if (mode === "dimension") {
+      instr.textContent = "Smart Dim: Click line, circle, or select two vertices to dimension.";
+      statusText.textContent = "Status: Dimensioning";
+    } else if (mode === "measure") {
+      instr.textContent = "Measure Tool: Click start point, hover, and click end point to resolve distance.";
+      statusText.textContent = "Status: Ruler Measuring";
+    } else if (mode === "pan") {
+      instr.textContent = "Pan Viewport: Left-click and drag on canvas. Right/middle-click also pans.";
+      statusText.textContent = "Status: Panning Viewport";
+    }
+
+    selectedVertexA = -1;
+    selectedVertexB = -1;
+    isMeasuring = false;
+    
+    drawSketchCanvas();
+  };
+
+  // Block Library inserts
   window.instantiateBlock = (blockType) => {
     activeBlockToInsert = blockType;
     setEditorMode("insert_block");
     const instr = document.getElementById("sketcher-instruction");
     if (instr) {
-      instr.textContent = `Click on viewport to insert ${blockType} at coordinate.`;
+      instr.textContent = `Click coordinate to place ${blockType} instance.`;
     }
   };
 
-  let parametricConstraints = [];
+  // --- Export DXF & SVG blue prints ---
+  window.exportSVGDrawing = () => {
+    if (sketchVertices.length < 2) {
+      alert("Drawing canvas is empty.");
+      return;
+    }
+    
+    const exportSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    exportSvg.setAttribute("viewBox", `0 0 ${sheetWidth} ${sheetHeight}`);
+    exportSvg.setAttribute("width", sheetWidth);
+    exportSvg.setAttribute("height", sheetHeight);
+    exportSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    exportSvg.style.background = "#ffffff";
+    
+    exportSvg.innerHTML = `
+      <defs>
+        <marker id="arrow-start" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 10 0 L 0 5 L 10 10 z" fill="#0d9488" />
+        </marker>
+        <marker id="arrow-end" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0d9488" />
+        </marker>
+      </defs>
+    `;
 
+    // Render directly using old svg pipeline context (mock helper)
+    const drawGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    exportSvg.appendChild(drawGroup);
+
+    // Outline
+    if (isSketchClosed) {
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      p.setAttribute("points", sketchVertices.map(v => `${v.x},${v.y}`).join(" "));
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke", "#000000");
+      p.setAttribute("stroke-width", "2");
+      drawGroup.appendChild(p);
+    } else {
+      const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      pl.setAttribute("points", sketchVertices.map(v => `${v.x},${v.y}`).join(" "));
+      pl.setAttribute("fill", "none");
+      pl.setAttribute("stroke", "#000000");
+      pl.setAttribute("stroke-width", "2");
+      drawGroup.appendChild(pl);
+    }
+
+    // Circles
+    sketchCircles.forEach(c => {
+      const circ = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circ.setAttribute("cx", c.cx);
+      circ.setAttribute("cy", c.cy);
+      circ.setAttribute("r", c.r);
+      circ.setAttribute("fill", "none");
+      circ.setAttribute("stroke", "#000000");
+      circ.setAttribute("stroke-width", "1.5");
+      if (c.construction) circ.setAttribute("stroke-dasharray", "4 4");
+      drawGroup.appendChild(circ);
+    });
+
+    // Save File
+    const svgData = new XMLSerializer().serializeToString(exportSvg);
+    const blob = new Blob([svgData], { type: "image/svg+xml" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "cad_drawing.svg";
+    a.click();
+  };
+
+  window.exportDXFDrawing = () => {
+    if (sketchVertices.length < 2) {
+      alert("Drawing canvas is empty.");
+      return;
+    }
+    
+    const db = new window.DxfDatabase();
+    db.addLayer("PROFILE_OUTLINE", 7, "CONTINUOUS");
+    db.addLayer("HOLES", 1, "CONTINUOUS");
+    db.addLayer("CONSTRUCTION", 2, "DASHED");
+    db.addLayer("SHEET_FORMAT", 3, "CONTINUOUS");
+
+    // Profile Lines
+    // 1. Export Finalized Profiles
+    sketchProfiles.forEach(prof => {
+      const numVerts = prof.count;
+      if (numVerts >= 2) {
+        const limit = prof.isClosed ? numVerts : numVerts - 1;
+        for (let i = 0; i < limit; i++) {
+          const p1 = sketchVertices[prof.startIndex + i];
+          const p2 = sketchVertices[prof.startIndex + (i + 1) % numVerts];
+          db.entities.push({
+            type: "LINE", layer: "PROFILE_OUTLINE",
+            x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y
+          });
+        }
+      }
+    });
+
+    // 2. Export Active open polyline segments
+    const activeStart = activeProfileStartIndex;
+    const activeCount = sketchVertices.length - activeStart;
+    if (activeCount >= 2) {
+      for (let i = 0; i < activeCount - 1; i++) {
+        const p1 = sketchVertices[activeStart + i];
+        const p2 = sketchVertices[activeStart + i + 1];
+        db.entities.push({
+          type: "LINE", layer: "PROFILE_OUTLINE",
+          x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y
+        });
+      }
+    }
+
+    // Circles
+    sketchCircles.forEach(c => {
+      db.entities.push({
+        type: "CIRCLE", layer: c.construction ? "CONSTRUCTION" : "HOLES",
+        cx: c.cx, cy: c.cy, r: c.r
+      });
+    });
+
+    // Sheet Format
+    if (layers["SHEET_FORMAT"] && layers["SHEET_FORMAT"].visible) {
+      db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 0, y1: 0, x2: sheetWidth, y2: 0 });
+      db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth, y1: 0, x2: sheetWidth, y2: sheetHeight });
+      db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: sheetWidth, y1: sheetHeight, x2: 0, y2: sheetHeight });
+      db.entities.push({ type: "LINE", layer: "SHEET_FORMAT", x1: 0, y1: sheetHeight, x2: 0, y2: 0 });
+    }
+
+    // Block definitions
+    db.blocks = Object.assign({}, blockDefinitions);
+    sketchInsertions.forEach(ins => {
+      db.entities.push({
+        type: "INSERT", blockName: ins.blockName, layer: "PROFILE_OUTLINE",
+        x: ins.x, y: ins.y, scaleX: ins.scaleX || 1, scaleY: ins.scaleY || 1, rotation: ins.rotation || 0
+      });
+    });
+
+    const dxf = db.export();
+    const blob = new Blob([dxf], { type: "application/dxf" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "cad_drawing.dxf";
+    a.click();
+  };
+
+  // State share links
+  window.shareLink = () => {
+    const state = {
+      vertices: sketchVertices,
+      circles: sketchCircles,
+      insertions: sketchInsertions,
+      customDimensions,
+      isSketchClosed
+    };
+    const encoded = btoa(JSON.stringify(state));
+    const url = `${window.location.origin}${window.location.pathname}?design=${encoded}`;
+    navigator.clipboard.writeText(url).then(() => {
+      alert("Sharing URL copied to clipboard.");
+    });
+  };
+
+  window.exportJSON = () => {
+    const state = {
+      vertices: sketchVertices,
+      circles: sketchCircles,
+      insertions: sketchInsertions,
+      customDimensions,
+      isSketchClosed
+    };
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "cad_drawing.json";
+    a.click();
+  };
+
+  window.importJSON = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        if (file.name.toLowerCase().endsWith(".dxf")) {
+          const db = new window.DxfDatabase();
+          db.parse(text);
+          
+          sketchVertices = [];
+          sketchCircles = [];
+          sketchInsertions = [];
+          customDimensions = [];
+
+          db.entities.forEach(ent => {
+            if (ent.type === "LINE") {
+              if (sketchVertices.length === 0) {
+                sketchVertices.push({ x: ent.x1, y: ent.y1 });
+                sketchVertices.push({ x: ent.x2, y: ent.y2 });
+              } else {
+                const last = sketchVertices[sketchVertices.length - 1];
+                if (Math.hypot(last.x - ent.x1, last.y - ent.y1) < 1.0) {
+                  sketchVertices.push({ x: ent.x2, y: ent.y2 });
+                } else {
+                  sketchVertices.push({ x: ent.x1, y: ent.y1 });
+                  sketchVertices.push({ x: ent.x2, y: ent.y2 });
+                }
+              }
+            } else if (ent.type === "CIRCLE") {
+              sketchCircles.push({ cx: ent.cx, cy: ent.cy, r: ent.r, construction: ent.layer === "CONSTRUCTION" });
+            } else if (ent.type === "INSERT") {
+              sketchInsertions.push({
+                blockName: ent.blockName,
+                x: ent.x, y: ent.y,
+                scaleX: ent.scaleX || 1, scaleY: ent.scaleY || 1, rotation: ent.rotation || 0
+              });
+            }
+          });
+
+          isSketchClosed = sketchVertices.length >= 3 && 
+            Math.hypot(sketchVertices[0].x - sketchVertices[sketchVertices.length-1].x, 
+                       sketchVertices[0].y - sketchVertices[sketchVertices.length-1].y) < 10;
+        } else {
+          const data = JSON.parse(text);
+          if (data.vertices) {
+            sketchVertices = data.vertices;
+            sketchCircles = data.circles || [];
+            sketchInsertions = data.insertions || [];
+            customDimensions = data.customDimensions || [];
+            isSketchClosed = !!data.isSketchClosed;
+          }
+        }
+        rebuildSpatialIndexes();
+        drawSketchCanvas();
+        updateLiveProperties();
+      } catch (err) {
+        console.error(err);
+        alert("Failed to parse drawing file.");
+      }
+      event.target.value = "";
+    };
+    reader.readAsText(file);
+  };
+
+  // --- Layer manager rows builder ---
+  function renderLayerManager() {
+    const container = document.getElementById("layer-manager-list");
+    if (!container) return;
+    container.innerHTML = "";
+
+    Object.keys(layers).forEach(layerName => {
+      const layer = layers[layerName];
+      const row = document.createElement("div");
+      row.style = "display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg-tertiary); border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 4px;";
+
+      const name = document.createElement("span");
+      name.textContent = layerName.replace("_", " ");
+      name.style = "font-weight: 600; color: var(--text-primary);";
+
+      const actions = document.createElement("div");
+      actions.style = "display: flex; align-items: center; gap: 8px;";
+
+      // Color dot indicator
+      const dot = document.createElement("span");
+      dot.style = `width: 8px; height: 8px; border-radius: 50%; background-color: ${layer.color}; display: inline-block;`;
+
+      // Eye Visibility Toggle
+      const eyeBtn = document.createElement("button");
+      eyeBtn.style = "background: none; border: none; padding: 2px; cursor: pointer; color: " + (layer.visible ? "var(--accent-primary)" : "var(--text-muted)");
+      eyeBtn.innerHTML = layer.visible
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+        : `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+      eyeBtn.onclick = () => {
+        layer.visible = !layer.visible;
+        renderLayerManager();
+        drawSketchCanvas();
+      };
+
+      // Freeze Editing lock toggle
+      const lockBtn = document.createElement("button");
+      lockBtn.style = "background: none; border: none; padding: 2px; cursor: pointer; color: " + (layer.frozen ? "#ef4444" : "var(--text-muted)");
+      lockBtn.innerHTML = layer.frozen
+        ? `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+        : `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
+      lockBtn.onclick = () => {
+        layer.frozen = !layer.frozen;
+        renderLayerManager();
+      };
+
+      actions.appendChild(dot);
+      actions.appendChild(eyeBtn);
+      actions.appendChild(lockBtn);
+      row.appendChild(name);
+      row.appendChild(actions);
+      container.appendChild(row);
+    });
+  }
+
+  // --- Parametric constraints builder helper ---
+  let parametricConstraints = [];
   window.getSelectedEntity = () => selectedEntity;
   window.setSelectedEntity = (val) => {
     selectedEntity = val;
@@ -2556,28 +1990,28 @@ document.addEventListener("DOMContentLoaded", () => {
     for (let i = 0; i < sketchVertices.length; i++) {
       const v = sketchVertices[i];
       const isLocked = (i === lockedIdx);
-      vars.push(new Variable(`v_${i}_x`, v.x, !isLocked));
-      vars.push(new Variable(`v_${i}_y`, v.y, !isLocked));
+      vars.push(new window.Variable(`v_${i}_x`, v.x, !isLocked));
+      vars.push(new window.Variable(`v_${i}_y`, v.y, !isLocked));
     }
     
     // Circle variables
     const circleBase = 2 * sketchVertices.length;
     for (let j = 0; j < sketchCircles.length; j++) {
       const c = sketchCircles[j];
-      vars.push(new Variable(`c_${j}_cx`, c.cx, true));
-      vars.push(new Variable(`c_${j}_cy`, c.cy, true));
-      vars.push(new Variable(`c_${j}_r`, c.r, true));
+      vars.push(new window.Variable(`c_${j}_cx`, c.cx, true));
+      vars.push(new window.Variable(`c_${j}_cy`, c.cy, true));
+      vars.push(new window.Variable(`c_${j}_r`, c.r, true));
     }
 
     let solverConstraints = [];
     
-    // Custom dimensions: treat as distance constraints
+    // Custom dimensions -> distance constraints
     customDimensions.forEach(dim => {
       const p1 = sketchVertices[dim.v1];
       const p2 = sketchVertices[dim.v2];
       if (p1 && p2) {
         const dVal = dim.d !== undefined ? dim.d : Math.hypot(p2.x - p1.x, p2.y - p1.y);
-        solverConstraints.push(new Constraint("distance", [2 * dim.v1, 2 * dim.v1 + 1, 2 * dim.v2, 2 * dim.v2 + 1], { d: dVal }));
+        solverConstraints.push(new window.Constraint("distance", [2 * dim.v1, 2 * dim.v1 + 1, 2 * dim.v2, 2 * dim.v2 + 1], { d: dVal }));
       }
     });
 
@@ -2586,26 +2020,26 @@ document.addEventListener("DOMContentLoaded", () => {
       switch (pc.type) {
         case "horizontal": {
           if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length) {
-            solverConstraints.push(new Constraint("horizontal", [2 * pc.targets[0] + 1, 2 * pc.targets[1] + 1]));
+            solverConstraints.push(new window.Constraint("horizontal", [2 * pc.targets[0] + 1, 2 * pc.targets[1] + 1]));
           }
           break;
         }
         case "vertical": {
           if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length) {
-            solverConstraints.push(new Constraint("vertical", [2 * pc.targets[0], 2 * pc.targets[1]]));
+            solverConstraints.push(new window.Constraint("vertical", [2 * pc.targets[0], 2 * pc.targets[1]]));
           }
           break;
         }
         case "distance": {
           if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length) {
-            solverConstraints.push(new Constraint("distance", [2 * pc.targets[0], 2 * pc.targets[0] + 1, 2 * pc.targets[1], 2 * pc.targets[1] + 1], { d: pc.d }));
+            solverConstraints.push(new window.Constraint("distance", [2 * pc.targets[0], 2 * pc.targets[0] + 1, 2 * pc.targets[1], 2 * pc.targets[1] + 1], { d: pc.d }));
           }
           break;
         }
         case "perpendicular": {
           if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length &&
               pc.targets[2] < sketchVertices.length && pc.targets[3] < sketchVertices.length) {
-            solverConstraints.push(new Constraint("perpendicular", [
+            solverConstraints.push(new window.Constraint("perpendicular", [
               2 * pc.targets[0], 2 * pc.targets[0] + 1,
               2 * pc.targets[1], 2 * pc.targets[1] + 1,
               2 * pc.targets[2], 2 * pc.targets[2] + 1,
@@ -2617,7 +2051,7 @@ document.addEventListener("DOMContentLoaded", () => {
         case "parallel": {
           if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length &&
               pc.targets[2] < sketchVertices.length && pc.targets[3] < sketchVertices.length) {
-            solverConstraints.push(new Constraint("parallel", [
+            solverConstraints.push(new window.Constraint("parallel", [
               2 * pc.targets[0], 2 * pc.targets[0] + 1,
               2 * pc.targets[1], 2 * pc.targets[1] + 1,
               2 * pc.targets[2], 2 * pc.targets[2] + 1,
@@ -2628,7 +2062,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         case "coincident": {
           if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length) {
-            solverConstraints.push(new Constraint("coincident", [
+            solverConstraints.push(new window.Constraint("coincident", [
               2 * pc.targets[0], 2 * pc.targets[0] + 1,
               2 * pc.targets[1], 2 * pc.targets[1] + 1
             ]));
@@ -2637,7 +2071,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         case "concentric": {
           if (pc.targets[0] < sketchCircles.length && pc.targets[1] < sketchCircles.length) {
-            solverConstraints.push(new Constraint("concentric", [
+            solverConstraints.push(new window.Constraint("concentric", [
               circleBase + 3 * pc.targets[0], circleBase + 3 * pc.targets[0] + 1,
               circleBase + 3 * pc.targets[1], circleBase + 3 * pc.targets[1] + 1
             ]));
@@ -2647,7 +2081,7 @@ document.addEventListener("DOMContentLoaded", () => {
         case "tangent": {
           if (pc.targets[0] < sketchVertices.length && pc.targets[1] < sketchVertices.length &&
               pc.targets[2] < sketchCircles.length) {
-            solverConstraints.push(new Constraint("tangent", [
+            solverConstraints.push(new window.Constraint("tangent", [
               2 * pc.targets[0], 2 * pc.targets[0] + 1,
               2 * pc.targets[1], 2 * pc.targets[1] + 1,
               circleBase + 3 * pc.targets[2], circleBase + 3 * pc.targets[2] + 1, circleBase + 3 * pc.targets[2] + 2
@@ -2679,17 +2113,44 @@ document.addEventListener("DOMContentLoaded", () => {
     const { vars, solverConstraints } = buildVariablesAndConstraints(lockedVertexIdx);
     if (solverConstraints.length === 0) return;
 
-    const success = solveConstraints(vars, solverConstraints, 100, 1e-4);
+    const success = window.solveConstraints(vars, solverConstraints, 100, 1e-4);
     if (success) {
       applySolvedVariables(vars);
     }
   }
 
-  showEntityInspector();
-  renderLayerManager();
-  if (webglRenderer) {
+  // --- Viewport Zoom HUD Bindings ---
+  window.zoomViewport = (factor) => {
+    if (webglRenderer) {
+      webglRenderer.zoom(factor);
+    }
+  };
+
+  window.resetViewport = () => {
+    if (webglRenderer) {
+      webglRenderer.resetView(sheetWidth, sheetHeight);
+    }
+  };
+
+  // --- Initialize CAD on Boot ---
+  if (canvasEl && typeof ExplicitCadRenderer !== "undefined") {
+    webglRenderer = new ExplicitCadRenderer(canvasEl);
+    webglRenderer.onViewChange = () => {
+      drawSketchCanvas();
+    };
+    window.addEventListener("resize", () => {
+      webglRenderer.resize();
+      drawSketchCanvas();
+    });
+    
+    // Fit drawing sheet
     webglRenderer.resetView(sheetWidth, sheetHeight);
   }
+
+  // Initial draw and bind events
+  showEntityInspector();
+  renderLayerManager();
   drawSketchCanvas();
   initSketcherEvents();
+  updateLiveProperties();
 });
