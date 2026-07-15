@@ -86,17 +86,30 @@ For tools supporting import/export, buttons in the `.hdr-right` toolbar must use
 
 ---
 
-## 4. Auth & Project Manager Integration
-* Ensure the page imports Firebase scripts and the shared helpers:
-  ```html
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  <script src="../../js/firebase.js"></script>
-  <script src="../../js/auth-ui.js"></script>
-  <script src="../../js/project-manager.js"></script>
-  ```
-* Register the tool with the global `window.projectManagerConfig` inside `app.js` before loading `project-manager.js` to enable online/offline project saving:
+## 4. Shared Tool Shell (Header / Footer / Beta Banner)
+Every tool page should load the shared chrome stack after Firebase helpers:
+
+```html
+<link rel="stylesheet" href="../../css/theme.css">
+<link rel="stylesheet" href="../../css/header.css">
+<link rel="stylesheet" href="../../css/tool-shell.css">
+...
+<script src="../../js/firebase.js"></script>
+<script src="../../js/auth-ui.js"></script>
+<script src="../../js/tools-data.js"></script>
+<script src="../../js/tool-shell.js"></script>
+<script src="../../js/project-manager.js"></script>
+```
+
+* **`tool-shell.js`** auto-detects `toolId` from the URL (or `projectManagerConfig` / `toolShellConfig`) and:
+  * Injects a **Beta** banner when `status === "beta"` in `tools-data.js` (one-click Report a Bug; dismissible for the session).
+  * Ensures a standardized **footer** (coffee / suggest / bug / GitHub).
+* Optional: `window.ToolShell.renderHeader(container, { title, subtitle, iconHtml, showShare, showExport, showImport })` for greenfield tools.
+* Prefer keeping existing static `<header>` markup (AGENTS §2) and letting the shell enhance chrome, rather than regenerating headers on every page.
+
+## 5. Auth & Project Manager Integration
+* Ensure the page imports Firebase scripts and the shared helpers (see §4 for full order).
+* Register the tool with the global `window.projectManagerConfig` **at top level of `app.js`** (or before `DOMContentLoaded` completes). `project-manager.js` defers boot so late registration still works, but top-level is safest:
   ```javascript
   window.projectManagerConfig = {
     toolId: "your-tool-id",
@@ -107,7 +120,7 @@ For tools supporting import/export, buttons in the `.hdr-right` toolbar must use
 
 ---
 
-## 5. Page Layout Containment & Typography
+## 6. Page Layout Containment & Typography
 To maintain styling parity with the rest of the project and ensure pages do not stretch to the full width of wide monitors:
 
 ### CSS Base & Typography

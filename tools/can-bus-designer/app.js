@@ -468,6 +468,21 @@ function bindEvents() {
   // Scope and Eye Diagram Toggles
   document.getElementById('scope-btn-scope').addEventListener('click', () => setScopeMode('scope'));
   document.getElementById('scope-btn-eye').addEventListener('click', () => setScopeMode('eye'));
+
+  // Bit timing / DBC / BOM
+  const inputCanClock = document.getElementById('input-can-clock');
+  const inputSjw = document.getElementById('input-sjw');
+  [inputCanClock, inputSjw].forEach(el => {
+    if (el) el.addEventListener('input', () => updateBitTimingResults());
+  });
+  document.getElementById('btn-parse-dbc')?.addEventListener('click', parseDbcSnippet);
+  document.getElementById('btn-clear-dbc')?.addEventListener('click', () => {
+    const ta = document.getElementById('dbc-import-text');
+    const out = document.getElementById('dbc-parse-results');
+    if (ta) ta.value = '';
+    if (out) out.innerHTML = '';
+  });
+  document.getElementById('btn-export-bom')?.addEventListener('click', exportHarnessBomCsv);
 }
 
 function initCanvasInteractions() {
@@ -665,6 +680,7 @@ function render() {
   updateBanner(diagnostics);
   drawTopologySVG(diagnostics);
   drawWaveform(diagnostics.riskPercentage);
+  updateBitTimingResults();
   try {
     if (window.lucide) {
       lucide.createIcons();
@@ -672,6 +688,206 @@ function render() {
   } catch (e) {
     console.warn("Lucide icons load failure: ", e);
   }
+}
+
+// ── Bit Timing (nominal arbitration phase) ───────────────────
+function solveCanBitTiming(baudKbps, samplePointPct, clockMHz, sjwMax) {
+  const bitrate = baudKbps * 1000;
+  const clockHz = clockMHz * 1e6;
+  if (!bitrate || !clockHz) return { error: "Invalid baud rate or clock." };
+
+  const targetSp = Math.min(95, Math.max(50, samplePointPct)) / 100;
+  let best = null;
+
+  for (let nTq = 8; nTq <= 25; nTq++) {
+    const brpExact = clockHz / (bitrate * nTq);
+    const brp = Math.round(brpExact);
+    if (brp < 1 || brp > 1024) continue;
+    if (Math.abs(brpExact - brp) / brp > 0.001) continue; // require near-integer BRP
+
+    // SYNC_SEG = 1; TSEG1 + TSEG2 = nTq - 1
+    // sample point ≈ (1 + TSEG1) / nTq
+    let tseg1 = Math.round(targetSp * nTq) - 1;
+    tseg1 = Math.max(1, Math.min(nTq - 2, tseg1));
+    let tseg2 = nTq - 1 - tseg1;
+    if (tseg2 < 1) {
+      tseg2 = 1;
+      tseg1 = nTq - 2;
+    }
+    const sp = (1 + tseg1) / nTq;
+    const sjw = Math.min(sjwMax || 4, tseg2, 4);
+    const tqNs = (brp / clockHz) * 1e9;
+    const bitNs = tqNs * nTq;
+    const errPpm = Math.abs(1e6 * ((clockHz / (brp * nTq)) - bitrate) / bitrate);
+    const spErr = Math.abs(sp - targetSp);
+    const score = errPpm * 10 + spErr * 1000;
+
+    if (!best || score < best.score) {
+      best = {
+        brp, nTq, tseg1, tseg2, sjw, tqNs, bitNs, sp, errPpm, score,
+        bitrateAchieved: clockHz / (brp * nTq)
+      };
+    }
+  }
+
+  if (!best) return { error: "No integer BRP solution for this clock/baud. Try another clock (e.g. 40/80 MHz)." };
+  return best;
+}
+
+function updateBitTimingResults() {
+  const el = document.getElementById('bit-timing-results');
+  if (!el) return;
+  const clock = parseFloat(document.getElementById('input-can-clock')?.value) || 40;
+  const sjwMax = parseInt(document.getElementById('input-sjw')?.value) || 4;
+  const baud = networkConfig.baudRate;
+  const sp = networkConfig.samplePoint;
+  const sol = solveCanBitTiming(baud, sp, clock, sjwMax);
+
+  if (sol.error) {
+    el.innerHTML = `<span style="color:var(--color-error,#ef4444)">${sol.error}</span>`;
+    return;
+  }
+
+  let html = `
+    <div><strong>Nominal ${baud} kbps</strong> @ ${clock} MHz clock</div>
+    <div>BRP=${sol.brp} · NTQ=${sol.nTq} · TSEG1=${sol.tseg1} · TSEG2=${sol.tseg2} · SJW=${sol.sjw}</div>
+    <div>tq=${sol.tqNs.toFixed(2)} ns · t_bit=${sol.bitNs.toFixed(1)} ns</div>
+    <div>Sample point=${(sol.sp * 100).toFixed(1)}% (target ${sp}%) · rate err=${sol.errPpm.toFixed(1)} ppm</div>
+  `;
+
+  if (networkConfig.enableCanFD) {
+    const dataSol = solveCanBitTiming(networkConfig.dataBaudRate, networkConfig.dataSamplePoint, clock, sjwMax);
+    if (!dataSol.error) {
+      html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-color)">
+        <strong>Data phase ${networkConfig.dataBaudRate} kbps</strong><br>
+        BRP=${dataSol.brp} · NTQ=${dataSol.nTq} · TSEG1=${dataSol.tseg1} · TSEG2=${dataSol.tseg2} · SJW=${dataSol.sjw}<br>
+        tq=${dataSol.tqNs.toFixed(2)} ns · SP=${(dataSol.sp * 100).toFixed(1)}%
+      </div>`;
+    } else {
+      html += `<div style="margin-top:8px;color:var(--color-error,#ef4444)">Data phase: ${dataSol.error}</div>`;
+    }
+  }
+
+  el.innerHTML = html;
+}
+
+// ── DBC snippet parser (BO_ / SG_ only) ──────────────────────
+function parseDbcSnippet() {
+  const ta = document.getElementById('dbc-import-text');
+  const out = document.getElementById('dbc-parse-results');
+  if (!ta || !out) return;
+  const text = ta.value || '';
+  const messages = [];
+  let current = null;
+
+  text.split(/\r?\n/).forEach(line => {
+    const bo = line.match(/^\s*BO_\s+(\d+)\s+(\w+)\s*:\s*(\d+)\s+(\S+)/);
+    if (bo) {
+      current = {
+        id: parseInt(bo[1], 10),
+        name: bo[2],
+        dlc: parseInt(bo[3], 10),
+        transmitter: bo[4],
+        signals: []
+      };
+      messages.push(current);
+      return;
+    }
+    const sg = line.match(/^\s*SG_\s+(\w+)\s*:\s*(\d+)\|(\d+)@([01])([+-])\s*\(([^,]+),([^)]+)\)\s*\[([^\]]*)\]\s*"([^"]*)"/);
+    if (sg && current) {
+      current.signals.push({
+        name: sg[1],
+        start: parseInt(sg[2], 10),
+        length: parseInt(sg[3], 10),
+        endian: sg[4] === '1' ? 'Intel' : 'Motorola',
+        sign: sg[5] === '-' ? 'signed' : 'unsigned',
+        scale: sg[6],
+        offset: sg[7],
+        unit: sg[9]
+      });
+    }
+  });
+
+  if (messages.length === 0) {
+    out.innerHTML = `<span style="color:var(--text-muted)">No <code>BO_</code> messages found. Paste a DBC fragment with BO_/SG_ lines.</span>`;
+    return;
+  }
+
+  out.innerHTML = messages.map(m => {
+    const idHex = '0x' + m.id.toString(16).toUpperCase();
+    const sigs = m.signals.length
+      ? `<ul style="margin:4px 0 0 16px;padding:0">${m.signals.map(s =>
+          `<li><code>${s.name}</code> ${s.start}|${s.length} ${s.endian} ×${s.scale}+${s.offset} ${s.unit ? '[' + s.unit + ']' : ''}</li>`
+        ).join('')}</ul>`
+      : `<div style="color:var(--text-muted);margin-top:4px">No signals parsed</div>`;
+    return `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border-color)">
+      <strong>${m.name}</strong> · ID ${m.id} (${idHex}) · DLC ${m.dlc} · TX ${m.transmitter}
+      ${sigs}
+    </div>`;
+  }).join('');
+
+  if (window.showToast) window.showToast(`Parsed ${messages.length} DBC message(s).`);
+}
+
+// ── Harness BOM CSV ──────────────────────────────────────────
+function buildHarnessBomRows() {
+  const rows = [['Item', 'Type', 'Name', 'Qty', 'Length_m', 'Notes']];
+  let trunkLen = 0;
+  stations.forEach((st, i) => {
+    if (i > 0) {
+      const seg = st.distanceFromPrev || 0;
+      trunkLen += seg;
+      rows.push([
+        `TRUNK-${i}`,
+        'Trunk Cable',
+        `${stations[i - 1].name} → ${st.name}`,
+        '1',
+        seg.toFixed(3),
+        `Segment spacing (${currentUnit})`
+      ]);
+    }
+    (st.devices || []).forEach((dev, di) => {
+      rows.push([
+        `DEV-${i + 1}-${di + 1}`,
+        'Device / ECU',
+        dev.name || 'Device',
+        '1',
+        (dev.stubLength || 0).toFixed(3),
+        `Stub at station "${st.name}"${dev.termination ? '; terminator ' + dev.termination + 'Ω' : ''}`
+      ]);
+      if (dev.termination && dev.termination > 0) {
+        rows.push([
+          `TERM-${i + 1}-${di + 1}`,
+          'Terminator',
+          `${dev.termination} Ω @ ${dev.name}`,
+          '1',
+          '',
+          'End/mid-bus termination resistor'
+        ]);
+      }
+    });
+  });
+  rows.push(['SUMMARY', 'Trunk Total', 'Bus length', '1', trunkLen.toFixed(3), `${networkConfig.baudRate} kbps design`]);
+  rows.push(['SUMMARY', 'Node Count', 'Devices', String(stations.reduce((n, s) => n + (s.devices || []).length, 0)), '', '']);
+  return rows;
+}
+
+function exportHarnessBomCsv() {
+  const rows = buildHarnessBomRows();
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `can-harness-bom-${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if (window.showToast) window.showToast('Harness BOM CSV exported.');
 }
 
 // Render inputs list (Station hierarchy)

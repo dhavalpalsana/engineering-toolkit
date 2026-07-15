@@ -29,6 +29,7 @@
 
   <link rel="stylesheet" href="../../css/theme.css">
   <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="../../css/tool-shell.css">
   <link rel="stylesheet" href="style.css">
   <!-- Firebase SDK compat -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -36,6 +37,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/tools-data.js"></script>
+  <script src="../../js/tool-shell.js"></script>
   <script src="../../js/project-manager.js"></script>
 </head>
 <body>
@@ -162,6 +165,52 @@
               <input type="number" id="input-data-sp" class="input-field" value="75" min="50" max="95" step="1">
             </div>
           </div>
+        </div>
+
+        <!-- Bit Timing Calculator -->
+        <div class="section-card">
+          <span class="section-title">Bit Timing Calculator</span>
+          <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.4;">
+            Solves CAN nominal bit timing (ISO 11898) for a controller clock: BRP, TSEG1/TSEG2, SJW, and time quantum.
+          </p>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="input-can-clock">Controller Clock (MHz)</label>
+              <input type="number" id="input-can-clock" class="input-field" value="40" min="1" max="200" step="1">
+            </div>
+            <div class="form-group">
+              <label for="input-sjw">SJW (tq, max)</label>
+              <input type="number" id="input-sjw" class="input-field" value="4" min="1" max="4" step="1">
+            </div>
+          </div>
+          <div id="bit-timing-results" class="bit-timing-results" style="margin-top: 10px; font-size: 12px; font-family: var(--font-mono); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; line-height: 1.55; color: var(--text-secondary);">
+            Configure baud rate and sample point to compute timing.
+          </div>
+        </div>
+
+        <!-- DBC Import Snippet -->
+        <div class="section-card">
+          <span class="section-title">DBC Import Snippet</span>
+          <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px; line-height: 1.4;">
+            Paste a <code>BO_</code> / <code>SG_</code> fragment to list message IDs and signals (nodes stay on the harness canvas).
+          </p>
+          <textarea id="dbc-import-text" class="input-field" rows="5" style="width:100%; resize:vertical; font-family: var(--font-mono); font-size: 11px;" placeholder="BO_ 256 EngineStatus: 8 Vector__XXX&#10; SG_ RPM : 0|16@1+ (0.25,0) [0|8000] &quot;rpm&quot; Vector__XXX"></textarea>
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <button type="button" id="btn-parse-dbc" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;">Parse DBC</button>
+            <button type="button" id="btn-clear-dbc" class="btn" style="padding: 6px 12px; font-size: 12px;">Clear</button>
+          </div>
+          <div id="dbc-parse-results" style="margin-top: 10px; font-size: 12px; max-height: 160px; overflow: auto;"></div>
+        </div>
+
+        <!-- Harness BOM Export -->
+        <div class="section-card">
+          <span class="section-title">Harness BOM Export</span>
+          <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px; line-height: 1.4;">
+            Export a parts list: trunk segments, devices/stubs, and terminators as CSV.
+          </p>
+          <button type="button" id="btn-export-bom" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; width: 100%;">
+            <i data-lucide="file-spreadsheet" style="width:14px;height:14px;"></i> Export BOM CSV
+          </button>
         </div>
 
         <!-- Station Configuration Card -->

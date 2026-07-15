@@ -661,6 +661,161 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  // ── Meeting Finder (overlap green zone) ─────────────────────
+  const parseHHMM = (val, fallbackMinutes) => {
+    if (!val || !val.includes(":")) return fallbackMinutes;
+    const [h, m] = val.split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  const getLocalMinutesOnDate = (utcDate, tz) => {
+    const offset = getTimezoneOffsetMinutes(utcDate, tz);
+    const local = new Date(utcDate.getTime() + offset * 60000);
+    return local.getUTCHours() * 60 + local.getUTCMinutes();
+  };
+
+  const findMeetingWindows = () => {
+    const resultsEl = document.getElementById("meeting-results");
+    if (!resultsEl) return;
+
+    const workStart = parseHHMM(document.getElementById("meeting-work-start")?.value, 9 * 60);
+    const workEnd = parseHHMM(document.getElementById("meeting-work-end")?.value, 17 * 60);
+    const duration = parseInt(document.getElementById("meeting-duration")?.value, 10) || 60;
+
+    if (workEnd <= workStart) {
+      resultsEl.innerHTML = `<p style="color:var(--color-error,#ef4444)">Work end must be after work start.</p>`;
+      return;
+    }
+
+    // Scan the reference UTC calendar day in 15-minute steps
+    const dayStart = new Date(Date.UTC(
+      anchorDate.getUTCFullYear(),
+      anchorDate.getUTCMonth(),
+      anchorDate.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    const windows = [];
+    const step = 15;
+
+    for (let utcMin = 0; utcMin <= 1440 - duration; utcMin += step) {
+      const start = new Date(dayStart.getTime() + utcMin * 60000);
+      const end = new Date(start.getTime() + duration * 60000);
+      const ok = selectedTimezones.every(tz => {
+        // Sample start + mid + end-1min so meetings don't straddle work hours incorrectly
+        const samples = [0, Math.floor(duration / 2), duration - 1];
+        return samples.every(dm => {
+          const t = new Date(start.getTime() + dm * 60000);
+          const lm = getLocalMinutesOnDate(t, tz);
+          return lm >= workStart && lm < workEnd;
+        });
+      });
+      if (ok) {
+        windows.push({ start, end });
+      }
+    }
+
+    // Merge contiguous windows
+    const merged = [];
+    windows.forEach(w => {
+      const last = merged[merged.length - 1];
+      if (last && w.start.getTime() <= last.end.getTime() + step * 60000) {
+        last.end = w.end > last.end ? w.end : last.end;
+      } else {
+        merged.push({ start: w.start, end: w.end });
+      }
+    });
+
+    if (merged.length === 0) {
+      resultsEl.innerHTML = `<p style="color:var(--text-muted)">No full overlap on this UTC day for the selected zones and work hours. Try widening work hours or fewer zones.</p>`;
+      return;
+    }
+
+    const fmtUtc = (d) => {
+      const hh = String(d.getUTCHours()).padStart(2, "0");
+      const mm = String(d.getUTCMinutes()).padStart(2, "0");
+      return `${hh}:${mm} UTC`;
+    };
+
+    resultsEl.innerHTML = `
+      <div style="font-weight:700;margin-bottom:6px;color:var(--text-primary)">
+        ${merged.length} overlap window(s) · ${selectedTimezones.length} zones
+      </div>
+      <ul style="margin:0;padding-left:18px;line-height:1.5;color:var(--text-secondary)">
+        ${merged.slice(0, 12).map(w => {
+          const mins = Math.round((w.end - w.start) / 60000);
+          return `<li><strong>${fmtUtc(w.start)}</strong> – ${fmtUtc(w.end)} <span style="color:var(--text-muted)">(${mins} min span)</span>
+            <button type="button" class="meeting-jump-btn" data-ts="${w.start.getTime()}" style="margin-left:6px;font-size:11px;cursor:pointer;border:1px solid var(--border-color);background:var(--bg-tertiary);border-radius:6px;padding:1px 6px;">Jump</button>
+          </li>`;
+        }).join("")}
+      </ul>
+      ${merged.length > 12 ? `<p style="color:var(--text-muted);margin-top:6px">Showing first 12 of ${merged.length}.</p>` : ""}
+    `;
+
+    resultsEl.querySelectorAll(".meeting-jump-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        anchorDate = new Date(parseInt(btn.getAttribute("data-ts"), 10));
+        updateAllInputs();
+        document.dispatchEvent(new Event("change", { bubbles: true }));
+        if (window.showToast) window.showToast("Timeline jumped to meeting start.");
+      });
+    });
+  };
+
+  const exportIcs = () => {
+    const duration = parseInt(document.getElementById("meeting-duration")?.value, 10) || 60;
+    const start = new Date(anchorDate.getTime());
+    const end = new Date(start.getTime() + duration * 60000);
+
+    const toIcsUtc = (d) => {
+      const y = d.getUTCFullYear();
+      const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const da = String(d.getUTCDate()).padStart(2, "0");
+      const hh = String(d.getUTCHours()).padStart(2, "0");
+      const mm = String(d.getUTCMinutes()).padStart(2, "0");
+      const ss = String(d.getUTCSeconds()).padStart(2, "0");
+      return `${y}${mo}${da}T${hh}${mm}${ss}Z`;
+    };
+
+    const zoneList = selectedTimezones.join(", ");
+    const uid = `eng-toolkit-${start.getTime()}@eng-toolkit.web.app`;
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Engineering Toolkit//Timezone Planner//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "BEGIN:VEVENT",
+      `UID:${uid}`,
+      `DTSTAMP:${toIcsUtc(new Date())}`,
+      `DTSTART:${toIcsUtc(start)}`,
+      `DTEND:${toIcsUtc(end)}`,
+      "SUMMARY:Cross-timezone meeting (Engineering Toolkit)",
+      `DESCRIPTION:Planned via Engineering Toolkit Timezone Converter. Zones: ${zoneList.replace(/,/g, "\\,")}`,
+      "END:VEVENT",
+      "END:VCALENDAR"
+    ].join("\r\n");
+
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `meeting-${toIcsUtc(start)}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if (window.showToast) window.showToast("ICS calendar file downloaded.");
+  };
+
+  document.getElementById("find-meetings-btn")?.addEventListener("click", findMeetingWindows);
+  document.getElementById("export-ics-btn")?.addEventListener("click", exportIcs);
+  ["meeting-work-start", "meeting-work-end", "meeting-duration"].forEach(id => {
+    document.getElementById(id)?.addEventListener("change", () => {
+      const el = document.getElementById("meeting-results");
+      if (el && el.innerHTML.trim()) findMeetingWindows();
+    });
+  });
+
   // Run Initializations
   populateTimezoneSearch();
   
@@ -682,5 +837,9 @@ document.addEventListener("DOMContentLoaded", () => {
     renderTimelines();
     updateRulerHours();
     updateAllInputs();
+  }
+
+  if (typeof lucide !== "undefined") {
+    lucide.createIcons();
   }
 });
