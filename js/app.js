@@ -26,11 +26,96 @@ document.addEventListener("DOMContentLoaded", () => {
     return registryIcons[name] || registryIcons["lightbulb"];
   };
 
-  // Render Tool Cards
+  const createSectionDivider = (title, subtitle, variant) => {
+    const divider = document.createElement("div");
+    divider.className = `tools-section-divider tools-section-divider--${variant}`;
+    divider.setAttribute("role", "separator");
+    divider.setAttribute("aria-label", title);
+    divider.innerHTML = `
+      <div class="tools-section-divider-inner">
+        <span class="tools-section-divider-label">${escapeHtml(title)}</span>
+        ${subtitle ? `<span class="tools-section-divider-sub">${escapeHtml(subtitle)}</span>` : ""}
+      </div>
+    `;
+    return divider;
+  };
+
+  const createToolCard = (tool) => {
+    const card = document.createElement("div");
+    card.className = "tool-card";
+
+    const isActive = tool.status === "active";
+    const isBeta = tool.status === "beta";
+    const isAvailable = isActive || isBeta;
+
+    const badgeClass = isActive ? "active" : (isBeta ? "beta" : "upcoming");
+    const badgeText = isActive ? "Active" : (isBeta ? "Beta" : "Coming Soon");
+    const ariaLabel = isAvailable
+      ? `Open ${tool.name}`
+      : `${tool.name} — Coming Soon. Click to suggest this tool.`;
+
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("aria-label", ariaLabel);
+
+    const isFav = isFavorited(tool.id);
+
+    card.innerHTML = `
+      <div class="tool-card-header">
+        <div class="tool-icon-box">
+          ${getIconSvg(tool.icon)}
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          ${isAvailable ? `
+          <button class="tool-fav-star-btn ${isFav ? 'favorited' : ''}" data-id="${tool.id}" title="${isFav ? 'Remove from Favorites' : 'Add to Favorites'}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+          </button>` : ''}
+          <span class="tool-badge ${badgeClass}">${badgeText}</span>
+        </div>
+      </div>
+      <h3 class="tool-card-title">${escapeHtml(tool.name)}</h3>
+      <p class="tool-card-desc">${escapeHtml(tool.description)}</p>
+      <div class="tool-card-footer">
+        ${isAvailable
+          ? `<span class="launch-btn">Open Tool ${registryIcons.arrowRight}</span>`
+          : `<span class="coming-soon-text">Under Development</span>`
+        }
+      </div>
+    `;
+
+    const handleActivate = (e) => {
+      if (isAvailable) {
+        window.location.href = tool.path;
+      } else {
+        window.openFeatureSuggestionModal(e, `Propose: ${tool.name}`);
+      }
+    };
+
+    card.addEventListener("click", (e) => handleActivate(e));
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleActivate(e);
+      }
+    });
+
+    const favBtn = card.querySelector(".tool-fav-star-btn");
+    if (favBtn) {
+      favBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleFavorite(tool.id, favBtn);
+      });
+    }
+
+    return card;
+  };
+
+  // Render Tool Cards grouped: Active → Beta → Coming Soon
   const renderCards = (filteredTools) => {
     toolsGrid.innerHTML = "";
 
-    // Show a clean notice if no actual tools matched a search query
     const query = searchInput.value.toLowerCase().trim();
     if (filteredTools.length === 0 && query) {
       const notice = document.createElement("div");
@@ -44,87 +129,53 @@ document.addEventListener("DOMContentLoaded", () => {
       toolsGrid.appendChild(notice);
     }
 
-    // Render regular tools
-    filteredTools.forEach(tool => {
-      const card = document.createElement("div");
-      card.className = "tool-card";
+    const activeTools = filteredTools.filter(t => t.status === "active");
+    const betaTools = filteredTools.filter(t => t.status === "beta");
+    const upcomingTools = filteredTools.filter(t => t.status !== "active" && t.status !== "beta");
 
-      const isActive = tool.status === "active";
-      const isBeta = tool.status === "beta";
-      const isAvailable = isActive || isBeta;
+    const appendGroup = (tools, title, subtitle, variant) => {
+      if (tools.length === 0) return;
+      toolsGrid.appendChild(createSectionDivider(title, subtitle, variant));
+      tools.forEach(tool => toolsGrid.appendChild(createToolCard(tool)));
+    };
 
-      const badgeClass = isActive ? "active" : (isBeta ? "beta" : "upcoming");
-      const badgeText = isActive ? "Active" : (isBeta ? "Beta" : "Coming Soon");
-      const ariaLabel = isAvailable
-        ? `Open ${tool.name}`
-        : `${tool.name} — Coming Soon. Click to suggest this tool.`;
+    // Only show the Active header when other maturity sections are also visible
+    // (avoids a redundant banner when the grid is Active-only after filtering).
+    const multiSection =
+      [activeTools, betaTools, upcomingTools].filter(g => g.length > 0).length > 1;
 
-      card.setAttribute("role", "button");
-      card.setAttribute("tabindex", "0");
-      card.setAttribute("aria-label", ariaLabel);
-      
-      const isFav = isFavorited(tool.id);
-      
-      card.innerHTML = `
-        <div class="tool-card-header">
-          <div class="tool-icon-box">
-            ${getIconSvg(tool.icon)}
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            ${isAvailable ? `
-            <button class="tool-fav-star-btn ${isFav ? 'favorited' : ''}" data-id="${tool.id}" title="${isFav ? 'Remove from Favorites' : 'Add to Favorites'}">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-              </svg>
-            </button>` : ''}
-            <span class="tool-badge ${badgeClass}">${badgeText}</span>
-          </div>
-        </div>
-        <h3 class="tool-card-title">${escapeHtml(tool.name)}</h3>
-        <p class="tool-card-desc">${escapeHtml(tool.description)}</p>
-        <div class="tool-card-footer">
-          ${isAvailable 
-            ? `<span class="launch-btn">Open Tool ${registryIcons.arrowRight}</span>` 
-            : `<span class="coming-soon-text">Under Development</span>`
-          }
-        </div>
-      `;
-
-      const handleActivate = (e) => {
-        if (isAvailable) {
-          window.location.href = tool.path;
-        } else {
-          window.openFeatureSuggestionModal(e, `Propose: ${tool.name}`);
-        }
-      };
-
-      card.addEventListener("click", (e) => handleActivate(e));
-      card.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleActivate(e);
-        }
-      });
-      
-      // Favorite Button Click handler
-      const favBtn = card.querySelector(".tool-fav-star-btn");
-      if (favBtn) {
-        favBtn.addEventListener("click", (e) => {
-          e.stopPropagation(); // Stop click from launching the tool page
-          toggleFavorite(tool.id, favBtn);
-        });
+    if (activeTools.length > 0) {
+      if (multiSection) {
+        toolsGrid.appendChild(createSectionDivider(
+          "Released",
+          "Stable tools ready for day-to-day engineering work",
+          "active"
+        ));
       }
+      activeTools.forEach(tool => toolsGrid.appendChild(createToolCard(tool)));
+    }
 
-      toolsGrid.appendChild(card);
-    });
+    appendGroup(
+      betaTools,
+      "Beta",
+      "Feature-complete enough to try — expect refinements and edge-case polish",
+      "beta"
+    );
 
-    // Unconditionally append 'Suggest a Tool' card at the end
+    appendGroup(
+      upcomingTools,
+      "Coming Soon",
+      "On the roadmap — click a card to vote or shape the design",
+      "upcoming"
+    );
+
+    // Suggest card always last
     const suggestCard = document.createElement("div");
     suggestCard.className = "tool-card suggest-tool-card";
     suggestCard.setAttribute("role", "button");
     suggestCard.setAttribute("tabindex", "0");
     suggestCard.setAttribute("aria-label", "Suggest a new tool");
-    
+
     suggestCard.innerHTML = `
       <div class="tool-card-header">
         <div class="tool-icon-box" style="background: var(--accent-primary-glow); color: var(--accent-primary);">
@@ -179,7 +230,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return matchSearch;
     });
     
-    // 2. Sort by dropdown value
+    // 2. Sort by dropdown value (within status sections; renderCards groups by maturity)
     const sortBy = sortSelect ? sortSelect.value : "default";
     if (sortBy === "alphabetical") {
       result.sort((a, b) => a.name.localeCompare(b.name));
@@ -195,8 +246,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const dateB = new Date(b.releaseDate || 0);
         return dateB - dateA;
       });
+    } else {
+      // Default: keep registry order, but prefer active → beta → upcoming overall
+      // (renderCards already sections them; this only stabilizes within-group order)
     }
-    
+
     renderCards(result);
   };
 
