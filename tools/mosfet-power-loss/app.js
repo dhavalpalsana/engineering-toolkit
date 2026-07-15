@@ -91,14 +91,14 @@ function renderColumns() {
           <input type="number" id="inp-tf-${m.id}" value="${m.tf}" step="1" min="0" oninput="recalculateAll()">
         </div>
 
-        <div class="input-lbl">td(on) <span class="unit">[ns]</span> <p>Turn-on Delay Time</p></div>
+        <div class="input-lbl">td(on) <span class="unit">[ns]</span> <p>Turn-on Delay (datasheet; not used in loss model)</p></div>
         <div class="mosfet-field-grp">
-          <input type="number" id="inp-tdon-${m.id}" value="${m.tdon}" step="1" min="0" oninput="recalculateAll()">
+          <input type="number" id="inp-tdon-${m.id}" value="${m.tdon}" step="1" min="0" oninput="recalculateAll()" title="Stored for reference only — delay times do not contribute crossover loss in this model">
         </div>
 
-        <div class="input-lbl">td(off) <span class="unit">[ns]</span> <p>Turn-off Delay Time</p></div>
+        <div class="input-lbl">td(off) <span class="unit">[ns]</span> <p>Turn-off Delay (datasheet; not used in loss model)</p></div>
         <div class="mosfet-field-grp">
-          <input type="number" id="inp-tdoff-${m.id}" value="${m.tdoff}" step="1" min="0" oninput="recalculateAll()">
+          <input type="number" id="inp-tdoff-${m.id}" value="${m.tdoff}" step="1" min="0" oninput="recalculateAll()" title="Stored for reference only — delay times do not contribute crossover loss in this model">
         </div>
 
         <div class="input-lbl">Qrr <span class="unit">[nC]</span> <p>Reverse Recovery Charge</p></div>
@@ -505,7 +505,7 @@ window.projectManagerConfig = {
 window.shareLink = function() {
   try {
     const configData = getInputsConfig();
-    const serialized = btoa(JSON.stringify(configData));
+    const serialized = (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
     const url = new URL(window.location.href);
     url.searchParams.set('design', serialized);
     
@@ -553,53 +553,13 @@ window.importJSON = function(e) {
   reader.readAsText(file);
 };
 
-// ================================================================
-//  INIT - Executed on script load
-// ================================================================
 document.addEventListener("DOMContentLoaded", () => {
-  // Theme toggle initialization
-  const themeToggle = document.getElementById('theme-toggle');
-  if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
-      const isDark = document.documentElement.classList.contains('dark') || 
-                     document.documentElement.getAttribute('data-theme') === 'dark';
-      const next = isDark ? 'light' : 'dark';
-      const sunIcon = document.querySelector('.sun-icon');
-      const moonIcon = document.querySelector('.moon-icon');
-      
-      if (next === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.setAttribute('data-theme', 'dark');
-        if (sunIcon) sunIcon.style.display = 'inline';
-        if (moonIcon) moonIcon.style.display = 'none';
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.setAttribute('data-theme', 'light');
-        if (sunIcon) sunIcon.style.display = 'none';
-        if (moonIcon) moonIcon.style.display = 'inline';
-      }
-      localStorage.setItem('theme', next);
-    });
-  }
-
-  // Initialize theme icons
-  const theme = localStorage.getItem('theme') || 'light';
-  const sunIcon = document.querySelector('.sun-icon');
-  const moonIcon = document.querySelector('.moon-icon');
-  if (theme === 'dark') {
-    if (sunIcon) sunIcon.style.display = 'inline';
-    if (moonIcon) moonIcon.style.display = 'none';
-  } else {
-    if (sunIcon) sunIcon.style.display = 'none';
-    if (moonIcon) moonIcon.style.display = 'inline';
-  }
-
   // Load from URL if design param is present
   const urlParams = new URLSearchParams(window.location.search);
   const design = urlParams.get('design');
   if (design) {
     try {
-      const decoded = JSON.parse(atob(design));
+      const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
       setInputsConfig(decoded);
     } catch (err) {
       console.error("Failed to load design from URL:", err);

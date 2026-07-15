@@ -1701,7 +1701,7 @@ function shareLink() {
   };
   
   // Serialize state to base64
-  const serialized = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  const serialized = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
   const url = new URL(window.location.href);
   url.hash = `design=${serialized}`;
   
@@ -1719,7 +1719,7 @@ function loadInitialState() {
   if (hash.startsWith("#design=")) {
     try {
       const serialized = hash.substring(8);
-      const decoded = JSON.parse(decodeURIComponent(escape(atob(serialized))));
+      const decoded = (window.decodeShareState ? window.decodeShareState(serialized) : JSON.parse(decodeURIComponent(escape(atob(serialized)))));
       if (decoded.nodes && decoded.wires) {
         systemGlobals = decoded.systemGlobals || systemGlobals;
         nodes = decoded.nodes;
@@ -2009,3 +2009,285 @@ function recalculateThermal() {
     }
   }
 }
+
+// ==========================================================================
+// 12. Panel Schedule, Tray Fill, Bus SC, Templates
+// ==========================================================================
+
+function estimateCableOdMm(sizeLabel) {
+  // Rough OD estimate (mm) for multi-core power cable by cross-section
+  const n = parseFloat(String(sizeLabel).replace(/[^\d.]/g, ""));
+  if (!n || isNaN(n)) return 15;
+  // Heuristic: OD ≈ 8 + 2.2*sqrt(mm²) for multi-core jacketed
+  if (String(sizeLabel).includes("AWG") || String(sizeLabel).includes("kcmil")) {
+    return Math.max(8, 6 + Math.sqrt(n) * 1.8);
+  }
+  return Math.max(8, 7 + Math.sqrt(n) * 2.2);
+}
+
+function buildPanelScheduleRows() {
+  const rows = [[
+    "Tag", "Type", "Name", "Power_kW", "FLA_A", "Protection", "Cable_Size", "Length_m", "Material", "Notes"
+  ]];
+
+  nodes.forEach(node => {
+    const type = node.type;
+    let power = "";
+    let fla = "";
+    let protection = "";
+    let notes = "";
+
+    if (type === "motor") {
+      power = node.params.power || "";
+      try {
+        fla = calculateMotorFLA(node).toFixed(1);
+      } catch (_) {
+        fla = "";
+      }
+    } else if (type === "source") {
+      notes = `SCC ${node.params.scc || "—"} kA`;
+    } else if (type === "busbar") {
+      protection = `${node.params.rating || "—"} A bus`;
+      notes = node.params.material || "";
+    } else if (type === "breaker") {
+      protection = `${node.params.selectedRating || "Auto"} A`;
+    } else if (type === "dol" || type === "vfd" || type === "softstarter") {
+      protection = node.params.ratedCurrent
+        ? `${node.params.ratedCurrent} A frame`
+        : (node.params.contactorRating ? `AC-3 ${node.params.contactorRating} A` : "");
+    }
+
+    // Find outgoing feeder wire (node as from)
+    const outWires = wires.filter(w => w.fromNode === node.id);
+    if (outWires.length === 0) {
+      rows.push([
+        node.id.slice(-6),
+        type,
+        node.name || "",
+        power,
+        fla,
+        protection,
+        "",
+        "",
+        "",
+        notes
+      ]);
+    } else {
+      outWires.forEach(w => {
+        const to = nodes.find(n => n.id === w.toNode);
+        rows.push([
+          node.id.slice(-6),
+          type,
+          node.name || "",
+          power,
+          fla,
+          protection,
+          w.params.selectedSize || "Auto",
+          w.params.length || "",
+          w.params.material || "",
+          notes + (to ? ` → ${to.name}` : "")
+        ]);
+      });
+    }
+  });
+
+  return rows;
+}
+
+function exportPanelScheduleCsv() {
+  const rows = buildPanelScheduleRows();
+  const csv = rows.map(r => r.map(c => {
+    const s = String(c ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `mcc-panel-schedule-${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  updateStatus("Panel schedule CSV exported.");
+  if (window.showToast) window.showToast("Panel schedule CSV exported.");
+}
+
+function updateTrayFillCalc() {
+  const el = document.getElementById("tray-fill-results");
+  if (!el) return;
+  const width = parseFloat(document.getElementById("tray-width")?.value) || 300;
+  const depth = parseFloat(document.getElementById("tray-depth")?.value) || 100;
+  const limit = parseFloat(document.getElementById("tray-fill-limit")?.value) || 40;
+  const trayArea = width * depth; // mm² usable cross-section (simplified rectangular)
+
+  let cableArea = 0;
+  let count = 0;
+  wires.forEach(w => {
+    const size = w.params.selectedSize || "10";
+    const od = estimateCableOdMm(size);
+    const area = Math.PI * Math.pow(od / 2, 2);
+    const runs = parseInt(w.params.parallelRuns, 10) || 1;
+    cableArea += area * runs;
+    count += runs;
+  });
+
+  const fillPct = trayArea > 0 ? (cableArea / trayArea) * 100 : 0;
+  const ok = fillPct <= limit;
+  el.innerHTML = `
+    <div><strong>Cables in tray model:</strong> ${count} run(s)</div>
+    <div><strong>Cable area:</strong> ${cableArea.toFixed(0)} mm²</div>
+    <div><strong>Tray usable area:</strong> ${trayArea.toFixed(0)} mm² (${width}×${depth})</div>
+    <div style="margin-top:4px;font-weight:700;color:${ok ? "var(--success,#10b981)" : "var(--color-error,#ef4444)"}">
+      Fill ${fillPct.toFixed(1)}% ${ok ? "≤" : ">"} limit ${limit}% — ${ok ? "PASS" : "OVERFILL"}
+    </div>
+    <div style="color:var(--text-muted);margin-top:4px;">Heuristic OD model; verify with manufacturer datasheets and NEC/IEC fill rules.</div>
+  `;
+}
+
+function updateBusShortCircuit() {
+  const el = document.getElementById("bus-sc-results");
+  if (!el) return;
+
+  const source = nodes.find(n => n.type === "source");
+  const bus = nodes.find(n => n.type === "busbar");
+  if (!source) {
+    el.innerHTML = "Add a Power Source with SCC (kA) to estimate bus fault level.";
+    return;
+  }
+
+  const sccKa = parseFloat(source.params.scc) || 25;
+  const V = systemGlobals.voltage || 400;
+  // Source impedance from 3-phase SC capacity: Isc = SCC, Zs = V/(√3 * Isc)
+  const Isc_src = sccKa * 1000; // A
+  const Zs = V / (Math.sqrt(3) * Isc_src); // ohm
+
+  // Find wire from source to bus if present
+  let Zfeed = 0;
+  let feedNote = "direct (no feeder modeled)";
+  if (bus) {
+    const feed = wires.find(w =>
+      (w.fromNode === source.id && w.toNode === bus.id) ||
+      (w.toNode === source.id && w.fromNode === bus.id)
+    );
+    if (feed) {
+      const len = parseFloat(feed.params.length) || 10;
+      const size = parseFloat(String(feed.params.selectedSize || "120").replace(/[^\d.]/g, "")) || 120;
+      // Rough AC resistance ohm/km for Cu ~ 0.018/mm², use simplified
+      const r_per_km = Math.max(0.05, 18 / Math.max(size, 1)); // ohm/km rough
+      const x_per_km = 0.08; // ohm/km typical tray
+      const r = (r_per_km * len) / 1000;
+      const x = (x_per_km * len) / 1000;
+      Zfeed = Math.sqrt(r * r + x * x);
+      feedNote = `${len} m feeder · size ${feed.params.selectedSize || "Auto"}`;
+    }
+  }
+
+  const Ztot = Zs + Zfeed;
+  const Isc_bus = V / (Math.sqrt(3) * Ztot); // A
+  const Isc_bus_kA = Isc_bus / 1000;
+  const busRating = bus ? (parseFloat(bus.params.rating) || 0) : 0;
+
+  el.innerHTML = `
+    <div><strong>Source SCC:</strong> ${sccKa} kA @ ${V} V</div>
+    <div><strong>Zs:</strong> ${(Zs * 1000).toFixed(3)} mΩ · <strong>Zfeed:</strong> ${(Zfeed * 1000).toFixed(3)} mΩ (${feedNote})</div>
+    <div style="margin-top:6px;font-weight:700;">Isc at bus ≈ <span style="color:var(--accent-primary)">${Isc_bus_kA.toFixed(2)} kA</span></div>
+    ${bus ? `<div>Bus rating ${busRating} A — ensure bracing / SC withstand ≥ ${Isc_bus_kA.toFixed(1)} kA (verify with IEC 61439 / manufacturer).</div>` : ""}
+    <div style="color:var(--text-muted);margin-top:4px;">First-order estimate only (neglects motor contribution &amp; X/R detail).</div>
+  `;
+}
+
+function applyMccTemplate() {
+  const sel = document.getElementById("mcc-template-select");
+  const key = sel ? sel.value : "";
+  if (!key) {
+    alert("Choose a template first.");
+    return;
+  }
+  if (!confirm("Replace the current canvas with this template?")) return;
+
+  const V = systemGlobals.voltage || 400;
+  const mk = (type, x, y, name, params) => ({
+    id: "node_" + Math.random().toString(36).substr(2, 9),
+    type, x, y,
+    name: name || NODE_DEFAULTS[type].name,
+    params: Object.assign({}, JSON.parse(JSON.stringify(NODE_DEFAULTS[type].params)), params || {})
+  });
+  const cable = (from, to, length) => ({
+    id: "wire_" + Math.random().toString(36).substr(2, 9),
+    fromNode: from.id,
+    toNode: to.id,
+    params: {
+      length: length || 15,
+      material: "Cu",
+      insulation: "XLPE",
+      routing: "Tray",
+      ambientTemp: 30,
+      groupingFactor: 1.0,
+      selectedSize: "Auto",
+      parallelRuns: 1
+    }
+  });
+
+  let src, bus, brk, starter, motor, nodesNew, wiresNew;
+
+  if (key === "single-dol") {
+    src = mk("source", 250, 40, "Utility Grid", { scc: 35 });
+    bus = mk("busbar", 250, 140, "MCC Main Bus", { rating: 630 });
+    brk = mk("breaker", 250, 240, "Feeder MCCB", { autoSize: true, selectedRating: 63 });
+    starter = mk("dol", 250, 340, "DOL Starter M1", {});
+    motor = mk("motor", 250, 460, "Pump Motor", { power: 15, unit: "kW", efficiency: 90, pf: 0.85 });
+    nodesNew = [src, bus, brk, starter, motor];
+    wiresNew = [cable(src, bus, 20), cable(bus, brk, 2), cable(brk, starter, 3), cable(starter, motor, 25)];
+  } else if (key === "dual-motor") {
+    src = mk("source", 320, 40, "Utility Grid", { scc: 40 });
+    bus = mk("busbar", 320, 140, "MCC Main Bus", { rating: 800 });
+    const brk1 = mk("breaker", 180, 240, "MCCB DOL", { selectedRating: 50 });
+    const brk2 = mk("breaker", 460, 240, "MCCB VFD", { selectedRating: 80 });
+    const dol = mk("dol", 180, 340, "DOL Pack", {});
+    const vfd = mk("vfd", 460, 340, "VFD Drive", { ratedCurrent: 32 });
+    const m1 = mk("motor", 180, 460, "Conveyor", { power: 11, unit: "kW" });
+    const m2 = mk("motor", 460, 460, "Fan", { power: 18.5, unit: "kW" });
+    nodesNew = [src, bus, brk1, brk2, dol, vfd, m1, m2];
+    wiresNew = [
+      cable(src, bus, 15),
+      cable(bus, brk1, 2), cable(brk1, dol, 2), cable(dol, m1, 20),
+      cable(bus, brk2, 2), cable(brk2, vfd, 2), cable(vfd, m2, 30)
+    ];
+  } else {
+    // soft-lineup
+    src = mk("source", 400, 40, "Utility Grid", { scc: 50 });
+    bus = mk("busbar", 400, 140, "MCC Bus", { rating: 1000 });
+    nodesNew = [src, bus];
+    wiresNew = [cable(src, bus, 12)];
+    for (let i = 0; i < 3; i++) {
+      const x = 160 + i * 220;
+      const b = mk("breaker", x, 240, `MCCB ${i + 1}`, { selectedRating: 63 });
+      const s = mk("softstarter", x, 340, `Soft Starter ${i + 1}`, { ratedCurrent: 45 });
+      const m = mk("motor", x, 460, `Motor ${i + 1}`, { power: 22, unit: "kW" });
+      nodesNew.push(b, s, m);
+      wiresNew.push(cable(bus, b, 2), cable(b, s, 2), cable(s, m, 18 + i * 5));
+    }
+  }
+
+  nodes = nodesNew;
+  wires = wiresNew;
+  deselectAll();
+  recalculateSystem();
+  renderCanvas();
+  updateTrayFillCalc();
+  updateBusShortCircuit();
+  updateStatus(`Loaded template: ${key}`);
+  if (window.showToast) window.showToast("MCC template loaded.");
+  if (sel) sel.value = "";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    try {
+      updateTrayFillCalc();
+      updateBusShortCircuit();
+    } catch (_) { /* ignore */ }
+  }, 500);
+});
+

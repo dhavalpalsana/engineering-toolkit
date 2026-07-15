@@ -11,6 +11,16 @@ let networkConfig = {
   dataSamplePoint: 75 // %
 };
 
+// CANopen (CiA 301) profile state — linked to harness devices by device id
+let canopenConfig = {
+  syncPeriodMs: 10,
+  defaultHeartbeatMs: 500,
+  syncProducer: true,
+  pdoPerNode: 2,
+  pdoDlc: 8,
+  pdoCycleMs: 10
+};
+
 // Length Unit Conversion Management
 let currentUnit = 'm';
 const UNIT_FACTORS = {
@@ -403,12 +413,11 @@ const btnShare = document.getElementById('btn-share');
 const btnExport = document.getElementById('btn-export');
 const btnImport = document.getElementById('btn-import');
 const fileImport = document.getElementById('file-import');
-const themeToggle = document.getElementById('theme-toggle');
 
 // Initialize App
 function init() {
   bindEvents();
-  loadTheme();
+
   loadURLOrPreset();
   resizeWaveformCanvas();
   initCanvasInteractions();
@@ -466,12 +475,66 @@ function bindEvents() {
   fileImport.addEventListener('change', importStateJSON);
   btnShare.addEventListener('click', shareState);
 
-  // Theme Toggler
-  themeToggle.addEventListener('click', toggleTheme);
-
   // Scope and Eye Diagram Toggles
   document.getElementById('scope-btn-scope').addEventListener('click', () => setScopeMode('scope'));
   document.getElementById('scope-btn-eye').addEventListener('click', () => setScopeMode('eye'));
+
+  // Bit timing / DBC / BOM
+  const inputCanClock = document.getElementById('input-can-clock');
+  const inputSjw = document.getElementById('input-sjw');
+  [inputCanClock, inputSjw].forEach(el => {
+    if (el) el.addEventListener('input', () => updateBitTimingResults());
+  });
+  document.getElementById('btn-parse-dbc')?.addEventListener('click', parseDbcSnippet);
+  document.getElementById('btn-clear-dbc')?.addEventListener('click', () => {
+    const ta = document.getElementById('dbc-import-text');
+    const out = document.getElementById('dbc-parse-results');
+    if (ta) ta.value = '';
+    if (out) out.innerHTML = '';
+  });
+  document.getElementById('btn-export-bom')?.addEventListener('click', exportHarnessBomCsv);
+
+  // Config mode tabs (Harness / Advanced / CANopen)
+  document.querySelectorAll('.config-mode-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const mode = tab.getAttribute('data-mode');
+      setConfigMode(mode);
+    });
+  });
+
+  // CANopen controls
+  ['canopen-sync-period', 'canopen-heartbeat', 'canopen-pdo-per-node', 'canopen-pdo-dlc', 'canopen-pdo-cycle'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', () => {
+      readCanopenInputs();
+      updateCanopenUi();
+    });
+  });
+  document.getElementById('canopen-sync-producer')?.addEventListener('change', () => {
+    readCanopenInputs();
+    updateCanopenUi();
+  });
+  document.getElementById('btn-canopen-auto-ids')?.addEventListener('click', autoAssignCanopenNodeIds);
+  document.getElementById('btn-canopen-export')?.addEventListener('click', exportCanopenNodeMapCsv);
+  ['canopen-cob-node', 'canopen-cob-object'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', updateCobIdCalculator);
+    document.getElementById(id)?.addEventListener('change', updateCobIdCalculator);
+  });
+  renderCanopenCheatsheet();
+  updateCobIdCalculator();
+}
+
+function setConfigMode(mode) {
+  document.querySelectorAll('.config-mode-tab').forEach(t => {
+    const on = t.getAttribute('data-mode') === mode;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-mode-panel]').forEach(p => {
+    p.classList.toggle('hidden', p.getAttribute('data-mode-panel') !== mode);
+  });
+  if (mode === 'advanced') updateBitTimingResults();
+  if (mode === 'canopen') updateCanopenUi();
+  try { if (window.lucide) lucide.createIcons(); } catch (_) { /* ignore */ }
 }
 
 function initCanvasInteractions() {
@@ -669,6 +732,8 @@ function render() {
   updateBanner(diagnostics);
   drawTopologySVG(diagnostics);
   drawWaveform(diagnostics.riskPercentage);
+  updateBitTimingResults();
+  updateCanopenUi();
   try {
     if (window.lucide) {
       lucide.createIcons();
@@ -676,6 +741,480 @@ function render() {
   } catch (e) {
     console.warn("Lucide icons load failure: ", e);
   }
+}
+
+// ── CANopen (CiA 301) ────────────────────────────────────────
+function getAllDevices() {
+  const list = [];
+  stations.forEach((st, si) => {
+    (st.devices || []).forEach((dev, di) => {
+      list.push({ station: st, stationIndex: si, device: dev, deviceIndex: di });
+    });
+  });
+  return list;
+}
+
+function readCanopenInputs() {
+  canopenConfig.syncPeriodMs = parseInt(document.getElementById('canopen-sync-period')?.value, 10) || 10;
+  canopenConfig.defaultHeartbeatMs = parseInt(document.getElementById('canopen-heartbeat')?.value, 10) || 0;
+  canopenConfig.syncProducer = !!document.getElementById('canopen-sync-producer')?.checked;
+  canopenConfig.pdoPerNode = parseInt(document.getElementById('canopen-pdo-per-node')?.value, 10) || 0;
+  canopenConfig.pdoDlc = Math.min(8, Math.max(0, parseInt(document.getElementById('canopen-pdo-dlc')?.value, 10) || 0));
+  canopenConfig.pdoCycleMs = parseInt(document.getElementById('canopen-pdo-cycle')?.value, 10) || 10;
+}
+
+function syncCanopenInputsFromState() {
+  const sp = document.getElementById('canopen-sync-period');
+  const hb = document.getElementById('canopen-heartbeat');
+  const prod = document.getElementById('canopen-sync-producer');
+  const pdoN = document.getElementById('canopen-pdo-per-node');
+  const pdoD = document.getElementById('canopen-pdo-dlc');
+  const pdoC = document.getElementById('canopen-pdo-cycle');
+  if (sp) sp.value = canopenConfig.syncPeriodMs;
+  if (hb) hb.value = canopenConfig.defaultHeartbeatMs;
+  if (prod) prod.checked = !!canopenConfig.syncProducer;
+  if (pdoN) pdoN.value = canopenConfig.pdoPerNode;
+  if (pdoD) pdoD.value = canopenConfig.pdoDlc;
+  if (pdoC) pdoC.value = canopenConfig.pdoCycleMs;
+}
+
+/** Pre-defined connection set (CiA 301) — base + nodeId unless global */
+function canopenCobId(objectKey, nodeId) {
+  const n = Math.min(127, Math.max(0, parseInt(nodeId, 10) || 0));
+  const table = {
+    nmt: { id: 0x000, bits: 11, note: 'NMT (global, node-independent)' },
+    sync: { id: 0x080, bits: 11, note: 'SYNC (global)' },
+    timestamp: { id: 0x100, bits: 11, note: 'TIME stamp (global)' },
+    emcy: { id: 0x080 + n, bits: 11, note: 'EMCY = 0x080 + Node-ID' },
+    tpdo1: { id: 0x180 + n, bits: 11, note: 'TPDO1 = 0x180 + Node-ID' },
+    rpdo1: { id: 0x200 + n, bits: 11, note: 'RPDO1 = 0x200 + Node-ID' },
+    tpdo2: { id: 0x280 + n, bits: 11, note: 'TPDO2 = 0x280 + Node-ID' },
+    rpdo2: { id: 0x300 + n, bits: 11, note: 'RPDO2 = 0x300 + Node-ID' },
+    tpdo3: { id: 0x380 + n, bits: 11, note: 'TPDO3 = 0x380 + Node-ID' },
+    rpdo3: { id: 0x400 + n, bits: 11, note: 'RPDO3 = 0x400 + Node-ID' },
+    tpdo4: { id: 0x480 + n, bits: 11, note: 'TPDO4 = 0x480 + Node-ID' },
+    rpdo4: { id: 0x500 + n, bits: 11, note: 'RPDO4 = 0x500 + Node-ID' },
+    sdotx: { id: 0x580 + n, bits: 11, note: 'SDO TX (server→client) = 0x580 + Node-ID' },
+    sdorx: { id: 0x600 + n, bits: 11, note: 'SDO RX (client→server) = 0x600 + Node-ID' },
+    heartbeat: { id: 0x700 + n, bits: 11, note: 'HEARTBEAT / Node Guarding = 0x700 + Node-ID' }
+  };
+  return table[objectKey] || table.heartbeat;
+}
+
+function formatCobId(id) {
+  return `0x${id.toString(16).toUpperCase().padStart(3, '0')} (${id})`;
+}
+
+function updateCobIdCalculator() {
+  const el = document.getElementById('canopen-cob-result');
+  if (!el) return;
+  const nodeId = parseInt(document.getElementById('canopen-cob-node')?.value, 10) || 1;
+  const obj = document.getElementById('canopen-cob-object')?.value || 'tpdo1';
+  const cob = canopenCobId(obj, nodeId);
+  el.innerHTML = `
+    <div><strong>COB-ID</strong> ${formatCobId(cob.id)}</div>
+    <div>${cob.note}</div>
+    <div style="margin-top:4px;color:var(--text-muted)">Node-ID ${nodeId} · ${cob.bits}-bit identifier</div>
+  `;
+}
+
+function renderCanopenCheatsheet() {
+  const el = document.getElementById('canopen-cheatsheet');
+  if (!el) return;
+  const n = 'N';
+  const rows = [
+    ['NMT', '0x000'],
+    ['SYNC', '0x080'],
+    ['EMCY', `0x080+${n}`],
+    ['TIME', '0x100'],
+    ['TPDO1…4', `0x180/280/380/480+${n}`],
+    ['RPDO1…4', `0x200/300/400/500+${n}`],
+    ['SDO TX/RX', `0x580/600+${n}`],
+    ['HEARTBEAT', `0x700+${n}`]
+  ];
+  el.innerHTML = rows.map(([a, b]) =>
+    `<div class="cs-row"><span>${a}</span><span>${b}</span></div>`
+  ).join('');
+}
+
+function ensureDeviceCanopenDefaults(dev, suggestedId) {
+  if (dev.nodeId == null || dev.nodeId === '') {
+    dev.nodeId = suggestedId;
+  }
+  if (dev.heartbeatMs == null) {
+    dev.heartbeatMs = canopenConfig.defaultHeartbeatMs;
+  }
+}
+
+function autoAssignCanopenNodeIds() {
+  let next = 1;
+  const used = new Set();
+  getAllDevices().forEach(({ device }) => {
+    while (used.has(next) && next <= 127) next++;
+    device.nodeId = Math.min(127, next);
+    used.add(device.nodeId);
+    if (device.heartbeatMs == null) device.heartbeatMs = canopenConfig.defaultHeartbeatMs;
+    next++;
+  });
+  updateCanopenUi();
+  if (window.showToast) window.showToast('CANopen Node-IDs auto-assigned (1…n).');
+}
+
+function updateCanopenUi() {
+  readCanopenInputs();
+  const listEl = document.getElementById('canopen-node-list');
+  if (!listEl) return;
+
+  const devices = getAllDevices();
+  if (devices.length === 0) {
+    listEl.innerHTML = `<div style="padding:12px;text-align:center;color:var(--text-muted);font-size:12px;">No devices on the harness yet. Add stations/devices under Harness.</div>`;
+  } else {
+    // Ensure defaults without clobbering user IDs
+    let suggest = 1;
+    const used = new Set(devices.map(d => parseInt(d.device.nodeId, 10)).filter(n => n >= 1 && n <= 127));
+    devices.forEach(({ device }) => {
+      if (device.nodeId == null || device.nodeId === '') {
+        while (used.has(suggest) && suggest <= 127) suggest++;
+        ensureDeviceCanopenDefaults(device, Math.min(127, suggest));
+        used.add(device.nodeId);
+        suggest++;
+      } else {
+        ensureDeviceCanopenDefaults(device, device.nodeId);
+      }
+    });
+
+    listEl.innerHTML = devices.map(({ station, device }, idx) => {
+      const nid = parseInt(device.nodeId, 10) || 1;
+      const hb = device.heartbeatMs != null ? device.heartbeatMs : canopenConfig.defaultHeartbeatMs;
+      const tpdo1 = formatCobId(canopenCobId('tpdo1', nid).id);
+      return `
+        <div class="canopen-node-row" data-dev-id="${device.id}">
+          <div>
+            <div class="node-name" title="${device.name}">${device.name || 'Device'}</div>
+            <div class="node-meta">${station.name || 'Station'} · TPDO1 ${tpdo1}</div>
+          </div>
+          <input type="number" class="canopen-node-id" min="1" max="127" value="${nid}" data-dev-id="${device.id}" title="Node-ID" />
+          <input type="number" class="canopen-hb-ms" min="0" max="60000" step="10" value="${hb}" data-dev-id="${device.id}" title="Heartbeat ms (0=off)" />
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('.canopen-node-id').forEach(inp => {
+      inp.addEventListener('change', (e) => {
+        const id = e.target.getAttribute('data-dev-id');
+        const val = Math.min(127, Math.max(1, parseInt(e.target.value, 10) || 1));
+        e.target.value = val;
+        setDeviceField(id, 'nodeId', val);
+        updateCanopenUi();
+      });
+    });
+    listEl.querySelectorAll('.canopen-hb-ms').forEach(inp => {
+      inp.addEventListener('change', (e) => {
+        const id = e.target.getAttribute('data-dev-id');
+        const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+        setDeviceField(id, 'heartbeatMs', val);
+        updateCanopenBusLoad();
+      });
+    });
+  }
+
+  updateCobIdCalculator();
+  updateCanopenBusLoad();
+}
+
+function setDeviceField(devId, key, value) {
+  for (const st of stations) {
+    const dev = (st.devices || []).find(d => d.id === devId);
+    if (dev) {
+      dev[key] = value;
+      return;
+    }
+  }
+}
+
+/**
+ * Classic CAN frame bit length approx (no stuffing):
+ * SOF(1)+ID(11)+RTR(1)+IDE(1)+r0(1)+DLC(4)+data(8*DLC)+CRC(15)+CRC_del(1)+ACK(2)+EOF(7)+IFS(3)
+ * ≈ 47 + 8*DLC
+ */
+function classicCanFrameBits(dlc) {
+  return 47 + 8 * Math.min(8, Math.max(0, dlc));
+}
+
+function updateCanopenBusLoad() {
+  const el = document.getElementById('canopen-busload-results');
+  if (!el) return;
+  const bitrate = (networkConfig.baudRate || 250) * 1000; // bit/s
+  const devices = getAllDevices();
+  const n = devices.length;
+
+  let bps = 0; // bits per second offered
+
+  // Heartbeats: 1-byte typically (DLC=1) at each node's period
+  devices.forEach(({ device }) => {
+    const hb = device.heartbeatMs != null ? device.heartbeatMs : canopenConfig.defaultHeartbeatMs;
+    if (hb > 0) {
+      bps += classicCanFrameBits(1) * (1000 / hb);
+    }
+  });
+
+  // SYNC (DLC=0 or 1) if producer present
+  if (canopenConfig.syncProducer && canopenConfig.syncPeriodMs > 0) {
+    bps += classicCanFrameBits(0) * (1000 / canopenConfig.syncPeriodMs);
+  }
+
+  // PDO traffic
+  if (n > 0 && canopenConfig.pdoPerNode > 0 && canopenConfig.pdoCycleMs > 0) {
+    const framesPerSec = n * canopenConfig.pdoPerNode * (1000 / canopenConfig.pdoCycleMs);
+    bps += framesPerSec * classicCanFrameBits(canopenConfig.pdoDlc);
+  }
+
+  const loadPct = bitrate > 0 ? (bps / bitrate) * 100 : 0;
+  const over = loadPct > 70;
+  el.innerHTML = `
+    <div><strong>Nodes:</strong> ${n} · <strong>Baud:</strong> ${networkConfig.baudRate} kbps</div>
+    <div><strong>Offered traffic:</strong> ${(bps / 1000).toFixed(1)} kbit/s</div>
+    <div style="margin-top:4px;font-weight:700;color:${over ? 'var(--error,#ef4444)' : 'var(--text-primary)'}">
+      Est. bus load ≈ ${loadPct.toFixed(1)}% ${over ? '(high — target &lt; 70% for real-time)' : ''}
+    </div>
+    <div class="canopen-load-bar ${over ? 'over' : ''}"><span style="width:${Math.min(100, loadPct)}%"></span></div>
+    <div style="margin-top:6px;color:var(--text-muted);font-size:11px;">Excludes bit stuffing, SDO, EMCY, and retransmits. Use as a planning check only.</div>
+  `;
+}
+
+function exportCanopenNodeMapCsv() {
+  const rows = [['Station', 'Device', 'NodeID', 'Heartbeat_ms', 'EMCY', 'TPDO1', 'RPDO1', 'SDO_TX', 'SDO_RX', 'HEARTBEAT']];
+  getAllDevices().forEach(({ station, device }) => {
+    const n = parseInt(device.nodeId, 10) || 1;
+    const hb = device.heartbeatMs != null ? device.heartbeatMs : canopenConfig.defaultHeartbeatMs;
+    const hex = (key) => '0x' + canopenCobId(key, n).id.toString(16).toUpperCase();
+    rows.push([
+      station.name || '',
+      device.name || '',
+      n,
+      hb,
+      hex('emcy'),
+      hex('tpdo1'),
+      hex('rpdo1'),
+      hex('sdotx'),
+      hex('sdorx'),
+      hex('heartbeat')
+    ]);
+  });
+  const csv = rows.map(r => r.map(c => {
+    const s = String(c ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `canopen-node-map-${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if (window.showToast) window.showToast('CANopen node map CSV exported.');
+}
+
+// ── Bit Timing (nominal arbitration phase) ───────────────────
+function solveCanBitTiming(baudKbps, samplePointPct, clockMHz, sjwMax) {
+  const bitrate = baudKbps * 1000;
+  const clockHz = clockMHz * 1e6;
+  if (!bitrate || !clockHz) return { error: "Invalid baud rate or clock." };
+
+  const targetSp = Math.min(95, Math.max(50, samplePointPct)) / 100;
+  let best = null;
+
+  for (let nTq = 8; nTq <= 25; nTq++) {
+    const brpExact = clockHz / (bitrate * nTq);
+    const brp = Math.round(brpExact);
+    if (brp < 1 || brp > 1024) continue;
+    if (Math.abs(brpExact - brp) / brp > 0.001) continue; // require near-integer BRP
+
+    // SYNC_SEG = 1; TSEG1 + TSEG2 = nTq - 1
+    // sample point ≈ (1 + TSEG1) / nTq
+    let tseg1 = Math.round(targetSp * nTq) - 1;
+    tseg1 = Math.max(1, Math.min(nTq - 2, tseg1));
+    let tseg2 = nTq - 1 - tseg1;
+    if (tseg2 < 1) {
+      tseg2 = 1;
+      tseg1 = nTq - 2;
+    }
+    const sp = (1 + tseg1) / nTq;
+    const sjw = Math.min(sjwMax || 4, tseg2, 4);
+    const tqNs = (brp / clockHz) * 1e9;
+    const bitNs = tqNs * nTq;
+    const errPpm = Math.abs(1e6 * ((clockHz / (brp * nTq)) - bitrate) / bitrate);
+    const spErr = Math.abs(sp - targetSp);
+    const score = errPpm * 10 + spErr * 1000;
+
+    if (!best || score < best.score) {
+      best = {
+        brp, nTq, tseg1, tseg2, sjw, tqNs, bitNs, sp, errPpm, score,
+        bitrateAchieved: clockHz / (brp * nTq)
+      };
+    }
+  }
+
+  if (!best) return { error: "No integer BRP solution for this clock/baud. Try another clock (e.g. 40/80 MHz)." };
+  return best;
+}
+
+function updateBitTimingResults() {
+  const el = document.getElementById('bit-timing-results');
+  if (!el) return;
+  const clock = parseFloat(document.getElementById('input-can-clock')?.value) || 40;
+  const sjwMax = parseInt(document.getElementById('input-sjw')?.value) || 4;
+  const baud = networkConfig.baudRate;
+  const sp = networkConfig.samplePoint;
+  const sol = solveCanBitTiming(baud, sp, clock, sjwMax);
+
+  if (sol.error) {
+    el.innerHTML = `<span style="color:var(--color-error,#ef4444)">${sol.error}</span>`;
+    return;
+  }
+
+  let html = `
+    <div><strong>Nominal ${baud} kbps</strong> @ ${clock} MHz clock</div>
+    <div>BRP=${sol.brp} · NTQ=${sol.nTq} · TSEG1=${sol.tseg1} · TSEG2=${sol.tseg2} · SJW=${sol.sjw}</div>
+    <div>tq=${sol.tqNs.toFixed(2)} ns · t_bit=${sol.bitNs.toFixed(1)} ns</div>
+    <div>Sample point=${(sol.sp * 100).toFixed(1)}% (target ${sp}%) · rate err=${sol.errPpm.toFixed(1)} ppm</div>
+  `;
+
+  if (networkConfig.enableCanFD) {
+    const dataSol = solveCanBitTiming(networkConfig.dataBaudRate, networkConfig.dataSamplePoint, clock, sjwMax);
+    if (!dataSol.error) {
+      html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-color)">
+        <strong>Data phase ${networkConfig.dataBaudRate} kbps</strong><br>
+        BRP=${dataSol.brp} · NTQ=${dataSol.nTq} · TSEG1=${dataSol.tseg1} · TSEG2=${dataSol.tseg2} · SJW=${dataSol.sjw}<br>
+        tq=${dataSol.tqNs.toFixed(2)} ns · SP=${(dataSol.sp * 100).toFixed(1)}%
+      </div>`;
+    } else {
+      html += `<div style="margin-top:8px;color:var(--color-error,#ef4444)">Data phase: ${dataSol.error}</div>`;
+    }
+  }
+
+  el.innerHTML = html;
+}
+
+// ── DBC snippet parser (BO_ / SG_ only) ──────────────────────
+function parseDbcSnippet() {
+  const ta = document.getElementById('dbc-import-text');
+  const out = document.getElementById('dbc-parse-results');
+  if (!ta || !out) return;
+  const text = ta.value || '';
+  const messages = [];
+  let current = null;
+
+  text.split(/\r?\n/).forEach(line => {
+    const bo = line.match(/^\s*BO_\s+(\d+)\s+(\w+)\s*:\s*(\d+)\s+(\S+)/);
+    if (bo) {
+      current = {
+        id: parseInt(bo[1], 10),
+        name: bo[2],
+        dlc: parseInt(bo[3], 10),
+        transmitter: bo[4],
+        signals: []
+      };
+      messages.push(current);
+      return;
+    }
+    const sg = line.match(/^\s*SG_\s+(\w+)\s*:\s*(\d+)\|(\d+)@([01])([+-])\s*\(([^,]+),([^)]+)\)\s*\[([^\]]*)\]\s*"([^"]*)"/);
+    if (sg && current) {
+      current.signals.push({
+        name: sg[1],
+        start: parseInt(sg[2], 10),
+        length: parseInt(sg[3], 10),
+        endian: sg[4] === '1' ? 'Intel' : 'Motorola',
+        sign: sg[5] === '-' ? 'signed' : 'unsigned',
+        scale: sg[6],
+        offset: sg[7],
+        unit: sg[9]
+      });
+    }
+  });
+
+  if (messages.length === 0) {
+    out.innerHTML = `<span style="color:var(--text-muted)">No <code>BO_</code> messages found. Paste a DBC fragment with BO_/SG_ lines.</span>`;
+    return;
+  }
+
+  out.innerHTML = messages.map(m => {
+    const idHex = '0x' + m.id.toString(16).toUpperCase();
+    const sigs = m.signals.length
+      ? `<ul style="margin:4px 0 0 16px;padding:0">${m.signals.map(s =>
+          `<li><code>${s.name}</code> ${s.start}|${s.length} ${s.endian} ×${s.scale}+${s.offset} ${s.unit ? '[' + s.unit + ']' : ''}</li>`
+        ).join('')}</ul>`
+      : `<div style="color:var(--text-muted);margin-top:4px">No signals parsed</div>`;
+    return `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border-color)">
+      <strong>${m.name}</strong> · ID ${m.id} (${idHex}) · DLC ${m.dlc} · TX ${m.transmitter}
+      ${sigs}
+    </div>`;
+  }).join('');
+
+  if (window.showToast) window.showToast(`Parsed ${messages.length} DBC message(s).`);
+}
+
+// ── Harness BOM CSV ──────────────────────────────────────────
+function buildHarnessBomRows() {
+  const rows = [['Item', 'Type', 'Name', 'Qty', 'Length_m', 'Notes']];
+  let trunkLen = 0;
+  stations.forEach((st, i) => {
+    if (i > 0) {
+      const seg = st.distanceFromPrev || 0;
+      trunkLen += seg;
+      rows.push([
+        `TRUNK-${i}`,
+        'Trunk Cable',
+        `${stations[i - 1].name} → ${st.name}`,
+        '1',
+        seg.toFixed(3),
+        `Segment spacing (${currentUnit})`
+      ]);
+    }
+    (st.devices || []).forEach((dev, di) => {
+      rows.push([
+        `DEV-${i + 1}-${di + 1}`,
+        'Device / ECU',
+        dev.name || 'Device',
+        '1',
+        (dev.stubLength || 0).toFixed(3),
+        `Stub at station "${st.name}"${dev.termination ? '; terminator ' + dev.termination + 'Ω' : ''}`
+      ]);
+      if (dev.termination && dev.termination > 0) {
+        rows.push([
+          `TERM-${i + 1}-${di + 1}`,
+          'Terminator',
+          `${dev.termination} Ω @ ${dev.name}`,
+          '1',
+          '',
+          'End/mid-bus termination resistor'
+        ]);
+      }
+    });
+  });
+  rows.push(['SUMMARY', 'Trunk Total', 'Bus length', '1', trunkLen.toFixed(3), `${networkConfig.baudRate} kbps design`]);
+  rows.push(['SUMMARY', 'Node Count', 'Devices', String(stations.reduce((n, s) => n + (s.devices || []).length, 0)), '', '']);
+  return rows;
+}
+
+function exportHarnessBomCsv() {
+  const rows = buildHarnessBomRows();
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `can-harness-bom-${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if (window.showToast) window.showToast('Harness BOM CSV exported.');
 }
 
 // Render inputs list (Station hierarchy)
@@ -2270,7 +2809,7 @@ function shareState() {
       }))
     };
 
-    const serialized = btoa(JSON.stringify(configData));
+    const serialized = (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
     const url = new URL(window.location.href);
     url.searchParams.set('design', serialized);
     
@@ -2289,7 +2828,7 @@ function loadURLOrPreset() {
 
   if (design) {
     try {
-      const decoded = JSON.parse(atob(design));
+      const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
       networkConfig.baudRate = decoded.baud || 250;
       networkConfig.samplePoint = decoded.sp || 80;
       networkConfig.propDelay = decoded.prop || 5.0;
@@ -2336,12 +2875,14 @@ function loadURLOrPreset() {
 }
 
 function exportStateJSON() {
+  readCanopenInputs();
   const fileContent = JSON.stringify({
-    version: '2.0',
+    version: '2.1',
     type: 'can-bus-harness-design',
     config: networkConfig,
     unit: currentUnit,
-    stations: stations
+    stations: stations,
+    canopen: canopenConfig
   }, null, 2);
 
   const blob = new Blob([fileContent], { type: 'application/json' });
@@ -2371,6 +2912,7 @@ function importStateJSON(event) {
 
       networkConfig = { ...imported.config };
       currentUnit = imported.unit || 'm';
+      if (imported.canopen) canopenConfig = { ...canopenConfig, ...imported.canopen };
       
       if (imported.version === '1.0') {
         stations = imported.nodes.map((n, i) => ({
@@ -2394,6 +2936,7 @@ function importStateJSON(event) {
       inputDataBaud.value = networkConfig.dataBaudRate || 2000;
       inputDataSP.value = networkConfig.dataSamplePoint || 75;
       selectUnit.value = currentUnit;
+      syncCanopenInputsFromState();
 
       const displayVal = networkConfig.enableCanFD ? 'block' : 'none';
       groupDataBaud.style.display = displayVal;
@@ -2409,34 +2952,7 @@ function importStateJSON(event) {
   reader.readAsText(file);
 }
 
-// Light / Dark Theme Syncer
-function loadTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-  syncThemeIcon(currentTheme);
-}
 
-function toggleTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme');
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  
-  document.documentElement.setAttribute('data-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  syncThemeIcon(newTheme);
-  render(); // Redraw canvas/SVG grid colors
-}
-
-function syncThemeIcon(theme) {
-  const iconMoon = document.querySelector('.theme-icon-moon');
-  const iconSun = document.querySelector('.theme-icon-sun');
-  
-  if (theme === 'dark') {
-    if (iconMoon) iconMoon.style.display = 'none';
-    if (iconSun) iconSun.style.display = 'block';
-  } else {
-    if (iconMoon) iconMoon.style.display = 'block';
-    if (iconSun) iconSun.style.display = 'none';
-  }
-}
 
 // Run initializer
 init();
@@ -2445,17 +2961,19 @@ init();
 window.projectManagerConfig = {
   toolId: "can-bus-designer",
   getInputs: () => ({
-    version: '2.0',
+    version: '2.1',
     type: 'can-bus-harness-design',
     config: networkConfig,
     unit: currentUnit,
-    stations: stations
+    stations: stations,
+    canopen: canopenConfig
   }),
   setInputs: (data) => {
     if (data.type === 'can-bus-harness-design') {
       networkConfig = { ...data.config };
       currentUnit = data.unit || 'm';
       stations = data.stations;
+      if (data.canopen) canopenConfig = { ...canopenConfig, ...data.canopen };
 
       // Sync form fields
       inputBaud.value = networkConfig.baudRate;
@@ -2466,6 +2984,7 @@ window.projectManagerConfig = {
       inputDataBaud.value = networkConfig.dataBaudRate || 2000;
       inputDataSP.value = networkConfig.dataSamplePoint || 75;
       selectUnit.value = currentUnit;
+      syncCanopenInputsFromState();
 
       const displayVal = networkConfig.enableCanFD ? 'block' : 'none';
       groupDataBaud.style.display = displayVal;

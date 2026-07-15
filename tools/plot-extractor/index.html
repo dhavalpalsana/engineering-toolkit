@@ -23,6 +23,7 @@
   <!-- Style Sheets -->
   <link rel="stylesheet" href="../../css/theme.css">
   <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="../../css/tool-shell.css">
   <link rel="stylesheet" href="style.css">
 
   <!-- Lucide Icons CDN -->
@@ -32,25 +33,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   
-  <!-- Theme Sync Script to Prevent Flash -->
-  <script>
-    (function() {
-      const theme = localStorage.getItem('theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', theme);
-      if (theme === 'dark') document.documentElement.classList.add('dark');
-      else document.documentElement.classList.remove('dark');
-    })();
-  </script>
-
   <!-- Firebase Integration -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/tools-data.js"></script>
+  <script src="../../js/registry.js"></script>
+  <script src="../../js/tool-shell.js"></script>
   <script src="../../js/project-manager.js"></script>
 </head>
-<body class="bg-[#f8fafc] dark:bg-slate-950 text-[#0f172a] dark:text-slate-100 font-sans min-h-screen flex flex-col antialiased transition-colors duration-200">
+<body class="bg-[#f8fafc] text-[#0f172a] font-sans min-h-screen flex flex-col antialiased transition-colors duration-200">
 
   <!-- Standard Toolkit Header -->
   <header>
@@ -91,10 +85,7 @@
           <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
         </button>
         
-        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
-          <i data-lucide="moon" class="moon-icon"></i>
-          <i data-lucide="sun" class="sun-icon"></i>
-        </button>
+
       </div>
     </div>
   </header>

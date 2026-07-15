@@ -6,7 +6,7 @@ This document outlines the core architecture guidelines, design rules, and user 
 
 ## 1. Global CSS Design Tokens & Theme System
 * **Central Token Registry**: All design tokens (colors, font sizes, weights, spacing, borders, shadows, and transitions) are defined in `/css/theme.css`.
-* **CSS Variable Priority**: Always use custom CSS properties (e.g., `var(--bg-primary)`, `var(--text-primary)`, `var(--border-color)`, `var(--font-sans)`) rather than hardcoding hexadecimal, RGB, or HSL values. This guarantees correct light/dark theme synchronization.
+* **CSS Variable Priority**: Always use custom CSS properties (e.g., `var(--bg-primary)`, `var(--text-primary)`, `var(--border-color)`, `var(--font-sans)`) rather than hardcoding hexadecimal, RGB, or HSL values. This preserves a consistent shared design system.
 * **Tailwind Compilation**:
   * **Do NOT use the Tailwind CDN script** (`<script src="https://cdn.tailwindcss.com">`) on any page. It bloats page load times and causes flickering.
   * Instead, define classes in the tool HTML/JS and compile them to a static, minified file via the Tailwind CLI:
@@ -71,11 +71,6 @@ The header markup must match this structure exactly:
         <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
       </button>
       
-      <!-- Standard Theme Toggle -->
-      <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
-        <i data-lucide="moon" class="moon-icon"></i>
-        <i data-lucide="sun" class="sun-icon"></i>
-      </button>
     </div>
   </div>
 </header>
@@ -91,17 +86,30 @@ For tools supporting import/export, buttons in the `.hdr-right` toolbar must use
 
 ---
 
-## 4. Auth & Project Manager Integration
-* Ensure the page imports Firebase scripts and the shared helpers:
-  ```html
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  <script src="../../js/firebase.js"></script>
-  <script src="../../js/auth-ui.js"></script>
-  <script src="../../js/project-manager.js"></script>
-  ```
-* Register the tool with the global `window.projectManagerConfig` inside `app.js` before loading `project-manager.js` to enable online/offline project saving:
+## 4. Shared Tool Shell (Header / Footer / Beta Banner)
+Every tool page should load the shared chrome stack after Firebase helpers:
+
+```html
+<link rel="stylesheet" href="../../css/theme.css">
+<link rel="stylesheet" href="../../css/header.css">
+<link rel="stylesheet" href="../../css/tool-shell.css">
+...
+<script src="../../js/firebase.js"></script>
+<script src="../../js/auth-ui.js"></script>
+<script src="../../js/tools-data.js"></script>
+<script src="../../js/tool-shell.js"></script>
+<script src="../../js/project-manager.js"></script>
+```
+
+* **`tool-shell.js`** auto-detects `toolId` from the URL (or `projectManagerConfig` / `toolShellConfig`) and:
+  * Injects a **Beta** banner when `status === "beta"` in `tools-data.js` (one-click Report a Bug; dismissible for the session).
+  * Ensures a standardized **footer** (coffee / suggest / bug / GitHub).
+* Optional: `window.ToolShell.renderHeader(container, { title, subtitle, iconHtml, showShare, showExport, showImport })` for greenfield tools.
+* Prefer keeping existing static `<header>` markup (AGENTS §2) and letting the shell enhance chrome, rather than regenerating headers on every page.
+
+## 5. Auth & Project Manager Integration
+* Ensure the page imports Firebase scripts and the shared helpers (see §4 for full order).
+* Register the tool with the global `window.projectManagerConfig` **at top level of `app.js`** (or before `DOMContentLoaded` completes). `project-manager.js` defers boot so late registration still works, but top-level is safest:
   ```javascript
   window.projectManagerConfig = {
     toolId: "your-tool-id",
@@ -112,11 +120,11 @@ For tools supporting import/export, buttons in the `.hdr-right` toolbar must use
 
 ---
 
-## 5. Page Layout Containment, Typography & Themes
+## 6. Page Layout Containment & Typography
 To maintain styling parity with the rest of the project and ensure pages do not stretch to the full width of wide monitors:
 
 ### CSS Base & Typography
-In the tool's local stylesheet (e.g. `style.css`), always style the `body` tag using project-wide design tokens for typography and background theme synchronization:
+In the tool's local stylesheet (e.g. `style.css`), always style the `body` tag using project-wide design tokens for typography and background consistency:
 ```css
 body {
   margin: 0;

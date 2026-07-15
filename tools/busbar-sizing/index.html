@@ -1,18 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script>
-    (function() {
-      const savedTheme = localStorage.getItem('theme') || 'light';
-      if (savedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.setAttribute('data-theme', 'light');
-      }
-    })();
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Busbar Capacity Calculator — Engineering Toolkit</title>
@@ -33,12 +21,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../css/theme.css">
   <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="../../css/tool-shell.css">
   <script src="https://unpkg.com/lucide@0.460.0"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/tools-data.js"></script>
+  <script src="../../js/registry.js"></script>
+  <script src="../../js/tool-shell.js"></script>
   <script src="../../js/project-manager.js"></script>
 
   <style>
@@ -64,9 +56,6 @@
       --sh-md: var(--shadow-md);
       --sh-lg: var(--shadow-lg);
       --tr: var(--transition-normal);
-    }
-    [data-theme="dark"] {
-      --accent-glow: var(--accent-primary-glow);
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     html{scroll-behavior:smooth;}
@@ -234,10 +223,6 @@
         <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
       </button>
       
-      <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
-        <i data-lucide="moon" class="moon-icon"></i>
-        <i data-lucide="sun" class="sun-icon"></i>
-      </button>
     </div>
   </div>
 </header>
@@ -657,7 +642,7 @@ const MAT = {
     sigma_y: 250e6,       // Pa (hard drawn)
     k_th: 141,            // A·s^0.5/mm² (IEC 60865-1, to 200°C)
     mu_r: 1.0,            // relative permeability
-    color_dark: '#b45309',
+    color_deep: '#b45309',
     color_light: '#f59e0b'
   },
   Al: {
@@ -669,7 +654,7 @@ const MAT = {
     sigma_y: 165e6,
     k_th: 86,
     mu_r: 1.0,
-    color_dark: '#6b7280',
+    color_deep: '#6b7280',
     color_light: '#9ca3af'
   }
 };
@@ -902,12 +887,11 @@ function renderSVG(r) {
   const barsToShow = Math.min(r.N, 3);
   const gap = Math.max(4, r.T_mm * scale * 0.7);
 
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const barFill = isDark ? '#92400e' : '#fef3c7';
-  const barStroke = isDark ? '#f59e0b' : '#d97706';
-  const skinFill = isDark ? 'rgba(245,158,11,0.25)' : 'rgba(245,158,11,0.18)';
-  const textFill = isDark ? '#94a3b8' : '#64748b';
-  const dimColor = isDark ? '#60a5fa' : '#2563eb';
+  const barFill = '#fef3c7';
+  const barStroke = '#d97706';
+  const skinFill = 'rgba(245,158,11,0.18)';
+  const textFill = '#64748b';
+  const dimColor = '#2563eb';
 
   let html = '';
 
@@ -954,8 +938,8 @@ function renderSVG(r) {
     // Support Clamps (gripping vertical edges at top/bottom)
     const clampH = 8;
     const overlap = 4;
-    const clampColor = isDark ? '#475569' : '#94a3b8';
-    const clampStroke = isDark ? '#334155' : '#64748b';
+    const clampColor = '#94a3b8';
+    const clampStroke = '#64748b';
     html += `<rect x="${ox - 10}" y="${oy - clampH + overlap}" width="${totalW + 20}" height="${clampH}" fill="${clampColor}" stroke="${clampStroke}" stroke-width="1" rx="2" opacity="0.85"/>`;
     html += `<rect x="${ox - 10}" y="${oy + bH - overlap}" width="${totalW + 20}" height="${clampH}" fill="${clampColor}" stroke="${clampStroke}" stroke-width="1" rx="2" opacity="0.85"/>`;
     html += `<text x="${ox + totalW/2}" y="${oy - clampH - 2}" text-anchor="middle" font-size="8" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif" font-weight="700" letter-spacing="0.5">INSULATOR CLAMP (EDGE-MOUNTED)</text>`;
@@ -1012,8 +996,8 @@ function renderSVG(r) {
     // Support Clamps (gripping top and bottom flat horizontal faces of stack)
     const clampH = 8;
     const overlap = 4;
-    const clampColor = isDark ? '#475569' : '#94a3b8';
-    const clampStroke = isDark ? '#334155' : '#64748b';
+    const clampColor = '#94a3b8';
+    const clampStroke = '#64748b';
     html += `<rect x="${ox - 10}" y="${oy - clampH + overlap}" width="${bW + 20}" height="${clampH}" fill="${clampColor}" stroke="${clampStroke}" stroke-width="1" rx="2" opacity="0.85"/>`;
     html += `<rect x="${ox - 10}" y="${oy + totalH - overlap}" width="${bW + 20}" height="${clampH}" fill="${clampColor}" stroke="${clampStroke}" stroke-width="1" rx="2" opacity="0.85"/>`;
     html += `<text x="${ox + bW/2}" y="${oy - clampH - 2}" text-anchor="middle" font-size="8" fill="${textFill}" font-family="Plus Jakarta Sans,sans-serif" font-weight="700" letter-spacing="0.5">INSULATOR CLAMP (FLAT-MOUNTED)</text>`;
@@ -1315,7 +1299,7 @@ function calculate() {
       // just re-rendered, fine
     }
 
-    showToast(`Calculated: ${fmt(r.I_total,0)} A continuous · ${fmt(r.I_withstand/1000,1)} kA SC`);
+    showToast(`Calculated: ${fmt(r.I_total,0)} A continuous · ${fmt(r.I_withstand/1000,1)} kA`);
   } catch(e) {
     console.error(e);
     showToast('Calculation error — check inputs');
@@ -1337,30 +1321,12 @@ document.querySelectorAll('.main-tab').forEach(btn => {
 // ================================================================
 //  AUTO-CALC on input changes
 // ================================================================
+// ================================================================
 document.querySelectorAll('input[type=number], select').forEach(el => {
   el.addEventListener('change', calculate);
   el.addEventListener('input', calculate);
 });
 $('calc-btn').addEventListener('click', calculate);
-
-// ================================================================
-//  THEME
-// ================================================================
-$('theme-toggle').addEventListener('click', () => {
-  const isDark = document.documentElement.classList.contains('dark') || 
-                 document.documentElement.getAttribute('data-theme') === 'dark';
-  const next = isDark ? 'light' : 'dark';
-  if (next === 'dark') {
-    document.documentElement.classList.add('dark');
-    document.documentElement.setAttribute('data-theme', 'dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-    document.documentElement.setAttribute('data-theme', 'light');
-  }
-  localStorage.setItem('theme', next);
-  // Re-render SVG with new colours
-  try { renderSVG(runCalc()); } catch(e) {}
-});
 
 // AC/DC toggle — disable frequency select when DC
 $('inp-acdc').addEventListener('change', () => {
@@ -1443,7 +1409,7 @@ window.projectManagerConfig = {
 window.shareLink = function() {
   try {
     const configData = getInputsConfig();
-    const serialized = btoa(JSON.stringify(configData));
+    const serialized = (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
     const url = new URL(window.location.href);
     url.searchParams.set('design', serialized);
     
@@ -1499,7 +1465,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const design = urlParams.get('design');
 if (design) {
   try {
-    const decoded = JSON.parse(atob(design));
+    const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
     setInputsConfig(decoded);
   } catch (err) {
     console.error("Failed to load design from URL:", err);

@@ -12,7 +12,6 @@ The toolkit runs entirely client-side as a static site with optional user authen
 
 - **Centralized Project Manager** — Unified slide-out Projects Drawer to save, search, delete, and cross-load designs.
 - **Firebase Authentication** — Multi-provider sign-in (Email/Password and Google OAuth) with Firestore database rules protecting user data.
-- **Theme Sync** — Global Light ↔ Dark mode synced across all tool pages via `localStorage`.
 - **Open Suggestion Portal** — Built-in workflow for requesting new engineering utilities.
 - **SEO & Social-Ready** — Structured schema metadata, sitemaps, and Open Graph previews.
 
@@ -35,6 +34,7 @@ The toolkit runs entirely client-side as a static site with optional user authen
 | [**Interactive Time Planner**](tools/timezone-converter/) | General Utility | Multi-timezone alignment layout with visual daylight/night/work segments, horizontal continuous gradients, and JDN/Julian conversions. |
 | [**MCC Feeder & Starter Designer**](tools/mcc-feeder-designer/) | Electrical / Control | Design Motor Control Center Single Line Diagrams. Drag & drop DOL starters, VFDs, soft starters, and cables with real-time sizing calculations. |
 | [**MOSFET Power Loss Calculator**](tools/mosfet-power-loss/) | Electrical / Thermo | Physics-based semiconductor power loss modeler. Calculate and compare conduction, switching, gate charge, dead-time, and Coss losses side-by-side for multiple devices. |
+| [**Risk Management Dashboard**](tools/risk-management/) | Management / Quality | Capture, score, and visualise project risks with heat-map, category filters, top-5 view, and weekly trend charts. Cloud sync for signed-in users. |
 
 ---
 
@@ -45,13 +45,13 @@ engineering-toolkit/
 ├── index.html                # Hub / dashboard
 ├── css/
 │   ├── style.css             # Shared global design system (tokens, components)
-│   └── theme.css             # Theme variables (light/dark colors)
+│   └── theme.css             # Shared design tokens
 ├── js/
 │   ├── firebase.js           # Firebase app init & Firestore CRUD operations
 │   ├── auth-ui.js            # Injected sign-in/up modal & styling
 │   ├── project-manager.js    # Slide-out saved project list drawer
 │   ├── tools-data.js         # Single source of truth for tool registry
-│   └── app.js                # Dashboard search, filtering, and theme toggle
+│   └── app.js                # Dashboard search and filtering
 ├── tools/                    # Tool subdirectories (HTML, Local CSS, JS)
 │   ├── beam-calculator/
 │   ├── busbar-sizing/
@@ -63,6 +63,7 @@ engineering-toolkit/
 │   ├── mcc-feeder-designer/
 │   ├── mosfet-power-loss/
 │   ├── plot-extractor/
+│   ├── risk-management/
 │   ├── timezone-converter/
 │   ├── unit-converter/
 │   └── wire-gauge/

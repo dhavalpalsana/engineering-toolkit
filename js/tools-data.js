@@ -2,7 +2,7 @@
  * tools-data.js — Single source of truth for all tools in the registry.
  * Add, remove, or update tools here. registry.js reads this array.
  *
- * Statuses: "active" | "coming-soon"
+ * Statuses: "active" | "beta" | "coming-soon"
  */
 const TOOLS_DATA = [
   {
@@ -40,7 +40,7 @@ const TOOLS_DATA = [
     name: "Busbar Capacity Calculator",
     description: "Full physics-based busbar design: thermal current capacity (CDA method), AC skin effect, multi-bar derating, IEC 60865-1 short-circuit rating, mechanical deflection, and voltage drop. Copper and aluminium.",
     tags: ["electrical", "busbar", "copper", "aluminium", "switchgear", "short-circuit", "IEC", "thermal"],
-    icon: "layers",
+    icon: "busbar",
     path: "./tools/busbar-sizing/index.html",
     status: "active",
     releaseDate: "2026-07-06T12:00:00Z"
@@ -60,9 +60,10 @@ const TOOLS_DATA = [
     name: "MOSFET Power Loss Calculator & Comparator",
     description: "Physics-based semiconductor power loss modeler. Calculate and compare conduction, switching, gate charge, dead-time, and Coss losses side-by-side for multiple devices.",
     tags: ["electrical", "semiconductor", "power-electronics", "mosfet", "thermal", "efficiency"],
-    icon: "cpu",
+    icon: "mosfet",
     path: "./tools/mosfet-power-loss/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-14T16:00:00Z"
   },
   {
     id: "plot-extractor",
@@ -109,7 +110,7 @@ const TOOLS_DATA = [
     name: "MCC Feeder & Motor Starter Designer",
     description: "Design Single Line Diagrams of Motor Control Centers. Drag & drop DOL starters, VFDs, soft starters, and cables, with real-time automatic sizing and compliance checks.",
     tags: ["electrical", "mcc", "motor", "vfd", "dol", "cable", "sizing", "schematic"],
-    icon: "grid",
+    icon: "grid-3x3",
     path: "./tools/mcc-feeder-designer/index.html",
     status: "beta",
     releaseDate: "2026-07-10T14:00:00Z"
@@ -131,7 +132,7 @@ const TOOLS_DATA = [
     tags: ["mechanical", "thermal", "heatsink", "simulation", "heat-transfer", "cfd"],
     icon: "thermometer",
     path: "./tools/heatsink-simulator/index.html",
-    status: "beta",
+    status: "active",
     releaseDate: "2026-07-09T03:00:00Z"
   },
   {
@@ -153,5 +154,16 @@ const TOOLS_DATA = [
     path: "./tools/pressure-drop/index.html",
     status: "coming-soon",
     releaseDate: "2026-07-01T12:00:00Z"
+  },
+  {
+    id: "risk-management",
+    name: "Risk Management Dashboard",
+    description: "Capture, score and visualise project risks. Heat‑map, category view, top‑5 risks and weekly trends.",
+    tags: ["management", "risk", "analytics", "heatmap"],
+    icon: "shield-alert",
+    path: "./tools/risk-management/index.html",
+    status: "beta",
+    releaseDate: "2026-07-14T12:00:00Z"
   }
+
 ];

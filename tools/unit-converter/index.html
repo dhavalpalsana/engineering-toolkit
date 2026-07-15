@@ -1,30 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script>
-    (function() {
-      const savedTheme = localStorage.getItem('theme') || 'light';
-      if (savedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.setAttribute('data-theme', 'light');
-      }
-    })();
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Engineering Unit Converter — Engineering Toolkit</title>
   <meta name="description" content="Instantly convert between 23 categories of engineering units: pressure, torque, temperature, energy, power, viscosity, thermal conductivity, velocity, volume flow, and more.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://dhavalpalsana.github.io/engineering-toolkit/tools/unit-converter/">
+  <meta property="og:url" content="https://eng-toolkit.web.app/tools/unit-converter/">
   <meta property="og:title" content="Engineering Unit Converter — Engineering Toolkit">
   <meta property="og:description" content="23 categories of engineering unit conversions. Pressure, Torque, Temperature, Energy, Power, Viscosity, Thermal Conductivity, and more. Instant bidirectional with copy-to-clipboard.">
-  <meta property="og:image" content="https://dhavalpalsana.github.io/engineering-toolkit/assets/og-image.png">
+  <meta property="og:image" content="https://eng-toolkit.web.app/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Engineering Unit Converter — Engineering Toolkit">
-  <meta name="twitter:image" content="https://dhavalpalsana.github.io/engineering-toolkit/assets/og-image.png">
+  <meta name="twitter:image" content="https://eng-toolkit.web.app/assets/og-image.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../css/theme.css">
@@ -38,9 +26,6 @@
       --accent-glow: var(--accent-primary-glow);
       --radius-xl: var(--radius-lg);
       --transition: var(--transition-normal);
-    }
-    [data-theme="dark"] {
-      --accent-glow: var(--accent-primary-glow);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -231,9 +216,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/tools-data.js"></script>
+  <script src="../../js/registry.js"></script>
+  <script src="../../js/tool-shell.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="https://unpkg.com/lucide@0.460.0"></script>
   <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="../../css/tool-shell.css">
 </head>
 <body>
   <header>
@@ -255,10 +244,7 @@
           <i data-lucide="user"></i>
           <span id="auth-btn-text">Sign In</span>
         </button>
-        <button class="hdr-icon-btn" id="theme-toggle" aria-label="Toggle theme">
-          <i data-lucide="moon" class="moon-icon"></i>
-          <i data-lucide="sun" class="sun-icon"></i>
-        </button>
+
       </div>
     </div>
   </header>
@@ -1055,21 +1041,6 @@
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 2800);
   }
-
-  // Theme
-  document.getElementById('theme-toggle').addEventListener('click', () => {
-    const isDark = document.documentElement.classList.contains('dark') || 
-                   document.documentElement.getAttribute('data-theme') === 'dark';
-    const next = isDark ? 'light' : 'dark';
-    if (next === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.setAttribute('data-theme', 'light');
-    }
-    localStorage.setItem('theme', next);
-  });
 
   // ============================================================
   //  Init

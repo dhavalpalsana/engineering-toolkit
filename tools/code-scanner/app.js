@@ -36,6 +36,44 @@ document.addEventListener("DOMContentLoaded", () => {
     lucide.createIcons();
   }
 
+  const isCameraSupported = () => {
+    return window.isSecureContext &&
+      !!navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === "function";
+  };
+
+  const setCameraSelectMessage = (message) => {
+    cameraSelect.innerHTML = "";
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = message;
+    cameraSelect.appendChild(option);
+    activeCameraId = "";
+  };
+
+  const setStartButtonState = (icon, text, disabled = false) => {
+    toggleCameraBtn.disabled = disabled;
+    toggleCameraBtn.innerHTML = `<i data-lucide="${icon}"></i> ${text}`;
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  };
+
+  const getCameraErrorMessage = (err) => {
+    const name = err && err.name ? err.name : "";
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      return "Camera access was denied. Allow permission and try again.";
+    }
+    if (name === "NotFoundError" || name === "OverconstrainedError") {
+      return "No usable camera was found on this device.";
+    }
+    if (name === "NotReadableError" || name === "AbortError") {
+      return "Camera is already in use or could not be opened.";
+    }
+    if (name === "TypeError") {
+      return "This browser does not support camera access in the current context.";
+    }
+    return "Could not open the camera stream.";
+  };
+
   // ── Tab Management ───────────────────────────────────────────
   tabButtons.forEach(btn => {
     btn.addEventListener("click", () => {
@@ -88,24 +126,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const initCameras = () => {
     if (typeof Html5Qrcode === "undefined") {
-      cameraSelect.innerHTML = `<option value="">Scanner library not loaded</option>`;
+      setCameraSelectMessage("Scanner library not loaded");
+      setStartButtonState("play", "Start Scanner", true);
+      viewfinderPlaceholder.querySelector("p").textContent = "Camera scanning is unavailable right now.";
       return;
     }
 
-    // Try to list cameras without triggering a prompt first. If browser blocks/gives empty list, we don't disable button
+    if (!isCameraSupported()) {
+      setCameraSelectMessage("Camera access requires HTTPS");
+      setStartButtonState("play", "Start Scanner", true);
+      viewfinderPlaceholder.querySelector("p").textContent = "Open this tool over HTTPS to enable camera access.";
+      return;
+    }
+
+    // Try to list cameras without triggering a prompt first.
     Html5Qrcode.getCameras()
       .then(devices => {
         if (devices && devices.length > 0) {
           populateCamerasDropdown(devices);
         } else {
-          cameraSelect.innerHTML = `<option value="">Access permission required</option>`;
-          activeCameraId = "";
+          setCameraSelectMessage("Start scanner to request permission");
         }
       })
       .catch(err => {
         console.warn("Camera check on load:", err);
-        cameraSelect.innerHTML = `<option value="">Access permission required</option>`;
-        activeCameraId = "";
+        setCameraSelectMessage("Start scanner to request permission");
       });
   };
 
@@ -163,13 +208,17 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const startCameraScanner = () => {
+    if (!isCameraSupported()) {
+      if (window.showToast) window.showToast("Camera access requires a secure HTTPS context.", false);
+      setStartButtonState("play", "Start Scanner", true);
+      return;
+    }
+
     // If activeCameraId is empty, it means we don't have camera permission yet or devices weren't queried
     if (!activeCameraId) {
-      toggleCameraBtn.disabled = true;
-      toggleCameraBtn.innerHTML = `<i data-lucide="loader"></i> Requesting access...`;
-      if (typeof lucide !== "undefined") lucide.createIcons();
+      setStartButtonState("loader", "Requesting access...", true);
 
-      navigator.mediaDevices.getUserMedia({ video: true })
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
         .then(stream => {
           // Stop stream immediately
           stream.getTracks().forEach(track => track.stop());
@@ -186,11 +235,9 @@ document.addEventListener("DOMContentLoaded", () => {
         })
         .catch(err => {
           console.error("Camera prompt error:", err);
-          if (window.showToast) window.showToast("Camera permission denied.", false);
-          cameraSelect.innerHTML = `<option value="">Access Denied</option>`;
-          toggleCameraBtn.disabled = false;
-          toggleCameraBtn.innerHTML = `<i data-lucide="play"></i> Start Scanner`;
-          if (typeof lucide !== "undefined") lucide.createIcons();
+          if (window.showToast) window.showToast(getCameraErrorMessage(err), false);
+          setCameraSelectMessage("Access denied");
+          setStartButtonState("play", "Start Scanner");
         });
       return;
     }
@@ -200,37 +247,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const stopCameraScanner = () => {
     return new Promise((resolve) => {
-      toggleCameraBtn.disabled = true;
-      toggleCameraBtn.innerHTML = `<i data-lucide="loader"></i> Closing...`;
-      if (typeof lucide !== "undefined") lucide.createIcons();
+      setStartButtonState("loader", "Closing...", true);
 
       if (html5QrCode && html5QrCode.isScanning) {
         html5QrCode.stop()
           .then(() => {
             isScanning = false;
-            toggleCameraBtn.disabled = false;
-            toggleCameraBtn.innerHTML = `<i data-lucide="play"></i> Start Scanner`;
+            setStartButtonState("play", "Start Scanner");
             readerElement.classList.add("hidden");
             readerElement.parentElement.classList.remove("scanning");
             viewfinderPlaceholder.classList.remove("hidden");
-            if (typeof lucide !== "undefined") lucide.createIcons();
             resolve();
           })
           .catch(err => {
             console.error("Error stopping scanner:", err);
-            toggleCameraBtn.disabled = false;
-            toggleCameraBtn.innerHTML = `<i data-lucide="play"></i> Start Scanner`;
-            if (typeof lucide !== "undefined") lucide.createIcons();
+            setStartButtonState("play", "Start Scanner");
             resolve();
           });
       } else {
         isScanning = false;
-        toggleCameraBtn.disabled = false;
-        toggleCameraBtn.innerHTML = `<i data-lucide="play"></i> Start Scanner`;
+        setStartButtonState("play", "Start Scanner");
         readerElement.classList.add("hidden");
         readerElement.parentElement.classList.remove("scanning");
         viewfinderPlaceholder.classList.remove("hidden");
-        if (typeof lucide !== "undefined") lucide.createIcons();
         resolve();
       }
     });
@@ -519,7 +558,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.shareLink = function() {
     try {
       const state = { history: scanHistory };
-      const serialized = btoa(JSON.stringify(state));
+      const serialized = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
       const url = new URL(window.location.href);
       url.searchParams.set("design", serialized);
       
@@ -555,7 +594,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let loadedFromUrl = false;
   if (designParam) {
     try {
-      const decoded = JSON.parse(atob(designParam));
+      const decoded = (window.decodeShareState ? window.decodeShareState(designParam) : JSON.parse(decodeURIComponent(escape(atob(designParam)))));
       window.projectManagerConfig.setInputs(decoded);
       loadedFromUrl = true;
     } catch (err) {

@@ -117,14 +117,6 @@ header {
   transition: border-color var(--transition-normal), background var(--transition-normal);
 }
 
-/* Ensure backdrop-filter works on dark theme */
-[data-theme="dark"] header {
-  background: rgba(15, 20, 34, 0.85);
-}
-[data-theme="light"] header {
-  background: rgba(255, 255, 255, 0.85);
-}
-
 .header-container {
   height: 72px;
   display: flex;
@@ -163,37 +155,7 @@ header {
   gap: 16px;
 }
 
-.theme-toggle {
-  background: none;
-  border: 1px solid var(--border-color);
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  transition: all var(--transition-fast);
-}
 
-.theme-toggle:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-.theme-toggle .sun-icon {
-  display: none;
-}
-
-[data-theme="dark"] .theme-toggle .sun-icon {
-  display: block;
-}
-
-[data-theme="dark"] .theme-toggle .moon-icon {
-  display: none;
-}
 
 #auth-btn {
   display: flex;
@@ -353,6 +315,96 @@ header {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px;
   transition: opacity var(--transition-normal);
+}
+
+/* Full-width maturity dividers between Active / Beta / Coming Soon */
+.tools-section-divider {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 8px 0 0;
+  padding: 4px 0;
+}
+
+.tools-section-divider::before,
+.tools-section-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.tools-section-divider--beta::before,
+.tools-section-divider--beta::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(245, 158, 11, 0.45),
+    transparent
+  );
+}
+
+.tools-section-divider--active::before,
+.tools-section-divider--active::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(16, 185, 129, 0.35),
+    transparent
+  );
+}
+
+.tools-section-divider--upcoming::before,
+.tools-section-divider--upcoming::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--border-color),
+    transparent
+  );
+}
+
+.tools-section-divider-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+.tools-section-divider-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.tools-section-divider--beta .tools-section-divider-label {
+  color: var(--color-warning, #f59e0b);
+}
+
+.tools-section-divider--active .tools-section-divider-label {
+  color: var(--success, #10b981);
+}
+
+.tools-section-divider-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: normal;
+  max-width: min(420px, 70vw);
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .tools-section-divider-sub {
+    max-width: 220px;
+  }
 }
 
 .tool-card {

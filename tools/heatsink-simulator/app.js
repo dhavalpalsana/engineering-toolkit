@@ -20,12 +20,13 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   let chips = [
-    { id: "chip-1", power: 45, width: 25, length: 25, x: 0, y: 0 } // positions relative to base center (mm)
+    { id: "chip-1", power: 45, width: 25, length: 25, x: 0, y: 0, maxTemp: 125 } // positions relative to base center (mm)
   ];
 
   let tim = {
     thickness: 100, // micrometers (0.1mm)
-    k: 5.0          // W/mK
+    k: 5.0,          // W/mK
+    preset: "custom"
   };
 
   let environment = {
@@ -68,6 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const chipsListContainer = document.getElementById("sources-list-container");
   const timThicknessInput = document.getElementById("tim-thickness");
   const timKInput = document.getElementById("tim-k");
+  const timPresetSelect = document.getElementById("tim-preset");
 
   const convectionMode = document.getElementById("convection-mode");
   const ambientTempInput = document.getElementById("ambient-temp");
@@ -176,6 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
     environment.emissivity = parseFloat(surfaceEmissivityInput.value) || 0.85;
     tim.thickness = parseFloat(timThicknessInput.value) || 100;
     tim.k = parseFloat(timKInput.value) || 5.0;
+    tim.preset = timPresetSelect ? timPresetSelect.value : "custom";
 
     // Update 3D model meshes
     update3DModel(environment.ambientTemp, environment.ambientTemp);
@@ -214,6 +217,10 @@ document.addEventListener("DOMContentLoaded", () => {
             <input type="number" class="form-input chip-power" data-id="${chip.id}" value="${chip.power}" min="1" max="500" />
           </div>
           <div class="form-group">
+            <label>Max Tj <span>(&deg;C)</span></label>
+            <input type="number" class="form-input chip-maxtemp" data-id="${chip.id}" value="${chip.maxTemp || 125}" min="30" max="250" />
+          </div>
+          <div class="form-group margin-top-6">
             <label>Size <span>(W x L - mm)</span></label>
             <input type="number" class="form-input chip-size" data-id="${chip.id}" value="${chip.width}" min="5" max="100" />
           </div>
@@ -248,6 +255,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const id = e.target.getAttribute("data-id");
         const match = chips.find(c => c.id === id);
         if (match) match.power = parseFloat(e.target.value) || 0;
+        updateCADGeometry();
+        document.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    });
+
+    document.querySelectorAll(".chip-maxtemp").forEach(input => {
+      input.addEventListener("change", (e) => {
+        const id = e.target.getAttribute("data-id");
+        const match = chips.find(c => c.id === id);
+        if (match) match.maxTemp = parseFloat(e.target.value) || 125;
         updateCADGeometry();
         document.dispatchEvent(new Event("change", { bubbles: true }));
       });
@@ -292,7 +309,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   addChipBtn.addEventListener("click", () => {
     const newId = `chip-${Date.now()}`;
-    chips.push({ id: newId, power: 30, width: 20, length: 20, x: 0, y: 0 });
+    chips.push({ id: newId, power: 30, width: 20, length: 20, x: 0, y: 0, maxTemp: 125 });
     renderChipsUI();
     updateCADGeometry();
     document.dispatchEvent(new Event("change", { bubbles: true }));
@@ -660,7 +677,8 @@ document.addEventListener("DOMContentLoaded", () => {
           role: "source",
           material: "custom",
           customK: 150, // silicon
-          power: chipData.power
+          power: chipData.power,
+          maxTemp: chipData.maxTemp || 125
         });
       });
 
@@ -901,6 +919,39 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  const timPresets = {
+    "paste-high": { k: 5.0, thickness: 50 },
+    "paste-std": { k: 2.0, thickness: 100 },
+    "pad-thin": { k: 1.5, thickness: 500 },
+    "pad-thick": { k: 3.0, thickness: 1000 },
+    "pcm": { k: 4.0, thickness: 40 },
+    "liquid-metal": { k: 70.0, thickness: 10 }
+  };
+
+  if (timPresetSelect) {
+    timPresetSelect.addEventListener("change", () => {
+      const val = timPresetSelect.value;
+      if (val !== "custom" && timPresets[val]) {
+        timThicknessInput.value = timPresets[val].thickness;
+        timKInput.value = timPresets[val].k;
+        tim.thickness = timPresets[val].thickness;
+        tim.k = timPresets[val].k;
+        tim.preset = val;
+        updateCADGeometry();
+        document.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+  }
+
+  if (timThicknessInput && timKInput && timPresetSelect) {
+    [timThicknessInput, timKInput].forEach(input => {
+      input.addEventListener("input", () => {
+        timPresetSelect.value = "custom";
+        tim.preset = "custom";
+      });
+    });
+  }
+
   const runSimBtn = document.getElementById("run-sim-btn");
   if (runSimBtn) {
     runSimBtn.addEventListener("click", () => {
@@ -1010,7 +1061,7 @@ document.addEventListener("DOMContentLoaded", () => {
         tim: tim,
         environment: environment
       };
-      const serialized = btoa(JSON.stringify(state));
+      const serialized = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
       const url = new URL(window.location.href);
       url.searchParams.set("design", serialized);
       
@@ -1059,6 +1110,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         timThicknessInput.value = tim.thickness;
         timKInput.value = tim.k;
+        if (timPresetSelect) {
+          timPresetSelect.value = tim.preset || "custom";
+        }
 
         convectionMode.value = environment.mode;
         if (environment.mode === "natural") {
@@ -1182,13 +1236,22 @@ document.addEventListener("DOMContentLoaded", () => {
         detailGrp.innerHTML = "";
         if (part.role === "source") {
           detailGrp.innerHTML = `
-            <div class="form-group">
-              <label style="font-size: 11px;">Heat Dissipation (W)</label>
-              <input type="number" class="form-input part-power-input" data-id="${part.id}" value="${part.power}" min="0.1" step="0.5" style="padding: 4px; font-size: 11px;" />
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div class="form-group">
+                <label style="font-size: 11px;">Heat Dissipation (W)</label>
+                <input type="number" class="form-input part-power-input" data-id="${part.id}" value="${part.power}" min="0.1" step="0.5" style="padding: 4px; font-size: 11px;" />
+              </div>
+              <div class="form-group">
+                <label style="font-size: 11px;">Max Tj (&deg;C)</label>
+                <input type="number" class="form-input part-maxtemp-input" data-id="${part.id}" value="${part.maxTemp || 125}" min="30" max="250" style="padding: 4px; font-size: 11px;" />
+              </div>
             </div>
           `;
           detailGrp.querySelector(".part-power-input").addEventListener("change", (e) => {
             part.power = parseFloat(e.target.value) || 0;
+          });
+          detailGrp.querySelector(".part-maxtemp-input").addEventListener("change", (e) => {
+            part.maxTemp = parseFloat(e.target.value) || 125;
           });
         }
         if (part.material === "custom") {
@@ -1256,7 +1319,8 @@ document.addEventListener("DOMContentLoaded", () => {
         material: "aluminum",
         customK: 200,
         customDensity: 2.7,
-        power: 30
+        power: 30,
+        maxTemp: 125
       };
     });
     
@@ -1572,7 +1636,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
       
+      let operatingFlowCFM = 0;
+      let operatingPressPa = 0;
       let hVal = 8.0;
+      
       if (environment.mode === "forced") {
         const W = cadMode ? size.x * 2 : heatsink.width;
         const L = cadMode ? size.z * 2 : heatsink.length;
@@ -1583,7 +1650,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const Dh = (2 * s * Hf) / (s + Hf || 1);
         const pMax = 45;
         const qMaxCFM = environment.fanAirflow;
-        let operatingFlowCFM = qMaxCFM;
+        operatingFlowCFM = qMaxCFM;
         let flowVelocity = 1.0;
         for (let flow = 0.5; flow <= qMaxCFM; flow += 0.5) {
           const qM3S = flow * 0.000471947;
@@ -1600,6 +1667,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (pressureDrop >= fanPressure) {
             operatingFlowCFM = flow;
             flowVelocity = vChannel;
+            operatingPressPa = pressureDrop;
             break;
           }
         }
@@ -1683,17 +1751,6 @@ document.addEventListener("DOMContentLoaded", () => {
           resTAirRise.textContent = "N/A";
         }
         
-        if (maxT > 105) {
-          statusBadge.className = "badge critical-badge";
-          statusBadge.textContent = "Critical";
-        } else if (maxT > 85) {
-          statusBadge.className = "badge warning-badge";
-          statusBadge.textContent = "Warning";
-        } else {
-          statusBadge.className = "badge active-badge";
-          statusBadge.textContent = "Normal";
-        }
-        
         document.getElementById("legend-min").textContent = `${Math.round(ambient)}°C`;
         document.getElementById("legend-max").textContent = `${Math.round(maxT)}°C`;
         
@@ -1738,31 +1795,84 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           
           if (part.role === "source") {
-            indTemps.push({ power: part.power, tJunc: vCount > 0 ? sumT / vCount : maxT });
+            let maxTempLimit = part.maxTemp || 125;
+            if (!cadMode) {
+              const chipIndex = parseInt(part.id.replace("procedural-source-", ""));
+              const chipData = chips[chipIndex];
+              if (chipData && chipData.maxTemp !== undefined) {
+                maxTempLimit = chipData.maxTemp;
+              }
+            }
+            const avgTemp = vCount > 0 ? sumT / vCount : maxT;
+            indTemps.push({ 
+              name: part.name,
+              power: part.power, 
+              tJunc: avgTemp,
+              maxTempLimit: maxTempLimit,
+              failed: avgTemp > maxTempLimit
+            });
           }
         });
         
+        // Status Badge Logic based on custom limits
+        const anyFailed = indTemps.some(item => item.failed);
+        const nearLimit = indTemps.some(item => !item.failed && (item.maxTempLimit - item.tJunc <= 15));
+        
+        if (indTemps.length > 0) {
+          if (anyFailed) {
+            statusBadge.className = "badge critical-badge";
+            statusBadge.textContent = "Critical";
+          } else if (nearLimit) {
+            statusBadge.className = "badge warning-badge";
+            statusBadge.textContent = "Warning";
+          } else {
+            statusBadge.className = "badge active-badge";
+            statusBadge.textContent = "Normal";
+          }
+        } else {
+          if (maxT > 105) {
+            statusBadge.className = "badge critical-badge";
+            statusBadge.textContent = "Critical";
+          } else if (maxT > 85) {
+            statusBadge.className = "badge warning-badge";
+            statusBadge.textContent = "Warning";
+          } else {
+            statusBadge.className = "badge active-badge";
+            statusBadge.textContent = "Normal";
+          }
+        }
+
         const sourcesTempList = document.getElementById("sources-temp-list");
         if (sourcesTempList) {
           sourcesTempList.innerHTML = "";
           indTemps.forEach((item, idx) => {
             const row = document.createElement("div");
             row.style.display = "flex";
-            row.style.justify = "space-between";
-            row.style.fontSize = "13px";
-            row.style.fontFamily = "var(--font-mono)";
-            row.style.color = "var(--text-primary)";
-            row.style.background = "var(--bg-tertiary)";
+            row.style.justifyContent = "space-between";
+            row.style.alignItems = "center";
+            row.style.fontSize = "12px";
+            row.style.background = item.failed ? "rgba(239, 68, 68, 0.15)" : "var(--bg-tertiary)";
+            row.style.borderLeft = item.failed ? "3px solid #ef4444" : "3px solid #0d9488";
             row.style.padding = "6px 12px";
             row.style.borderRadius = "var(--radius-sm)";
             row.style.marginTop = "4px";
             row.innerHTML = `
-              <span>Heat Source #${idx + 1} (${item.power}W)</span>
-              <strong>${item.tJunc.toFixed(1)} °C</strong>
+              <span style="color: var(--text-secondary); font-family: var(--font-sans);">${item.name} (${item.power}W)</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 10px; color: var(--text-muted); font-family: var(--font-sans);">Max: ${item.maxTempLimit}&deg;C</span>
+                <strong style="font-family: var(--font-mono); color: ${item.failed ? "#ef4444" : "var(--text-primary)"};">${item.tJunc.toFixed(1)} &deg;C</strong>
+                ${item.failed 
+                  ? `<span style="background: #ef4444; color: white; padding: 1px 4px; font-size: 9px; font-weight: 700; border-radius: var(--radius-sm); font-family: var(--font-sans);">FAIL</span>` 
+                  : `<span style="background: #0d9488; color: white; padding: 1px 4px; font-size: 9px; font-weight: 700; border-radius: var(--radius-sm); font-family: var(--font-sans);">OK</span>`
+                }
+              </div>
             `;
             sourcesTempList.appendChild(row);
           });
         }
+        
+        // Draw the fan curve matching chart
+        drawFanCurve(operatingFlowCFM, operatingPressPa);
       };
 
       const finalizeSimulation = () => {
@@ -2020,7 +2130,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let loadedFromUrl = false;
   if (designParam) {
     try {
-      const decoded = JSON.parse(atob(designParam));
+      const decoded = (window.decodeShareState ? window.decodeShareState(designParam) : JSON.parse(decodeURIComponent(escape(atob(designParam)))));
       window.projectManagerConfig.setInputs(decoded);
       loadedFromUrl = true;
     } catch (err) {

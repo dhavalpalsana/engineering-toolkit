@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script>
-        // Sync theme immediately to prevent flashing
-        (function() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            if (savedTheme === 'dark') {
-                document.documentElement.classList.add('dark');
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-                document.documentElement.setAttribute('data-theme', 'light');
-            }
-        })();
-    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dynamic Cable Thermal & Loss Solver — Engineering Toolkit</title>
@@ -36,6 +23,7 @@
     <link rel="stylesheet" href="../../css/tailwind.css">
     <link rel="stylesheet" href="../../css/theme.css">
     <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="../../css/tool-shell.css">
 
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@0.460.0"></script>
@@ -58,17 +46,6 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
-
-        /* Dark mode scrollbars */
-        .dark ::-webkit-scrollbar-track {
-            background: #090d16;
-        }
-        .dark ::-webkit-scrollbar-thumb {
-            background: #1e293b;
-        }
-        .dark ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
-        }
     </style>
     <!-- Firebase SDK compat -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -76,9 +53,12 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="../../js/firebase.js"></script>
     <script src="../../js/auth-ui.js"></script>
-    <script src="../../js/project-manager.js"></script>
+    <script src="../../js/tools-data.js"></script>
+  <script src="../../js/registry.js"></script>
+  <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/project-manager.js"></script>
 </head>
-<body class="bg-[#f8fafc] dark:bg-slate-950 text-[#0f172a] dark:text-slate-100 font-sans min-h-screen flex flex-col antialiased transition-colors duration-200">
+<body class="bg-[#f8fafc] text-[#0f172a] font-sans min-h-screen flex flex-col antialiased transition-colors duration-200">
 
     <!-- Header -->
     <header>
@@ -110,24 +90,21 @@
                 <button id="auth-btn" title="Sign In">
                     <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
                 </button>
-                <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
-                    <i data-lucide="moon" class="moon-icon"></i>
-                    <i data-lucide="sun" class="sun-icon"></i>
-                </button>
+        
             </div>
         </div>
     </header>
 
     <!-- Custom Alert Container -->
     <div id="alert-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 transform transition-all">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 transform transition-all">
             <div class="flex items-center gap-3 text-amber-600 mb-3">
                 <div class="bg-amber-50 p-2 rounded-full">
                     <i data-lucide="alert-triangle" class="w-6 h-6"></i>
                 </div>
-                <h3 class="text-lg font-bold text-slate-950 dark:text-white" id="alert-title">System Message</h3>
+                <h3 class="text-lg font-bold text-slate-950" id="alert-title">System Message</h3>
             </div>
-            <p class="text-slate-600 dark:text-slate-300 text-sm mb-6" id="alert-message">Details go here...</p>
+            <p class="text-slate-600 text-sm mb-6" id="alert-message">Details go here...</p>
             <div class="flex justify-end">
                 <button onclick="closeAlert()" class="bg-slate-950 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-2 rounded-xl transition-colors">
                     Acknowledge
@@ -143,36 +120,36 @@
         <section class="lg:col-span-5 space-y-4">
             
             <!-- Quickstart Presets Section (Collapsible details) -->
-            <details class="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden" open>
-                <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 list-none select-none [&::-webkit-details-marker]:hidden">
+            <details class="group bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" open>
+                <summary class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 list-none select-none [&::-webkit-details-marker]:hidden">
                     <div class="flex items-center gap-2">
                         <span class="text-teal-600"><i data-lucide="library" class="w-5 h-5"></i></span>
-                        <h2 class="font-bold text-slate-900 dark:text-white text-sm md:text-base">Solver Setup Presets</h2>
+                        <h2 class="font-bold text-slate-900 text-sm md:text-base">Solver Setup Presets</h2>
                     </div>
                     <div class="text-slate-400 group-open:rotate-180 transition-transform duration-200">
                         <i data-lucide="chevron-down" class="w-5 h-5"></i>
                     </div>
                 </summary>
-                <div class="p-4 pt-0 space-y-2 border-t border-slate-100 dark:border-slate-800">
+                <div class="p-4 pt-0 space-y-2 border-t border-slate-100">
                     <div class="grid grid-cols-1 gap-2 mt-3">
-                        <button onclick="applyPreset('automotiveStarter')" class="text-left py-2 px-3 hover:bg-teal-50/50 dark:hover:bg-teal-950/20 border border-slate-100 dark:border-slate-800 hover:border-teal-200 dark:hover:border-teal-800/50 rounded-xl text-xs transition-all flex items-center justify-between">
+                        <button onclick="applyPreset('automotiveStarter')" class="text-left py-2 px-3 hover:bg-teal-50/50 border border-slate-100 hover:border-teal-200 rounded-xl text-xs transition-all flex items-center justify-between">
                             <div>
-                                <p class="font-bold text-slate-800 dark:text-slate-200">Automotive 12V High-Current Starter</p>
-                                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-medium">150A DC, Spliced 2 AWG to 4 AWG, Conduit</p>
+                                <p class="font-bold text-slate-800">Automotive 12V High-Current Starter</p>
+                                <p class="text-[10px] text-slate-400 font-medium">150A DC, Spliced 2 AWG to 4 AWG, Conduit</p>
                             </div>
                             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
                         </button>
-                        <button onclick="applyPreset('aerospaceSignal')" class="text-left py-2 px-3 hover:bg-teal-50/50 dark:hover:bg-teal-950/20 border border-slate-100 dark:border-slate-800 hover:border-teal-200 dark:hover:border-teal-800/50 rounded-xl text-xs transition-all flex items-center justify-between">
+                        <button onclick="applyPreset('aerospaceSignal')" class="text-left py-2 px-3 hover:bg-teal-50/50 border border-slate-100 hover:border-teal-200 rounded-xl text-xs transition-all flex items-center justify-between">
                             <div>
-                                <p class="font-bold text-slate-800 dark:text-slate-200">Aerospace 28V Low-Current Signal Harness</p>
-                                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-medium">3A DC, Spliced 24 AWG to 26 AWG, Pure Teflon</p>
+                                <p class="font-bold text-slate-800">Aerospace 28V Low-Current Signal Harness</p>
+                                <p class="text-[10px] text-slate-400 font-medium">3A DC, Spliced 24 AWG to 26 AWG, Pure Teflon</p>
                             </div>
                             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
                         </button>
-                        <button onclick="applyPreset('industrial3p')" class="text-left py-2 px-3 hover:bg-teal-50/50 dark:hover:bg-teal-950/20 border border-slate-100 dark:border-slate-800 hover:border-teal-200 dark:hover:border-teal-800/50 rounded-xl text-xs transition-all flex items-center justify-between">
+                        <button onclick="applyPreset('industrial3p')" class="text-left py-2 px-3 hover:bg-teal-50/50 border border-slate-100 hover:border-teal-200 rounded-xl text-xs transition-all flex items-center justify-between">
                             <div>
-                                <p class="font-bold text-slate-800 dark:text-slate-200">Industrial 480V 3Φ AC Motor Feeder</p>
-                                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-medium">45A AC, Spliced 10 mm² to 6 mm² Aluminium, THHN</p>
+                                <p class="font-bold text-slate-800">Industrial 480V 3Φ AC Motor Feeder</p>
+                                <p class="text-[10px] text-slate-400 font-medium">45A AC, Spliced 10 mm² to 6 mm² Aluminium, THHN</p>
                             </div>
                             <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
                         </button>
@@ -181,14 +158,14 @@
             </details>
 
             <!-- 1. Electrical Load Parameters -->
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-4">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
                 <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
                     <span class="text-teal-600"><i data-lucide="activity" class="w-5 h-5"></i></span>
-                    <h2 class="font-bold text-slate-900 dark:text-white">1. Electrical Load Parameters</h2>
+                    <h2 class="font-bold text-slate-900">1. Electrical Load Parameters</h2>
                 </div>
                 
                 <div class="space-y-2">
-                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">System Phase Configuration</label>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">System Phase Configuration</label>
                     <div class="grid grid-cols-3 gap-2" id="phase-group">
                         <button onclick="setPhase('dc')" id="phase-dc" class="py-2 px-3 border-2 border-teal-600 bg-teal-50 text-teal-700 font-bold rounded-xl text-sm transition-all shadow-sm">
                             DC
@@ -204,39 +181,39 @@
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Source Voltage (V)</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Source Voltage (V)</label>
                         <input id="voltage-input" type="number" step="any" min="0.0001" value="12.0" oninput="triggerCalculate()"
-                               class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+                               class="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Load Current (A)</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Load Current (A)</label>
                         <input id="current-input" type="number" step="any" min="0.0001" value="1.0" oninput="triggerCalculate()"
-                               class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+                               class="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
                     </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Power Factor (cos θ)</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Power Factor (cos θ)</label>
                         <input id="pf-input" type="number" step="0.01" min="0.1" max="1.0" value="1.0" disabled oninput="triggerCalculate()"
                                class="w-full bg-slate-50 border border-slate-200 text-slate-400 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none disabled:opacity-60" />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Max Allowable Drop (%)</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Max Allowable Drop (%)</label>
                         <input id="vdrop-limit-input" type="number" step="0.1" min="0.1" max="20.0" value="3.0" oninput="triggerCalculate()"
-                               class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+                               class="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
                     </div>
                 </div>
 
-                <div class="flex items-center justify-between gap-4 pt-2 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800/60">
+                <div class="flex items-center justify-between gap-4 pt-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
                     <div>
-                        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                        <p id="total-dist-display" class="text-lg font-extrabold text-teal-600 dark:text-teal-400 font-mono">0.00</p>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <p id="total-dist-display" class="text-lg font-extrabold text-teal-600 font-mono">0.00</p>
                     </div>
                     <div class="w-1/2">
-                        <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Unit</label>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Unit</label>
                         <select id="dist-unit-select" onchange="triggerCalculate()"
-                                class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-lg px-2 py-1 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                class="w-full bg-white border border-slate-200 text-slate-900 rounded-lg px-2 py-1 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <option value="ft">Feet (ft)</option>
                             <option value="m">Meters (m)</option>
                             <option value="mm" selected>Millimeters (mm)</option>
@@ -246,25 +223,25 @@
             </div>
 
             <!-- 2. Conductor Material & Segments -->
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-4">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
                 <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
                     <span class="text-teal-600"><i data-lucide="layers" class="w-5 h-5"></i></span>
-                    <h2 class="font-bold text-slate-900 dark:text-white">2. Conductor Material & Segments</h2>
+                    <h2 class="font-bold text-slate-900">2. Conductor Material & Segments</h2>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Conductor Metal</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Conductor Metal</label>
                         <select id="material-select" onchange="triggerCalculate()"
-                                class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                class="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <option value="copper">Copper (Cu)</option>
                             <option value="aluminum">Aluminum (Al)</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Insulation Preset</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Insulation Preset</label>
                         <select id="insulation-select" onchange="onInsulationChanged()"
-                                class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                class="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <!-- Populated by JS -->
                         </select>
                     </div>
@@ -272,32 +249,32 @@
 
                 <div class="flex items-center gap-2 mt-2">
                     <input type="checkbox" id="double-length-cb" checked onchange="triggerCalculate()"
-                           class="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-800 dark:bg-slate-950 cursor-pointer" />
-                    <label for="double-length-cb" class="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+                           class="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" />
+                    <label for="double-length-cb" class="text-xs font-medium text-slate-700 cursor-pointer">
                         Round-Trip Return Path Multiplier (2x)
                     </label>
                 </div>
 
                 <!-- Custom Insulation Parameters (Hidden by default) -->
-                <div id="custom-insulation-box" class="hidden bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
-                    <h3 class="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                <div id="custom-insulation-box" class="hidden bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-600 flex items-center gap-1">
                         <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Custom Insulation Spec
                     </h3>
                     <div class="grid grid-cols-3 gap-2">
                         <div>
-                            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Limit (°C)</label>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Limit (°C)</label>
                             <input id="custom-temp-input" type="number" value="105" min="40" max="300" oninput="triggerCalculate()"
-                                   class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-lg px-2 py-1 text-xs font-mono text-center" />
+                                   class="w-full bg-white border border-slate-200 text-slate-900 rounded-lg px-2 py-1 text-xs font-mono text-center" />
                         </div>
                         <div>
-                            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Thick. (mm)</label>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Thick. (mm)</label>
                             <input id="custom-thickness-input" type="number" step="0.1" value="0.8" min="0.05" max="10" oninput="triggerCalculate()"
-                                   class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-lg px-2 py-1 text-xs font-mono text-center" />
+                                   class="w-full bg-white border border-slate-200 text-slate-900 rounded-lg px-2 py-1 text-xs font-mono text-center" />
                         </div>
                         <div>
-                            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">k (W/m·K)</label>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">k (W/m·K)</label>
                             <input id="custom-k-input" type="number" step="0.01" value="0.17" min="0.01" max="5.0" oninput="triggerCalculate()"
-                                   class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-lg px-2 py-1 text-xs font-mono text-center" />
+                                   class="w-full bg-white border border-slate-200 text-slate-900 rounded-lg px-2 py-1 text-xs font-mono text-center" />
                         </div>
                     </div>
                 </div>
@@ -305,56 +282,56 @@
                 <!-- Segments Spliced Section -->
                 <div>
                     <div class="flex items-center justify-between mb-2">
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Spliced Conductor Segments</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Spliced Conductor Segments</label>
                         <span class="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Series Splices</span>
                     </div>
                     
                     <!-- Splicing Table Container -->
-                    <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-950">
+                    <div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
                         <table class="w-full text-left border-collapse" id="segments-table">
                             <thead>
-                                <tr class="bg-slate-100 dark:bg-slate-900 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                                <tr class="bg-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                                     <th class="py-1.5 px-3 w-1/4">Std</th>
                                     <th class="py-1.5 px-3">Size Gauge</th>
                                     <th class="py-1.5 px-3 w-1/4">Length</th>
                                     <th class="py-1.5 px-3 w-10 text-center"></th>
                                 </tr>
                             </thead>
-                            <tbody id="segments-body" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                            <tbody id="segments-body" class="divide-y divide-slate-100 bg-white">
                                 <!-- Dynamic JS Insertions -->
                             </tbody>
                         </table>
                     </div>
 
                     <!-- Add Segment Trigger Button -->
-                    <button onclick="addSegmentRow('AWG', 22, 1000.0)" class="mt-3 w-full border border-dashed border-teal-300 dark:border-teal-800/80 hover:border-teal-400 bg-teal-50/50 dark:bg-teal-950/10 hover:bg-teal-50 dark:hover:bg-teal-950/20 text-teal-600 dark:text-teal-400 hover:text-teal-700 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5">
+                    <button onclick="addSegmentRow('AWG', 22, 1000.0)" class="mt-3 w-full border border-dashed border-teal-300 hover:border-teal-400 bg-teal-50/50 hover:bg-teal-50 text-teal-600 hover:text-teal-700 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5">
                         <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Wire Segment Row
                     </button>
                 </div>
             </div>
 
             <!-- 3. Environmental Factors -->
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-4"
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4"
                 <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
                     <span class="text-teal-600"><i data-lucide="globe" class="w-5 h-5"></i></span>
-                    <h2 class="font-bold text-slate-900 dark:text-white">3. Environmental Factors</h2>
+                    <h2 class="font-bold text-slate-900">3. Environmental Factors</h2>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Installation Routing</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Installation Routing</label>
                         <select id="install-select" onchange="triggerCalculate()"
-                                class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                                class="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                             <!-- Populated by JS -->
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Ambient Temp</label>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ambient Temp</label>
                         <div class="flex gap-1.5">
                             <input id="ambient-temp-input" type="number" value="30" oninput="triggerCalculate()"
-                                   class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+                                   class="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-1.5 font-mono text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
                             <select id="ambient-unit-select" onchange="onAmbientUnitChanged()"
-                                    class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl px-2 text-sm focus:outline-none">
+                                    class="bg-white border border-slate-200 text-slate-900 rounded-xl px-2 text-sm focus:outline-none">
                                 <option value="C">°C</option>
                                 <option value="F">°F</option>
                             </select>
@@ -370,45 +347,45 @@
             <!-- Dynamic Realtime KPI Cards Grid -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <!-- Card 1: Thermal Bottleneck -->
-                <div id="kpi-temp-card" class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex flex-col justify-between">
+                <div id="kpi-temp-card" class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all flex flex-col justify-between">
                     <div>
                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Thermal Bottleneck</p>
-                        <h3 id="kpi-temp-val" class="text-2xl font-extrabold text-slate-950 dark:text-white font-mono tracking-tight my-1">0.0 °C</h3>
+                        <h3 id="kpi-temp-val" class="text-2xl font-extrabold text-slate-950 font-mono tracking-tight my-1">0.0 °C</h3>
                     </div>
-                    <p id="kpi-temp-sub" class="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">--</p>
+                    <p id="kpi-temp-sub" class="text-xs text-slate-500 font-medium truncate">--</p>
                 </div>
 
                 <!-- Card 2: Total Voltage Drop -->
-                <div id="kpi-vdrop-card" class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex flex-col justify-between">
+                <div id="kpi-vdrop-card" class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all flex flex-col justify-between">
                     <div>
                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Voltage Drop</p>
-                        <h3 id="kpi-vdrop-val" class="text-2xl font-extrabold text-slate-950 dark:text-white font-mono tracking-tight my-1">0.00 %</h3>
+                        <h3 id="kpi-vdrop-val" class="text-2xl font-extrabold text-slate-950 font-mono tracking-tight my-1">0.00 %</h3>
                     </div>
-                    <p id="kpi-vdrop-sub" class="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">--</p>
+                    <p id="kpi-vdrop-sub" class="text-xs text-slate-500 font-medium truncate">--</p>
                 </div>
 
                 <!-- Card 3: Power Dissipated -->
-                <div id="kpi-ploss-card" class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex flex-col justify-between">
+                <div id="kpi-ploss-card" class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all flex flex-col justify-between">
                     <div>
                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Power Dissipation</p>
-                        <h3 id="kpi-ploss-val" class="text-2xl font-extrabold text-slate-950 dark:text-white font-mono tracking-tight my-1">0.00 W</h3>
+                        <h3 id="kpi-ploss-val" class="text-2xl font-extrabold text-slate-950 font-mono tracking-tight my-1">0.00 W</h3>
                     </div>
-                    <p id="kpi-ploss-sub" class="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">--</p>
+                    <p id="kpi-ploss-sub" class="text-xs text-slate-500 font-medium truncate">--</p>
                 </div>
             </div>
 
             <!-- Tabbed Analytical Console -->
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <!-- Navigation Tab Bar -->
-                <div class="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center overflow-x-auto">
-                    <button onclick="switchTab('dash')" id="tab-btn-dash" class="px-5 py-3 border-b-2 border-teal-600 dark:border-teal-400 text-teal-600 dark:text-teal-400 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5">
+                <div class="bg-slate-50 border-b border-slate-200 flex items-center overflow-x-auto">
+                    <button onclick="switchTab('dash')" id="tab-btn-dash" class="px-5 py-3 border-b-2 border-teal-600 text-teal-600 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5">
                         <i data-lucide="gauge" class="w-4 h-4"></i> Dashboard
                     </button>
-                    <button onclick="switchTab('trace')" id="tab-btn-trace" class="px-5 py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5">
+                    <button onclick="switchTab('trace')" id="tab-btn-trace" class="px-5 py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5">
                         <i data-lucide="search-code" class="w-4 h-4"></i> Solver Trace
                     </button>
 
-                    <button onclick="switchTab('theory')" id="tab-btn-theory" class="px-5 py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5">
+                    <button onclick="switchTab('theory')" id="tab-btn-theory" class="px-5 py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5">
                         <i data-lucide="book-open" class="w-4 h-4"></i> Physics
                     </button>
                 </div>
@@ -420,41 +397,41 @@
                     <div id="tab-panel-dash" class="space-y-6">
                         
                         <!-- NEW FEATURE: Interactive Dynamic SVG Splicing Heat Map Visualizer -->
-                        <div class="bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                        <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
                             <div class="flex items-center justify-between">
-                                <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                                     <i data-lucide="git-commit" class="w-4 h-4 text-teal-600"></i> Series Splicing Heat Map Diagram
                                 </h3>
-                                <span class="text-[9px] font-semibold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-1.5 py-0.5 rounded">
+                                <span class="text-[9px] font-semibold text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
                             </div>
                             <!-- Dynamic SVG Container -->
-                            <div id="svg-visualization-container" class="bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800/50 rounded-lg p-3 overflow-x-auto min-h-[140px] flex items-center justify-center">
+                            <div id="svg-visualization-container" class="bg-white border border-slate-100 rounded-lg p-3 overflow-x-auto min-h-[140px] flex items-center justify-center">
                                 <!-- Re-drawn dynamically on calculation -->
                             </div>
                         </div>
 
                         <!-- Operational Envelope Progress -->
-                        <div class="space-y-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl">
-                            <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                        <div class="space-y-4 bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
                                 <i data-lucide="shield-check" class="w-4 h-4"></i> Physical Operational Envelope Checks
                             </h3>
                             
                             <div class="space-y-1.5">
                                 <div class="flex items-center justify-between text-xs">
-                                    <span id="temp-progress-lbl" class="font-bold text-slate-600 dark:text-slate-400">Peak Thermal Limit</span>
-                                    <span id="temp-progress-val" class="font-mono font-bold text-slate-900 dark:text-slate-200">0%</span>
+                                    <span id="temp-progress-lbl" class="font-bold text-slate-600">Peak Thermal Limit</span>
+                                    <span id="temp-progress-val" class="font-mono font-bold text-slate-900">0%</span>
                                 </div>
-                                <div class="w-full bg-slate-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                                <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
                                     <div id="temp-progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
                                 </div>
                             </div>
 
                             <div class="space-y-1.5">
                                 <div class="flex items-center justify-between text-xs">
-                                    <span id="vdrop-progress-lbl" class="font-bold text-slate-600 dark:text-slate-400">Voltage Drop Budget</span>
-                                    <span id="vdrop-progress-val" class="font-mono font-bold text-slate-900 dark:text-slate-200">0%</span>
+                                    <span id="vdrop-progress-lbl" class="font-bold text-slate-600">Voltage Drop Budget</span>
+                                    <span id="vdrop-progress-val" class="font-mono font-bold text-slate-900">0%</span>
                                 </div>
-                                <div class="w-full bg-slate-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                                <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
                                     <div id="vdrop-progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
                                 </div>
                             </div>
@@ -462,13 +439,13 @@
 
                         <!-- NEW FEATURE: Detailed Spliced Segment Drop Breakdown -->
                         <div class="space-y-2">
-                            <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                                 <i data-lucide="percent" class="w-4 h-4 text-slate-500"></i> Individual Spliced Segment Losses
                             </h3>
-                            <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                            <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <table class="w-full text-left border-collapse text-xs">
                                     <thead>
-                                        <tr class="bg-slate-100 dark:bg-slate-900 font-bold text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-wider">
+                                        <tr class="bg-slate-100 font-bold text-slate-600 border-b border-slate-200 text-[10px] uppercase tracking-wider">
                                             <th class="py-2 px-3">Segment</th>
                                             <th class="py-2 px-3">Size</th>
                                             <th class="py-2 px-3 text-right">Length</th>
@@ -477,7 +454,7 @@
                                             <th class="py-2 px-3 text-right">Watts Dissipated</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="loss-breakdown-body" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900 font-mono">
+                                    <tbody id="loss-breakdown-body" class="divide-y divide-slate-100 bg-white font-mono">
                                         <!-- Populated dynamically -->
                                     </tbody>
                                 </table>
@@ -485,7 +462,7 @@
                         </div>
 
                         <!-- System Specs Output Block -->
-                        <div class="bg-slate-900 dark:bg-slate-950 text-slate-300 dark:text-slate-400 p-4 rounded-xl border border-slate-800 dark:border-slate-900 font-mono text-[11px] leading-relaxed relative overflow-hidden">
+                        <div class="bg-slate-900 text-slate-300 p-4 rounded-xl border border-slate-800 font-mono text-[11px] leading-relaxed relative overflow-hidden">
                             <div class="absolute -right-4 -bottom-4 opacity-5 pointer-events-none">
                                 <i data-lucide="database" class="w-24 h-24"></i>
                             </div>
@@ -500,15 +477,15 @@
                         <!-- Sizing Optimization Matrix -->
                         <div class="space-y-2">
                             <div class="flex items-center justify-between">
-                                <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                                     <i data-lucide="table" class="w-4 h-4"></i> Dynamic Sizing Optimization Matrix
                                 </h3>
-                                <span class="text-[10px] font-semibold text-slate-400 dark:text-slate-500">Iterative shifts applied to all sections</span>
+                                <span class="text-[10px] font-semibold text-slate-400">Iterative shifts applied to all sections</span>
                             </div>
-                            <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                            <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <table class="w-full text-left border-collapse text-xs">
                                     <thead>
-                                        <tr class="bg-slate-100 dark:bg-slate-900 font-bold text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-wider">
+                                        <tr class="bg-slate-100 font-bold text-slate-600 border-b border-slate-200 text-[10px] uppercase tracking-wider">
                                             <th class="py-2 px-3">Sizing Shift</th>
                                             <th class="py-2 px-3">Est Area Avg</th>
                                             <th class="py-2 px-3">Max Temp</th>
@@ -517,7 +494,7 @@
                                             <th class="py-2 px-3">Total Loss</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="opt-matrix-body" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900 font-mono">
+                                    <tbody id="opt-matrix-body" class="divide-y divide-slate-100 bg-white font-mono">
                                         <!-- Populated dynamically -->
                                     </tbody>
                                 </table>
@@ -528,15 +505,15 @@
                     <!-- TAB 2: Solver Trace -->
                     <div id="tab-panel-trace" class="hidden space-y-4">
                         <div class="flex items-center justify-between">
-                            <h3 class="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
+                            <h3 class="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                                 Mathematical Trace for Thermal Bottleneck Segment
                             </h3>
-                            <span class="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">Radial 1D Solver</span>
+                            <span class="text-[10px] font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Radial 1D Solver</span>
                         </div>
-                        <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                        <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                             <table class="w-full text-left border-collapse text-xs">
                                 <thead>
-                                    <tr class="bg-slate-100 dark:bg-slate-900 font-bold text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-wider">
+                                    <tr class="bg-slate-100 font-bold text-slate-600 border-b border-slate-200 text-[10px] uppercase tracking-wider">
                                         <th class="py-2 px-3">Step</th>
                                         <th class="py-2 px-3">Segment Temp</th>
                                         <th class="py-2 px-3">Resistivity (Ω·m)</th>
@@ -545,12 +522,12 @@
                                         <th class="py-2 px-3">Computed ΔT</th>
                                     </tr>
                                 </thead>
-                                <tbody id="trace-table-body" class="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900 font-mono">
+                                <tbody id="trace-table-body" class="divide-y divide-slate-100 bg-white font-mono">
                                     <!-- Log steps added programmatically -->
                                 </tbody>
                             </table>
                         </div>
-                        <div id="thermal-details-block" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 font-mono text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        <div id="thermal-details-block" class="bg-slate-50 border border-slate-200 rounded-xl p-4 font-mono text-xs text-slate-600 leading-relaxed">
                             Loading calculations trace...
                         </div>
                     </div>
@@ -559,7 +536,7 @@
 
                     <!-- TAB 4: Physics -->
                     <div id="tab-panel-theory" class="hidden space-y-4 overflow-y-auto max-h-[500px] pr-2">
-                        <h3 class="font-bold text-teal-600 dark:text-teal-400 text-lg">Physics & Mathematics of Coupled Cable States</h3>
+                        <h3 class="font-bold text-teal-600 text-lg">Physics & Mathematics of Coupled Cable States</h3>
                         <p class="text-xs text-slate-600 leading-relaxed">
                             Calculators often assume constant resistances at pre-set temperatures. Standard loads generate internal 
                             Joule heating which alters wire resistance. This application runs an iterative solver using 1D Radial Thermodynamics 
@@ -567,11 +544,11 @@
                         </p>
                         
                         <div class="space-y-2">
-                            <h4 class="font-bold text-slate-800 dark:text-slate-200 text-sm">1. Electrodynamics & Thermal Coupling</h4>
+                            <h4 class="font-bold text-slate-800 text-sm">1. Electrodynamics & Thermal Coupling</h4>
                             <p class="text-xs text-slate-600 leading-relaxed">
                                 Metals experience increased resistance as free electron collisions rise under temperature:
                             </p>
-                            <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-3 font-mono text-xs text-teal-600 dark:text-teal-400">
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 font-mono text-xs text-teal-600">
                                 R(T) = R<sub>20</sub> [1 + α (T - 20)]
                             </div>
                             <p class="text-xs text-slate-500 leading-relaxed">
@@ -580,18 +557,18 @@
                         </div>
 
                         <div class="space-y-2">
-                            <h4 class="font-bold text-slate-800 dark:text-slate-200 text-sm">2. Radial Heat Dissipation Path</h4>
+                            <h4 class="font-bold text-slate-800 text-sm">2. Radial Heat Dissipation Path</h4>
                             <p class="text-xs text-slate-600 leading-relaxed">
                                 Heat generated is defined as P = I<sup>2</sup>R. The heat flow traverses insulation conduction and ambient air/conduit convection/radiation:
                             </p>
-                            <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-3 font-mono text-xs text-teal-600 dark:text-teal-400 space-y-1">
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 font-mono text-xs text-teal-600 space-y-1">
                                 <div>R<sub>insulation</sub> = ln(D<sub>outer</sub> / d<sub>cond</sub>) / (2π · k<sub>insulation</sub>)</div>
                                 <div>R<sub>convection</sub> = 1 / (h · π · D<sub>outer</sub>)</div>
                             </div>
                         </div>
 
                         <div class="space-y-2">
-                            <h4 class="font-bold text-slate-800 dark:text-slate-200 text-sm">3. Multi-Segment System Assembly</h4>
+                            <h4 class="font-bold text-slate-800 text-sm">3. Multi-Segment System Assembly</h4>
                             <p class="text-xs text-slate-600 leading-relaxed">
                                 For systems with multiple spliced wire gauges, the solver calculates local heat dissipation characteristics for each 
                                 segment individually. It aggregates the total electrical impedance arrays for global voltage drops, and extracts the 

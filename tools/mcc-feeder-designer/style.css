@@ -13,13 +13,6 @@
   --terminal-out: #10b981;
 }
 
-[data-theme="dark"] :root {
-  --grid-color: rgba(51, 65, 85, 0.4);
-  --node-bg: #1e293b;
-  --node-border: #334155;
-  --node-selected: #0d9488;
-}
-
 body {
   margin: 0;
   padding: 0;

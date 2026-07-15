@@ -8,46 +8,28 @@
   <!-- Standardized CSS Links -->
   <link rel="stylesheet" href="../../css/theme.css">
   <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="../../css/tool-shell.css">
   <link rel="stylesheet" href="style.css">
   
   <!-- Inline theme initializer to prevent flickering -->
-  <script>
-    const savedTheme = localStorage.getItem("theme") || "light";
-    document.documentElement.setAttribute("data-theme", savedTheme);
-  </script>
   
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- RBush Spatial Indexing Library for fast snapping & selecting -->
   <script src="https://unpkg.com/rbush@3.0.1/rbush.min.js"></script>
 </head>
-<body>
+<body class="cad-tool-page">
 
-  <!-- Standardized Tool Header -->
-  <header>
+  <!-- Compact CAD header (subtitle hidden to maximize canvas) -->
+  <header class="cad-compact-header">
     <div class="hdr">
       <div class="hdr-left">
-        <!-- Standardized Back Button -->
         <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
         </a>
-        
-        <!-- Tool-Specific Icon (2D Drafting Compass/Square icon) -->
-        <div class="hdr-icon" style="color: var(--accent-primary);">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-dasharray="3 3" stroke-width="1.2" fill="none" opacity="0.65"></rect>
-            <line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="0.8" stroke-dasharray="6 2 2 2" opacity="0.45"></line>
-            <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="0.8" stroke-dasharray="6 2 2 2" opacity="0.45"></line>
-            <path d="M6 7 L6 16 L16 16 L16 12 L10 12 L10 7 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="none"></path>
-            <line x1="6" y1="19" x2="16" y2="19" stroke="currentColor" stroke-width="1"></line>
-            <path d="M8 17 L6 19 L8 21 M14 17 L16 19 L14 21" stroke="currentColor" stroke-width="1" fill="none"></path>
-          </svg>
-        </div>
-        
-        <!-- Titles -->
+        <div class="hdr-icon" style="color: var(--accent-primary);"></div>
         <div class="hdr-titles">
           <h1>2D Engineering Drafting Board</h1>
-          <p>Draft precision engineering parts, profiles, and annotations using a professional CAD interface.</p>
         </div>
       </div>
       
@@ -72,11 +54,6 @@
           <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
         </button>
         
-        <!-- Standard Theme Toggle -->
-        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
-          <i data-lucide="moon" class="moon-icon"></i>
-          <i data-lucide="sun" class="sun-icon"></i>
-        </button>
       </div>
     </div>
   </header>
@@ -88,15 +65,25 @@
       <div class="ribbon-tabs">
         <button id="tab-draw-btn" class="ribbon-tab-btn active" onclick="switchRibbonTab('draw')">Draw</button>
         <button id="tab-modify-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('modify')">Modify</button>
-        <button id="tab-insert-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('insert')">Blocks & Layers</button>
+        <button id="tab-annotate-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('annotate')">Annotation &amp; Utility</button>
+        <button id="tab-insert-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('insert')">Blocks &amp; Layers</button>
+        <button id="tab-export-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('export')">Export</button>
       </div>
       <div class="ribbon-panels">
         <!-- Draw Tab Panel -->
         <div id="panel-draw" class="ribbon-panel active">
           <div class="panel-group">
+            <div class="group-title">Select</div>
+            <div class="group-buttons">
+              <button id="tool-select-btn" class="tool-btn active" title="Select (Esc / V)" onclick="setEditorMode('select')">
+                <i data-lucide="mouse-pointer-2"></i> Select
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
             <div class="group-title">Shapes</div>
             <div class="group-buttons">
-              <button id="tool-draw-btn" class="tool-btn active" title="Line / Polyline (L)" onclick="setEditorMode('draw')">
+              <button id="tool-draw-btn" class="tool-btn" title="Line / Polyline (L)" onclick="setEditorMode('draw')">
                 <i data-lucide="pen-tool"></i> Line
               </button>
               <button id="tool-circle-btn" class="tool-btn" title="Circle (C)" onclick="setEditorMode('circle')">
@@ -110,20 +97,6 @@
               </button>
             </div>
           </div>
-          <div class="panel-group">
-            <div class="group-title">Annotation & Utility</div>
-            <div class="group-buttons">
-              <button id="tool-dimension-btn" class="tool-btn" title="Smart Dimension (D)" onclick="setEditorMode('dimension')">
-                <i data-lucide="scaling"></i> Smart Dim
-              </button>
-              <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (M)" onclick="setEditorMode('measure')">
-                <i data-lucide="ruler"></i> Measure
-              </button>
-              <button id="tool-pan-btn" class="tool-btn" title="Pan Mode (Shift+Click)" onclick="setEditorMode('pan')">
-                <i data-lucide="hand"></i> Pan
-              </button>
-            </div>
-          </div>
         </div>
         
         <!-- Modify Tab Panel -->
@@ -132,21 +105,81 @@
             <div class="group-title">Edit Geometry</div>
             <div class="group-buttons">
               <button id="tool-fillet-btn" class="tool-btn" title="Fillet Corner (F)" onclick="setEditorMode('fillet')">
-                <i data-lucide="corner-down-right"></i> Fillet Corner
+                <i data-lucide="corner-down-right"></i> Fillet
+              </button>
+              <button id="tool-trim-btn" class="tool-btn" title="Trim Geometry (T)" onclick="setEditorMode('trim')">
+                <i data-lucide="scissors"></i> Trim
+              </button>
+              <button id="tool-extend-btn" class="tool-btn" title="Extend (X)" onclick="setEditorMode('extend')">
+                <i data-lucide="move-horizontal"></i> Extend
+              </button>
+              <button id="tool-offset-btn" class="tool-btn" title="Offset (O)" onclick="setEditorMode('offset')">
+                <i data-lucide="copy-plus"></i> Offset
               </button>
             </div>
           </div>
           <div class="panel-group">
-            <div class="group-title">Operations</div>
+            <div class="group-title">Transform</div>
             <div class="group-buttons">
-              <button class="tool-btn" title="Close Polyline Shape" onclick="closeSketchShape()">
-                <i data-lucide="check-square"></i> Close Shape
+              <button id="tool-move-btn" class="tool-btn" title="Move (G)" onclick="setEditorMode('move')">
+                <i data-lucide="move"></i> Move
               </button>
-              <button class="tool-btn" title="Undo Last Segment Node (U)" onclick="undoSketchPoint()">
-                <i data-lucide="undo-2"></i> Undo Node
+              <button id="tool-copy-btn" class="tool-btn" title="Copy (Ctrl+C workflow / Y)" onclick="setEditorMode('copy')">
+                <i data-lucide="copy"></i> Copy
+              </button>
+              <button id="tool-rotate-btn" class="tool-btn" title="Rotate (Q)" onclick="setEditorMode('rotate')">
+                <i data-lucide="rotate-cw"></i> Rotate
+              </button>
+              <button id="tool-mirror-btn" class="tool-btn" title="Mirror (I)" onclick="setEditorMode('mirror')">
+                <i data-lucide="flip-horizontal-2"></i> Mirror
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">History</div>
+            <div class="group-buttons">
+              <button class="tool-btn" title="Undo (Ctrl+Z)" onclick="cadUndo()">
+                <i data-lucide="undo-2"></i> Undo
+              </button>
+              <button class="tool-btn" title="Redo (Ctrl+Y)" onclick="cadRedo()">
+                <i data-lucide="redo-2"></i> Redo
+              </button>
+              <button class="tool-btn" title="Close Polyline Shape" onclick="closeSketchShape()">
+                <i data-lucide="check-square"></i> Close
               </button>
               <button class="tool-btn" title="Clear Canvas Board" onclick="clearSketchCanvas()" style="color: #ef4444;">
-                <i data-lucide="trash-2"></i> Clear Board
+                <i data-lucide="trash-2"></i> Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Annotation & Utility Tab Panel -->
+        <div id="panel-annotate" class="ribbon-panel">
+          <div class="panel-group">
+            <div class="group-title">Smart Dimension</div>
+            <div class="group-buttons">
+              <button id="tool-dimension-btn" class="tool-btn" title="Smart Dimension (D) — line, two points, Ø / R on circle" onclick="setEditorMode('dimension')">
+                <i data-lucide="scaling"></i> Smart Dim
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">Radial</div>
+            <div class="group-buttons">
+              <button id="tool-dim-diameter-btn" class="tool-btn" title="Diameter dimension on circle" onclick="setEditorMode('dim-diameter')">
+                <i data-lucide="circle-dot"></i> Diameter
+              </button>
+              <button id="tool-dim-radius-btn" class="tool-btn" title="Radius dimension on circle" onclick="setEditorMode('dim-radius')">
+                <i data-lucide="circle"></i> Radius
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">Measure</div>
+            <div class="group-buttons">
+              <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (M)" onclick="setEditorMode('measure')">
+                <i data-lucide="ruler"></i> Measure
               </button>
             </div>
           </div>
@@ -180,6 +213,10 @@
               </select>
             </div>
           </div>
+        </div>
+
+        <!-- Export Tab Panel -->
+        <div id="panel-export" class="ribbon-panel">
           <div class="panel-group">
             <div class="group-title">Vector Exports</div>
             <div class="group-buttons">
@@ -188,6 +225,20 @@
               </button>
               <button class="tool-btn" onclick="exportDXFDrawing()" title="Export AutoCAD DXF file">
                 <i data-lucide="file-text"></i> Export DXF
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">Project Data</div>
+            <div class="group-buttons">
+              <button class="tool-btn" onclick="exportJSON()" title="Export drawing JSON">
+                <i data-lucide="download"></i> Export JSON
+              </button>
+              <button class="tool-btn" onclick="document.getElementById('import-file-input').click()" title="Import JSON or DXF">
+                <i data-lucide="upload"></i> Import Drawing
+              </button>
+              <button class="tool-btn" onclick="shareLink()" title="Copy share link">
+                <i data-lucide="share-2"></i> Share Link
               </button>
             </div>
           </div>
@@ -210,6 +261,34 @@
           <h3>Layer Manager</h3>
           <div id="layer-manager-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 160px; overflow-y: auto; padding-right: 4px; font-size: 11px;">
             <!-- Layer rows are dynamically injected here -->
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Profile Health</h3>
+          <div id="profile-health" class="profile-health">
+            <div class="health-row"><span>Status</span><span id="health-status" class="health-badge health-warn">Empty</span></div>
+            <div class="health-row"><span>Closed profiles</span><span id="health-closed">0</span></div>
+            <div class="health-row"><span>Open polylines</span><span id="health-open">0</span></div>
+            <div class="health-row"><span>Vertices / Circles</span><span id="health-counts">0 / 0</span></div>
+            <div class="health-row"><span>Constraints</span><span id="health-constraints">0</span></div>
+            <div class="health-row"><span>DOF estimate</span><span id="health-dof">—</span></div>
+            <p id="health-tips" class="health-tips">Draw a closed profile to compute section properties.</p>
+          </div>
+          <div class="constraint-quick-actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
+            <button type="button" class="tool-btn" style="height:28px;padding:0 8px;font-size:10px;" onclick="addConstraintFromSelection('horizontal')" title="Make selected line horizontal">H</button>
+            <button type="button" class="tool-btn" style="height:28px;padding:0 8px;font-size:10px;" onclick="addConstraintFromSelection('vertical')" title="Make selected line vertical">V</button>
+            <button type="button" class="tool-btn" style="height:28px;padding:0 8px;font-size:10px;" onclick="autoDetectConstraints()" title="Auto-detect H/V on near-axis segments">Auto H/V</button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Dimension Style</h3>
+          <div class="dim-style-form">
+            <label>Decimals <input type="number" id="dim-decimals" min="0" max="4" value="1" style="width:52px"></label>
+            <label>Text ht <input type="number" id="dim-text-h" min="6" max="24" value="10.5" step="0.5" style="width:56px"></label>
+            <label>Arrow <input type="number" id="dim-arrow" min="1" max="8" value="3" step="0.5" style="width:52px"></label>
+            <label>Offset <input type="number" id="dim-offset" min="10" max="80" value="28" step="1" style="width:52px"></label>
           </div>
         </div>
 
@@ -242,12 +321,25 @@
           <canvas id="cad-canvas"></canvas>
         </div>
 
-        <!-- Float Info Overlay Instruction -->
-        <div id="sketcher-instruction" class="sketcher-instruction-bubble">
-          Click on the viewport to place vertices. Press 'Escape' to cancel drawing.
+        <!-- Dynamic tool prompt (command status near top of canvas) -->
+        <div id="sketcher-instruction" class="sketcher-instruction-bubble" role="status">
+          Select: click an entity to inspect. Press L for Line, Esc to cancel.
         </div>
 
-        <!-- Viewport Zoom / Reset Controls -->
+        <!-- Dynamic input (type length / angle while drawing) -->
+        <div id="dyn-input-bar" class="dyn-input-bar hidden">
+          <label for="dyn-input-field">Input</label>
+          <input id="dyn-input-field" type="text" autocomplete="off" spellcheck="false"
+            placeholder="length  e.g. 50   or  @50&lt;90   or  45d"
+            title="While drawing: type length (mm), @dist&lt;angle, or angle with d suffix" />
+          <button type="button" id="dyn-input-apply" class="dyn-input-apply">Apply</button>
+          <span class="dyn-input-hint">Enter apply · Esc clear</span>
+        </div>
+
+        <!-- Floating cursor prompt (follows pointer) -->
+        <div id="cursor-prompt" class="cursor-prompt" aria-hidden="true"></div>
+
+        <!-- Viewport Zoom / Pan Controls -->
         <div class="cad-viewport-controls">
           <button class="viewport-btn" id="vp-zoom-in" title="Zoom In" onclick="zoomViewport(1.2)">
             <i data-lucide="zoom-in"></i>
@@ -255,29 +347,84 @@
           <button class="viewport-btn" id="vp-zoom-out" title="Zoom Out" onclick="zoomViewport(1/1.2)">
             <i data-lucide="zoom-out"></i>
           </button>
-          <button class="viewport-btn" id="vp-pan-float" title="Pan Viewport" onclick="setEditorMode('pan')">
+          <button class="viewport-btn" id="vp-pan-float" title="Pan (or Space+drag / middle-drag)" onclick="setEditorMode('pan')">
             <i data-lucide="hand"></i>
           </button>
-          <button class="viewport-btn" id="vp-reset" title="Reset View" onclick="resetViewport()">
+          <button class="viewport-btn" id="vp-fit" title="Fit view (geometry, or sheet if empty)" onclick="fitView()">
             <i data-lucide="maximize"></i>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- FOOTER COMMAND AREA & STATUS BAR -->
+    <!-- FOOTER STATUS BAR (Phase A CAD chrome) -->
     <div class="cad-footer-area">
       <div class="cad-status-bar">
-        <div class="coordinate-display" id="coords-display">X: 0.0 | Y: 0.0 mm</div>
-        <div class="status-toggles">
-          <button class="status-toggle-btn active" id="snap-toggle" onclick="toggleSnap()" title="Toggle Object / Grid Snapping">SNAP</button>
-          <button class="status-toggle-btn" id="ortho-toggle" onclick="toggleOrtho()" title="Toggle Orthogonal Angles Constraint (Shift)">ORTHO</button>
-          <button class="status-toggle-btn active" id="grid-toggle" onclick="toggleGrid()" title="Toggle Canvas Grid Lines">GRID</button>
+        <div class="status-left">
+          <span class="status-tool" id="status-tool-name">SELECT</span>
+          <span class="status-prompt" id="cad-status-text">Click an entity to select · Esc cancels</span>
         </div>
-        <div id="cad-status-text">Status: Idle</div>
+        <div class="status-center">
+          <span class="coordinate-display" id="coords-display">X: 0.00  Y: 0.00 mm</span>
+          <span class="status-sep">|</span>
+          <span class="coordinate-display" id="coords-delta" title="Delta from last point">Δ 0.00</span>
+          <span class="status-sep">|</span>
+          <span id="status-zoom-pct" class="coordinate-display">100%</span>
+        </div>
+        <div class="status-right">
+          <div class="status-toggles">
+            <button class="status-toggle-btn active" id="snap-toggle" onclick="toggleSnap()" title="Toggle object snaps">OSNAP</button>
+            <button class="status-toggle-btn" id="snap-filter-btn" onclick="toggleSnapFilterPanel()" title="Snap filters">▾</button>
+            <button class="status-toggle-btn" id="ortho-toggle" onclick="toggleOrtho()" title="Orthogonal lock (Shift)">ORTHO</button>
+            <button class="status-toggle-btn active" id="grid-toggle" onclick="toggleGrid()" title="Toggle grid">GRID</button>
+            <button class="status-toggle-btn active" id="crosshair-toggle" onclick="toggleCrosshair()" title="Full crosshair cursor">CROSS</button>
+            <button class="status-toggle-btn" id="dark-canvas-toggle" onclick="toggleDarkCanvas()" title="Dark canvas theme">DARK</button>
+          </div>
+          <label class="status-layer-wrap" title="Active layer for new geometry">
+            <span>Layer</span>
+            <select id="status-layer-select" class="status-layer-select">
+              <option value="FOREGROUND">FOREGROUND</option>
+              <option value="BACKGROUND">BACKGROUND</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <!-- Snap filter popover -->
+      <div id="snap-filter-panel" class="snap-filter-panel hidden">
+        <label><input type="checkbox" data-snap-type="endpoint" checked> Endpoint</label>
+        <label><input type="checkbox" data-snap-type="midpoint" checked> Midpoint</label>
+        <label><input type="checkbox" data-snap-type="center" checked> Center</label>
+        <label><input type="checkbox" data-snap-type="intersection" checked> Intersection</label>
+        <label><input type="checkbox" data-snap-type="tangent" checked> Tangent</label>
+        <label><input type="checkbox" data-snap-type="perpendicular" checked> Perpendicular</label>
       </div>
     </div>
   </main>
+
+  <!-- Autosave recovery banner -->
+  <div id="autosave-banner" class="autosave-banner hidden" role="status">
+    <span id="autosave-banner-text">Recovered draft found.</span>
+    <button type="button" id="autosave-restore-btn" class="autosave-btn primary">Restore</button>
+    <button type="button" id="autosave-discard-btn" class="autosave-btn">Discard</button>
+  </div>
+
+  <!-- Command palette -->
+  <div id="cmd-palette-overlay" class="cmd-palette-overlay hidden" aria-hidden="true">
+    <div class="cmd-palette" role="dialog" aria-label="Command palette">
+      <input id="cmd-palette-input" type="text" placeholder="Type a command… (line, trim, undo, dark, export…)" autocomplete="off" />
+      <ul id="cmd-palette-list" class="cmd-palette-list"></ul>
+      <div class="cmd-palette-footer">↑↓ navigate · Enter run · Esc close · ? shortcuts</div>
+    </div>
+  </div>
+
+  <!-- Shortcuts cheatsheet -->
+  <div id="shortcuts-modal" class="cmd-palette-overlay hidden">
+    <div class="shortcuts-panel">
+      <h3>Keyboard shortcuts</h3>
+      <div class="shortcuts-grid" id="shortcuts-grid"></div>
+      <button type="button" class="autosave-btn" onclick="document.getElementById('shortcuts-modal').classList.add('hidden')">Close</button>
+    </div>
+  </div>
 
   <!-- Firebase Scripts -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -287,6 +434,9 @@
   <!-- Shared Hooks & Account/Project Managers -->
   <script src="../../js/firebase.js"></script>
   <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/tools-data.js"></script>
+  <script src="../../js/registry.js"></script>
+  <script src="../../js/tool-shell.js"></script>
   <script id="project-manager-script" src="../../js/project-manager.js"></script>
   
   <!-- CAD Modules -->
