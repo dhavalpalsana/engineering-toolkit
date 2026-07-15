@@ -64,6 +64,22 @@ document.addEventListener("DOMContentLoaded", () => {
     perpendicular: true
   };
   window.crosshairEnabled = true;
+  window.darkCanvas = false;
+
+  // Dimension style (Phase C)
+  let dimStyle = {
+    decimals: 1,
+    textHeight: 10.5,
+    arrowSize: 3,
+    offset: 28,
+    color: "#0d9488"
+  };
+
+  // Geometric constraints (must be early for undo/autosave snapshots)
+  let parametricConstraints = [];
+
+  const AUTOSAVE_KEY = "drafting_board_autosave_v1";
+  let pendingAutosaveRestore = null;
 
   // Shapes drawing states
   let activeCircleCenter = null;
@@ -114,8 +130,11 @@ document.addEventListener("DOMContentLoaded", () => {
       circles: sketchCircles,
       insertions: sketchInsertions,
       customDimensions,
+      parametricConstraints,
       isSketchClosed,
-      activeLayerName
+      activeLayerName,
+      dimStyle,
+      darkCanvas: window.darkCanvas
     });
   }
 
@@ -127,8 +146,15 @@ document.addEventListener("DOMContentLoaded", () => {
     sketchCircles = data.circles || [];
     sketchInsertions = data.insertions || [];
     customDimensions = data.customDimensions || [];
+    parametricConstraints = data.parametricConstraints || [];
     isSketchClosed = !!data.isSketchClosed;
     if (data.activeLayerName) activeLayerName = data.activeLayerName;
+    if (data.dimStyle) dimStyle = { ...dimStyle, ...data.dimStyle };
+    if (typeof data.darkCanvas === "boolean") {
+      window.darkCanvas = data.darkCanvas;
+      document.body.classList.toggle("cad-dark", window.darkCanvas);
+      document.getElementById("dark-canvas-toggle")?.classList.toggle("active", window.darkCanvas);
+    }
     selectedEntity = null;
     selectedVertexIndex = -1;
     activeGrip = null;
@@ -136,7 +162,9 @@ document.addEventListener("DOMContentLoaded", () => {
     rebuildSpatialIndexes();
     showEntityInspector();
     updateLiveProperties();
+    updateProfileHealth();
     syncLayerSelect();
+    syncDimStyleInputs();
     drawSketchCanvas();
     updateToolPromptUI();
   }
@@ -1637,6 +1665,9 @@ document.addEventListener("DOMContentLoaded", () => {
         activePolyCenter,
         orthoLockEnabled: window.orthoLockEnabled || shiftPressed,
         crosshairEnabled: window.crosshairEnabled !== false,
+        darkCanvas: !!window.darkCanvas,
+        dimStyle,
+        constraintIcons: getConstraintIcons(),
         grips: (editorMode === "select" && selectedEntity) ? getGripPoints(selectedEntity) : [],
         insertPreview: (editorMode === "insert_block" && activeBlockToInsert && mousePos)
           ? { blockName: activeBlockToInsert, x: mousePos.x, y: mousePos.y, scaleX: 1, scaleY: 1, rotation: 0 }
@@ -1746,6 +1777,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("sk-inertia").textContent = "0.0 cm⁴";
       document.getElementById("sk-centroid").textContent = "0.0 mm";
       document.getElementById("sk-height").textContent = "0.0 mm";
+      updateProfileHealth();
       return;
     }
 
@@ -1781,6 +1813,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("sk-inertia").textContent = `${(Math.max(0, netIz) / 10000).toFixed(1)} cm⁴`;
     document.getElementById("sk-centroid").textContent = `${netYc.toFixed(1)} mm`;
     document.getElementById("sk-height").textContent = `${height.toFixed(1)} mm`;
+    updateProfileHealth();
   }
 
   function calculatePolygonProperties(vertices) {
@@ -2454,6 +2487,35 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         cadRedo();
         return;
+      }
+
+      // Command palette / shortcuts help
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        openCommandPalette();
+        return;
+      }
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        openCommandPalette();
+        return;
+      }
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        openShortcuts();
+        return;
+      }
+      if (e.key === "Escape") {
+        const palette = document.getElementById("cmd-palette-overlay");
+        if (palette && !palette.classList.contains("hidden")) {
+          closeCommandPalette();
+          return;
+        }
+        const sc = document.getElementById("shortcuts-modal");
+        if (sc && !sc.classList.contains("hidden")) {
+          sc.classList.add("hidden");
+          return;
+        }
       }
 
       // Tool shortcuts
@@ -3450,7 +3512,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- Parametric constraints builder helper ---
-  let parametricConstraints = [];
   window.getSelectedEntity = () => selectedEntity;
   window.setSelectedEntity = (val) => {
     selectedEntity = val;
@@ -3461,10 +3522,423 @@ document.addEventListener("DOMContentLoaded", () => {
   window.getCirclesCount = () => sketchCircles.length;
   window.getParametricConstraints = () => parametricConstraints;
   window.addParametricConstraint = (c) => {
+    pushUndo("constraint");
     parametricConstraints.push(c);
     runConstraintSolver();
     drawSketchCanvas();
+    updateProfileHealth();
   };
+
+  function getLineEndpointsFromSelection() {
+    if (!selectedEntity || selectedEntity.type !== "line") return null;
+    const idx = selectedEntity.index;
+    let i2 = idx + 1;
+    for (const prof of sketchProfiles) {
+      const limit = prof.isClosed ? prof.count : prof.count - 1;
+      for (let i = 0; i < limit; i++) {
+        if (prof.startIndex + i === idx) {
+          i2 = prof.startIndex + (i + 1) % prof.count;
+        }
+      }
+    }
+    if (!sketchVertices[idx] || !sketchVertices[i2]) return null;
+    return [idx, i2];
+  }
+
+  window.addConstraintFromSelection = (type) => {
+    const ends = getLineEndpointsFromSelection();
+    if (!ends) {
+      if (window.showToast) window.showToast("Select a line segment first", false);
+      return;
+    }
+    // Avoid duplicates
+    const exists = parametricConstraints.some(c =>
+      c.type === type &&
+      ((c.targets[0] === ends[0] && c.targets[1] === ends[1]) ||
+       (c.targets[0] === ends[1] && c.targets[1] === ends[0]))
+    );
+    if (exists) {
+      if (window.showToast) window.showToast("Constraint already exists", false);
+      return;
+    }
+    window.addParametricConstraint({ type, targets: ends });
+    if (window.showToast) window.showToast(`Added ${type} constraint`);
+  };
+
+  window.autoDetectConstraints = () => {
+    pushUndo("auto constraints");
+    let added = 0;
+    const tol = 0.5; // mm axis tolerance
+    const consider = (i1, i2) => {
+      const a = sketchVertices[i1], b = sketchVertices[i2];
+      if (!a || !b) return;
+      const dx = Math.abs(b.x - a.x), dy = Math.abs(b.y - a.y);
+      let type = null;
+      if (dy <= tol && dx > tol) type = "horizontal";
+      else if (dx <= tol && dy > tol) type = "vertical";
+      if (!type) return;
+      const exists = parametricConstraints.some(c =>
+        c.type === type &&
+        ((c.targets[0] === i1 && c.targets[1] === i2) || (c.targets[0] === i2 && c.targets[1] === i1))
+      );
+      if (!exists) {
+        parametricConstraints.push({ type, targets: [i1, i2] });
+        added++;
+      }
+    };
+    sketchProfiles.forEach(prof => {
+      const limit = prof.isClosed ? prof.count : prof.count - 1;
+      for (let i = 0; i < limit; i++) {
+        consider(prof.startIndex + i, prof.startIndex + (i + 1) % prof.count);
+      }
+    });
+    const aStart = activeProfileStartIndex;
+    const aCount = sketchVertices.length - aStart;
+    for (let i = 0; i < aCount - 1; i++) consider(aStart + i, aStart + i + 1);
+    if (added) {
+      runConstraintSolver();
+      drawSketchCanvas();
+      updateProfileHealth();
+    }
+    if (window.showToast) window.showToast(added ? `Added ${added} H/V constraint(s)` : "No near-axis segments found");
+  };
+
+  function getConstraintIcons() {
+    // Icons mid-segment for H/V and at midpoint for distance dims
+    const icons = [];
+    parametricConstraints.forEach((pc, idx) => {
+      if ((pc.type === "horizontal" || pc.type === "vertical") && pc.targets?.length >= 2) {
+        const a = sketchVertices[pc.targets[0]];
+        const b = sketchVertices[pc.targets[1]];
+        if (a && b) {
+          icons.push({
+            type: pc.type,
+            x: (a.x + b.x) / 2,
+            y: (a.y + b.y) / 2,
+            index: idx
+          });
+        }
+      }
+    });
+    return icons;
+  }
+
+  function estimateDOF() {
+    // Rough: 2 DOF per free vertex + 3 per circle - residual equations from constraints
+    const freeVerts = sketchVertices.length;
+    const freeCircles = sketchCircles.length;
+    let dof = freeVerts * 2 + freeCircles * 3;
+    // subtract dim constraints
+    dof -= customDimensions.length;
+    parametricConstraints.forEach(pc => {
+      if (pc.type === "horizontal" || pc.type === "vertical") dof -= 1;
+      else if (pc.type === "distance" || pc.type === "perpendicular" || pc.type === "parallel" || pc.type === "tangent") dof -= 1;
+      else if (pc.type === "coincident" || pc.type === "concentric") dof -= 2;
+    });
+    // closed profile rigid body approx: subtract 3 for first closed shape
+    const closed = sketchProfiles.filter(p => p.isClosed).length;
+    if (closed > 0) dof -= 3;
+    return Math.max(0, dof);
+  }
+
+  function profilesSelfIntersect(verts) {
+    if (verts.length < 4) return false;
+    const segs = [];
+    for (let i = 0; i < verts.length; i++) {
+      segs.push([verts[i], verts[(i + 1) % verts.length]]);
+    }
+    const orient = (a, b, c) => Math.sign((b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y));
+    const onSeg = (a, b, c) =>
+      Math.min(a.x, b.x) <= c.x + 1e-6 && c.x <= Math.max(a.x, b.x) + 1e-6 &&
+      Math.min(a.y, b.y) <= c.y + 1e-6 && c.y <= Math.max(a.y, b.y) + 1e-6;
+    const intersects = (a, b, c, d) => {
+      const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+      if (o1 !== o2 && o3 !== o4) return true;
+      if (o1 === 0 && onSeg(a, b, c)) return true;
+      if (o2 === 0 && onSeg(a, b, d)) return true;
+      if (o3 === 0 && onSeg(c, d, a)) return true;
+      if (o4 === 0 && onSeg(c, d, b)) return true;
+      return false;
+    };
+    for (let i = 0; i < segs.length; i++) {
+      for (let j = i + 1; j < segs.length; j++) {
+        if (Math.abs(i - j) <= 1 || (i === 0 && j === segs.length - 1)) continue;
+        if (intersects(segs[i][0], segs[i][1], segs[j][0], segs[j][1])) return true;
+      }
+    }
+    return false;
+  }
+
+  function updateProfileHealth() {
+    const closed = sketchProfiles.filter(p => p.isClosed).length;
+    const openFinal = sketchProfiles.filter(p => !p.isClosed).length;
+    const activeOpen = (sketchVertices.length - activeProfileStartIndex) >= 2 ? 1 : 0;
+    const open = openFinal + activeOpen;
+    const nV = sketchVertices.length;
+    const nC = sketchCircles.length;
+    const nConst = parametricConstraints.length + customDimensions.length;
+    const dof = estimateDOF();
+
+    let status = "Empty";
+    let cls = "health-warn";
+    let tips = "Draw a closed profile to compute section properties.";
+    if (nV === 0 && nC === 0) {
+      status = "Empty";
+      cls = "health-warn";
+    } else if (closed === 0) {
+      status = "Open";
+      cls = "health-warn";
+      tips = "Close a polyline (click near start or Close) for solid section properties.";
+    } else {
+      let bad = false;
+      sketchProfiles.filter(p => p.isClosed).forEach(prof => {
+        const verts = sketchVertices.slice(prof.startIndex, prof.startIndex + prof.count);
+        if (profilesSelfIntersect(verts)) bad = true;
+      });
+      if (bad) {
+        status = "Self-intersect";
+        cls = "health-bad";
+        tips = "A closed profile appears to self-intersect — check crossings.";
+      } else if (dof <= 3) {
+        status = "Well constrained";
+        cls = "health-ok";
+        tips = "Profile is closed and constraint DOF is low. Ready for export.";
+      } else {
+        status = "Under-defined";
+        cls = "health-warn";
+        tips = `Approx. ${dof} free DOF — add H/V/dims or Auto H/V to stabilize.`;
+      }
+    }
+
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    const badge = document.getElementById("health-status");
+    if (badge) {
+      badge.textContent = status;
+      badge.className = `health-badge ${cls}`;
+    }
+    set("health-closed", String(closed));
+    set("health-open", String(open));
+    set("health-counts", `${nV} / ${nC}`);
+    set("health-constraints", String(nConst));
+    set("health-dof", nV || nC ? String(dof) : "—");
+    set("health-tips", tips);
+  }
+
+  // ── Dark canvas ────────────────────────────────────────────
+  window.toggleDarkCanvas = () => {
+    window.darkCanvas = !window.darkCanvas;
+    document.body.classList.toggle("cad-dark", window.darkCanvas);
+    document.getElementById("dark-canvas-toggle")?.classList.toggle("active", window.darkCanvas);
+    drawSketchCanvas();
+  };
+
+  // ── Dimension style inputs ─────────────────────────────────
+  function syncDimStyleInputs() {
+    const map = {
+      "dim-decimals": "decimals",
+      "dim-text-h": "textHeight",
+      "dim-arrow": "arrowSize",
+      "dim-offset": "offset"
+    };
+    Object.entries(map).forEach(([id, key]) => {
+      const el = document.getElementById(id);
+      if (el) el.value = dimStyle[key];
+    });
+  }
+  function bindDimStyleInputs() {
+    const map = {
+      "dim-decimals": "decimals",
+      "dim-text-h": "textHeight",
+      "dim-arrow": "arrowSize",
+      "dim-offset": "offset"
+    };
+    Object.entries(map).forEach(([id, key]) => {
+      document.getElementById(id)?.addEventListener("change", (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v)) dimStyle[key] = v;
+        drawSketchCanvas();
+      });
+    });
+  }
+
+  // ── Autosave + recovery ────────────────────────────────────
+  function scheduleAutosave() {
+    try {
+      const payload = {
+        savedAt: Date.now(),
+        snapshot: captureDrawingSnapshot()
+      };
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+    } catch (_) { /* quota */ }
+  }
+
+  function checkAutosaveRecovery() {
+    try {
+      const raw = localStorage.getItem(AUTOSAVE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (!data.snapshot) return;
+      // Only offer if current board is empty
+      if (sketchVertices.length || sketchCircles.length || sketchInsertions.length) return;
+      pendingAutosaveRestore = data;
+      const banner = document.getElementById("autosave-banner");
+      const text = document.getElementById("autosave-banner-text");
+      if (text) {
+        const age = data.savedAt ? new Date(data.savedAt).toLocaleString() : "unknown time";
+        text.textContent = `Autosaved draft found (${age}). Restore it?`;
+      }
+      banner?.classList.remove("hidden");
+    } catch (_) { /* ignore */ }
+  }
+
+  function bindAutosaveUI() {
+    document.getElementById("autosave-restore-btn")?.addEventListener("click", () => {
+      if (!pendingAutosaveRestore) return;
+      try {
+        applyDrawingSnapshot(pendingAutosaveRestore.snapshot);
+        if (window.showToast) window.showToast("Draft restored");
+      } catch (e) {
+        alert("Failed to restore draft: " + e.message);
+      }
+      document.getElementById("autosave-banner")?.classList.add("hidden");
+      pendingAutosaveRestore = null;
+    });
+    document.getElementById("autosave-discard-btn")?.addEventListener("click", () => {
+      localStorage.removeItem(AUTOSAVE_KEY);
+      document.getElementById("autosave-banner")?.classList.add("hidden");
+      pendingAutosaveRestore = null;
+    });
+    setInterval(scheduleAutosave, 15000);
+    window.addEventListener("beforeunload", scheduleAutosave);
+  }
+
+  // ── Command palette ────────────────────────────────────────
+  const COMMANDS = [
+    { id: "select", label: "Select", keys: "V", run: () => setEditorMode("select") },
+    { id: "line", label: "Line / Polyline", keys: "L", run: () => setEditorMode("draw") },
+    { id: "circle", label: "Circle", keys: "C", run: () => setEditorMode("circle") },
+    { id: "rect", label: "Rectangle", keys: "R", run: () => setEditorMode("rect") },
+    { id: "poly", label: "Polygon", keys: "P", run: () => setEditorMode("poly") },
+    { id: "dim", label: "Smart Dimension", keys: "D", run: () => setEditorMode("dimension") },
+    { id: "measure", label: "Measure", keys: "M", run: () => setEditorMode("measure") },
+    { id: "fillet", label: "Fillet", keys: "F", run: () => setEditorMode("fillet") },
+    { id: "trim", label: "Trim", keys: "T", run: () => setEditorMode("trim") },
+    { id: "extend", label: "Extend", keys: "X", run: () => setEditorMode("extend") },
+    { id: "offset", label: "Offset", keys: "O", run: () => setEditorMode("offset") },
+    { id: "move", label: "Move", keys: "G", run: () => setEditorMode("move") },
+    { id: "copy", label: "Copy", keys: "Y", run: () => setEditorMode("copy") },
+    { id: "rotate", label: "Rotate", keys: "Q", run: () => setEditorMode("rotate") },
+    { id: "mirror", label: "Mirror", keys: "I", run: () => setEditorMode("mirror") },
+    { id: "pan", label: "Pan", keys: "H", run: () => setEditorMode("pan") },
+    { id: "undo", label: "Undo", keys: "Ctrl+Z", run: () => cadUndo() },
+    { id: "redo", label: "Redo", keys: "Ctrl+Y", run: () => cadRedo() },
+    { id: "close", label: "Close shape", keys: "", run: () => closeSketchShape() },
+    { id: "clear", label: "Clear board", keys: "", run: () => clearSketchCanvas() },
+    { id: "extents", label: "Zoom extents", keys: "", run: () => zoomExtents() },
+    { id: "sheet", label: "Fit sheet", keys: "", run: () => resetViewport() },
+    { id: "dark", label: "Toggle dark canvas", keys: "", run: () => toggleDarkCanvas() },
+    { id: "snap", label: "Toggle OSNAP", keys: "", run: () => toggleSnap() },
+    { id: "ortho", label: "Toggle ORTHO", keys: "", run: () => toggleOrtho() },
+    { id: "grid", label: "Toggle GRID", keys: "", run: () => toggleGrid() },
+    { id: "cross", label: "Toggle CROSSHAIR", keys: "", run: () => toggleCrosshair() },
+    { id: "auto-hv", label: "Auto H/V constraints", keys: "", run: () => autoDetectConstraints() },
+    { id: "export-dxf", label: "Export DXF", keys: "", run: () => exportDXFDrawing() },
+    { id: "export-svg", label: "Export SVG", keys: "", run: () => exportSVGDrawing() },
+    { id: "shortcuts", label: "Show shortcuts", keys: "?", run: () => openShortcuts() }
+  ];
+
+  let cmdActiveIndex = 0;
+  let cmdFiltered = COMMANDS.slice();
+
+  function openCommandPalette() {
+    const overlay = document.getElementById("cmd-palette-overlay");
+    const input = document.getElementById("cmd-palette-input");
+    if (!overlay || !input) return;
+    overlay.classList.remove("hidden");
+    overlay.setAttribute("aria-hidden", "false");
+    input.value = "";
+    cmdActiveIndex = 0;
+    filterCommands("");
+    setTimeout(() => input.focus(), 0);
+  }
+
+  function closeCommandPalette() {
+    const overlay = document.getElementById("cmd-palette-overlay");
+    if (!overlay) return;
+    overlay.classList.add("hidden");
+    overlay.setAttribute("aria-hidden", "true");
+  }
+
+  function filterCommands(q) {
+    const query = (q || "").toLowerCase().trim();
+    cmdFiltered = COMMANDS.filter(c =>
+      !query || c.label.toLowerCase().includes(query) || c.id.includes(query) || (c.keys || "").toLowerCase().includes(query)
+    );
+    cmdActiveIndex = 0;
+    renderCommandList();
+  }
+
+  function renderCommandList() {
+    const list = document.getElementById("cmd-palette-list");
+    if (!list) return;
+    list.innerHTML = cmdFiltered.map((c, i) =>
+      `<li class="${i === cmdActiveIndex ? "active" : ""}" data-idx="${i}">
+        <span>${c.label}</span>
+        <span class="cmd-keys">${c.keys || ""}</span>
+      </li>`
+    ).join("") || `<li style="color:#64748b">No commands</li>`;
+    list.querySelectorAll("li[data-idx]").forEach(li => {
+      li.addEventListener("mouseenter", () => {
+        cmdActiveIndex = parseInt(li.getAttribute("data-idx"), 10);
+        renderCommandList();
+      });
+      li.addEventListener("click", () => runCommandAt(parseInt(li.getAttribute("data-idx"), 10)));
+    });
+  }
+
+  function runCommandAt(idx) {
+    const c = cmdFiltered[idx];
+    if (!c) return;
+    closeCommandPalette();
+    c.run();
+  }
+
+  function openShortcuts() {
+    const modal = document.getElementById("shortcuts-modal");
+    const grid = document.getElementById("shortcuts-grid");
+    if (grid) {
+      grid.innerHTML = COMMANDS.filter(c => c.keys).map(c =>
+        `<div><span>${c.label}</span><kbd>${c.keys}</kbd></div>`
+      ).join("");
+    }
+    modal?.classList.remove("hidden");
+  }
+
+  function bindCommandPalette() {
+    const input = document.getElementById("cmd-palette-input");
+    const overlay = document.getElementById("cmd-palette-overlay");
+    input?.addEventListener("input", () => filterCommands(input.value));
+    input?.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        cmdActiveIndex = Math.min(cmdFiltered.length - 1, cmdActiveIndex + 1);
+        renderCommandList();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        cmdActiveIndex = Math.max(0, cmdActiveIndex - 1);
+        renderCommandList();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        runCommandAt(cmdActiveIndex);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeCommandPalette();
+      }
+    });
+    overlay?.addEventListener("click", (e) => {
+      if (e.target === overlay) closeCommandPalette();
+    });
+  }
 
   function buildVariablesAndConstraints(lockedIdx = -1) {
     let vars = [];
@@ -3664,11 +4138,17 @@ document.addEventListener("DOMContentLoaded", () => {
   showEntityInspector();
   renderLayerManager();
   syncLayerSelect();
+  syncDimStyleInputs();
+  bindDimStyleInputs();
+  bindCommandPalette();
+  bindAutosaveUI();
   drawSketchCanvas();
   initSketcherEvents();
   updateLiveProperties();
+  updateProfileHealth();
   setEditorMode("select");
   updateZoomPctDisplay();
+  checkAutosaveRecovery();
   // Seed undo baseline
   pushUndo("baseline");
   undoStack.pop(); // don't keep empty baseline as undoable

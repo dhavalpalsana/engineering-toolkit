@@ -602,6 +602,199 @@ body.cad-tool-page {
   overflow: hidden;
 }
 
+/* Profile health */
+.profile-health {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+}
+.health-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+.health-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.health-ok { background: rgba(16,185,129,0.15); color: #059669; }
+.health-warn { background: rgba(245,158,11,0.15); color: #d97706; }
+.health-bad { background: rgba(239,68,68,0.12); color: #dc2626; }
+.health-tips {
+  margin: 6px 0 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.dim-style-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.dim-style-form label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.dim-style-form input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 5px;
+}
+
+/* Autosave recovery */
+.autosave-banner {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid var(--accent-primary);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  font-size: 12px;
+  max-width: min(560px, 94vw);
+}
+.autosave-banner.hidden { display: none !important; }
+.autosave-btn {
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.autosave-btn.primary {
+  background: var(--accent-primary);
+  color: #0f172a;
+  border-color: transparent;
+}
+
+/* Command palette */
+.cmd-palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.cmd-palette-overlay.hidden { display: none !important; }
+.cmd-palette {
+  width: min(520px, 94vw);
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.cmd-palette input {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-bottom: 1px solid #1e293b;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 14px;
+  padding: 14px 16px;
+  outline: none;
+  font-family: var(--font-sans);
+}
+.cmd-palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.cmd-palette-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #cbd5e1;
+  font-size: 13px;
+  cursor: pointer;
+}
+.cmd-palette-list li:hover,
+.cmd-palette-list li.active {
+  background: rgba(13, 148, 136, 0.18);
+  color: #f8fafc;
+}
+.cmd-palette-list .cmd-keys {
+  color: #64748b;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.cmd-palette-footer {
+  padding: 8px 14px 12px;
+  font-size: 11px;
+  color: #64748b;
+  border-top: 1px solid #1e293b;
+}
+.shortcuts-panel {
+  width: min(560px, 94vw);
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 20px;
+  color: #e2e8f0;
+}
+.shortcuts-panel h3 { margin: 0 0 12px; font-size: 16px; }
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+.shortcuts-grid div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #1e293b;
+}
+.shortcuts-grid kbd {
+  font-family: var(--font-mono);
+  color: #5eead4;
+  font-size: 11px;
+}
+
+/* Dark canvas page chrome */
+body.cad-dark .cad-canvas-container {
+  background-color: #0b1220;
+}
+body.cad-dark .sketcher-instruction-bubble {
+  background: rgba(2, 6, 23, 0.92);
+}
+
 .cad-app-container {
   display: grid;
   grid-template-rows: auto 1fr 36px;

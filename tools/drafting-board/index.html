@@ -228,6 +228,34 @@
         </div>
 
         <div class="sidebar-section">
+          <h3>Profile Health</h3>
+          <div id="profile-health" class="profile-health">
+            <div class="health-row"><span>Status</span><span id="health-status" class="health-badge health-warn">Empty</span></div>
+            <div class="health-row"><span>Closed profiles</span><span id="health-closed">0</span></div>
+            <div class="health-row"><span>Open polylines</span><span id="health-open">0</span></div>
+            <div class="health-row"><span>Vertices / Circles</span><span id="health-counts">0 / 0</span></div>
+            <div class="health-row"><span>Constraints</span><span id="health-constraints">0</span></div>
+            <div class="health-row"><span>DOF estimate</span><span id="health-dof">—</span></div>
+            <p id="health-tips" class="health-tips">Draw a closed profile to compute section properties.</p>
+          </div>
+          <div class="constraint-quick-actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
+            <button type="button" class="tool-btn" style="height:28px;padding:0 8px;font-size:10px;" onclick="addConstraintFromSelection('horizontal')" title="Make selected line horizontal">H</button>
+            <button type="button" class="tool-btn" style="height:28px;padding:0 8px;font-size:10px;" onclick="addConstraintFromSelection('vertical')" title="Make selected line vertical">V</button>
+            <button type="button" class="tool-btn" style="height:28px;padding:0 8px;font-size:10px;" onclick="autoDetectConstraints()" title="Auto-detect H/V on near-axis segments">Auto H/V</button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Dimension Style</h3>
+          <div class="dim-style-form">
+            <label>Decimals <input type="number" id="dim-decimals" min="0" max="4" value="1" style="width:52px"></label>
+            <label>Text ht <input type="number" id="dim-text-h" min="6" max="24" value="10.5" step="0.5" style="width:56px"></label>
+            <label>Arrow <input type="number" id="dim-arrow" min="1" max="8" value="3" step="0.5" style="width:52px"></label>
+            <label>Offset <input type="number" id="dim-offset" min="10" max="80" value="28" step="1" style="width:52px"></label>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
           <h3>Profile Telemetry</h3>
           <div class="telemetry-readout">
             <div class="tel-item">
@@ -316,6 +344,7 @@
             <button class="status-toggle-btn" id="ortho-toggle" onclick="toggleOrtho()" title="Orthogonal lock (Shift)">ORTHO</button>
             <button class="status-toggle-btn active" id="grid-toggle" onclick="toggleGrid()" title="Toggle grid">GRID</button>
             <button class="status-toggle-btn active" id="crosshair-toggle" onclick="toggleCrosshair()" title="Full crosshair cursor">CROSS</button>
+            <button class="status-toggle-btn" id="dark-canvas-toggle" onclick="toggleDarkCanvas()" title="Dark canvas theme">DARK</button>
           </div>
           <label class="status-layer-wrap" title="Active layer for new geometry">
             <span>Layer</span>
@@ -337,6 +366,31 @@
       </div>
     </div>
   </main>
+
+  <!-- Autosave recovery banner -->
+  <div id="autosave-banner" class="autosave-banner hidden" role="status">
+    <span id="autosave-banner-text">Recovered draft found.</span>
+    <button type="button" id="autosave-restore-btn" class="autosave-btn primary">Restore</button>
+    <button type="button" id="autosave-discard-btn" class="autosave-btn">Discard</button>
+  </div>
+
+  <!-- Command palette -->
+  <div id="cmd-palette-overlay" class="cmd-palette-overlay hidden" aria-hidden="true">
+    <div class="cmd-palette" role="dialog" aria-label="Command palette">
+      <input id="cmd-palette-input" type="text" placeholder="Type a command… (line, trim, undo, dark, export…)" autocomplete="off" />
+      <ul id="cmd-palette-list" class="cmd-palette-list"></ul>
+      <div class="cmd-palette-footer">↑↓ navigate · Enter run · Esc close · ? shortcuts</div>
+    </div>
+  </div>
+
+  <!-- Shortcuts cheatsheet -->
+  <div id="shortcuts-modal" class="cmd-palette-overlay hidden">
+    <div class="shortcuts-panel">
+      <h3>Keyboard shortcuts</h3>
+      <div class="shortcuts-grid" id="shortcuts-grid"></div>
+      <button type="button" class="autosave-btn" onclick="document.getElementById('shortcuts-modal').classList.add('hidden')">Close</button>
+    </div>
+  </div>
 
   <!-- Firebase Scripts -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>

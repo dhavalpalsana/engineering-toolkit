@@ -163,8 +163,9 @@ class ExplicitCadRenderer {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // Default white background for high-contrast drafting board
-    ctx.fillStyle = "#ffffff";
+    // Paper / dark canvas background
+    const dark = !!state.darkCanvas;
+    ctx.fillStyle = dark ? "#0b1220" : "#ffffff";
     ctx.fillRect(0, 0, this.width, this.height);
 
     // Apply camera transformation mapping
@@ -172,19 +173,24 @@ class ExplicitCadRenderer {
     ctx.scale(this.zoomLevel, this.zoomLevel);
 
     // 1. Draw Grid Lines (Dynamic based on zoom level)
-    this.drawGrid(ctx, state.sheetWidth, state.sheetHeight);
+    this.drawGrid(ctx, state.sheetWidth, state.sheetHeight, dark);
 
     // 2. Draw Page Borders & Title Block
     const isSheetVisible = state.layers["BACKGROUND"] && state.layers["BACKGROUND"].visible;
     if (isSheetVisible) {
-      this.drawSheetFormat(ctx, state.sheetWidth, state.sheetHeight);
+      this.drawSheetFormat(ctx, state.sheetWidth, state.sheetHeight, dark);
     }
 
     // 3. Draw Construction Lines / Profile Geometry
-    this.drawGeometry(ctx, state);
+    this.drawGeometry(ctx, state, dark);
 
     // 4. Draw Smart Dimensions & Annotations
-    this.drawDimensions(ctx, state);
+    this.drawDimensions(ctx, state, dark);
+
+    // 4b. Constraint icons (H/V)
+    if (state.constraintIcons && state.constraintIcons.length) {
+      this.drawConstraintIcons(ctx, state.constraintIcons, dark);
+    }
 
     // 5. Draw Ruler Measurement Guide
     if (state.isMeasuring && state.measureStartPos && state.mousePos) {
@@ -298,7 +304,7 @@ class ExplicitCadRenderer {
   }
 
   // Draw CAD grid layout, fading grids out dynamically when zoomed out
-  drawGrid(ctx, sheetWidth, sheetHeight) {
+  drawGrid(ctx, sheetWidth, sheetHeight, dark = false) {
     if (window.gridVisible === false) return;
 
     let minorStep = 10;
@@ -326,8 +332,8 @@ class ExplicitCadRenderer {
 
     ctx.save();
     
-    // Draw minor grid lines (thin, faint light-grey)
-    ctx.strokeStyle = "#f1f5f9";
+    // Draw minor grid lines
+    ctx.strokeStyle = dark ? "#1e293b" : "#f1f5f9";
     ctx.lineWidth = 0.5 / this.zoomLevel;
     ctx.beginPath();
     for (let x = startX; x <= endX; x += minorStep) {
@@ -342,8 +348,8 @@ class ExplicitCadRenderer {
     }
     ctx.stroke();
 
-    // Draw major grid lines (slightly thicker, darker grey)
-    ctx.strokeStyle = "#cbd5e1";
+    // Draw major grid lines
+    ctx.strokeStyle = dark ? "#334155" : "#cbd5e1";
     ctx.lineWidth = 1.0 / this.zoomLevel;
     ctx.beginPath();
     for (let x = startX; x <= endX; x += minorStep) {
@@ -376,22 +382,22 @@ class ExplicitCadRenderer {
   }
 
   // Draw paper sheet layout border and title block
-  drawSheetFormat(ctx, width, height) {
+  drawSheetFormat(ctx, width, height, dark = false) {
     ctx.save();
     
     // Soft shadow under drawing format border
-    ctx.fillStyle = "rgba(15, 23, 42, 0.08)";
+    ctx.fillStyle = dark ? "rgba(0,0,0,0.35)" : "rgba(15, 23, 42, 0.08)";
     ctx.fillRect(4 / this.zoomLevel, 4 / this.zoomLevel, width, height);
 
-    // White blueprint background area
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#94a3b8";
+    // Blueprint paper area
+    ctx.fillStyle = dark ? "#111827" : "#ffffff";
+    ctx.strokeStyle = dark ? "#475569" : "#94a3b8";
     ctx.lineWidth = 1.0 / this.zoomLevel;
     ctx.fillRect(0, 0, width, height);
     ctx.strokeRect(0, 0, width, height);
 
     // Inner active boundary sheet margin (10mm offset)
-    ctx.strokeStyle = "#334155";
+    ctx.strokeStyle = dark ? "#64748b" : "#334155";
     ctx.lineWidth = 1.5 / this.zoomLevel;
     ctx.strokeRect(10, 10, width - 20, height - 20);
 
@@ -410,22 +416,22 @@ class ExplicitCadRenderer {
     ctx.stroke();
 
     // Injected text labels
-    ctx.fillStyle = "#1e293b";
+    ctx.fillStyle = dark ? "#cbd5e1" : "#1e293b";
     ctx.font = `${6.5 / this.zoomLevel}px var(--font-sans)`;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText("TITLE: CAD BLUEPRINT DESIGN", tx + 3, ty + 5);
     ctx.fillText("SCALE: 1:1", tx + 3, ty + 15);
     ctx.fillText("UNIT: mm", tx + 63, ty + 15);
-    ctx.fillText("ENGINEER: ANTIGRAVITY COMPASS", tx + 3, ty + 25);
+    ctx.fillText("ENGINEERING TOOLKIT", tx + 3, ty + 25);
     
     ctx.restore();
   }
 
   // Draw active drawing geometries
-  drawGeometry(ctx, state) {
+  drawGeometry(ctx, state, dark = false) {
     const isSheetVisible = state.layers["BACKGROUND"] && state.layers["BACKGROUND"].visible;
-    const defaultColor = "#000000";
+    const defaultColor = dark ? "#e2e8f0" : "#000000";
 
     // 1. Draw Finalized Profiles
     if (state.layers["FOREGROUND"] && state.layers["FOREGROUND"].visible) {
@@ -567,7 +573,13 @@ class ExplicitCadRenderer {
   }
 
   // Draw dimension annotations and leader lines
-  drawDimensions(ctx, state) {
+  drawDimensions(ctx, state, dark = false) {
+    const style = state.dimStyle || { decimals: 1, textHeight: 10.5, arrowSize: 3, offset: 28, color: "#0d9488" };
+    const decimals = style.decimals != null ? style.decimals : 1;
+    const textH = style.textHeight != null ? style.textHeight : 10.5;
+    const baseOffset = style.offset != null ? style.offset : 28;
+    const dimColor = style.color || "#0d9488";
+
     state.customDimensions.forEach((dim, idx) => {
       const p1 = state.vertices[dim.v1];
       const p2 = state.vertices[dim.v2];
@@ -583,16 +595,16 @@ class ExplicitCadRenderer {
       const theta = Math.atan2(dy, dx);
       const normalAngle = theta - Math.PI / 2;
       
-      const offsetDist = 28 + (idx * 16); // mm offset
+      const offsetDist = baseOffset + (idx * 16); // mm offset
       const o1x = p1.x + offsetDist * Math.cos(normalAngle);
       const o1y = p1.y + offsetDist * Math.sin(normalAngle);
       const o2x = p2.x + offsetDist * Math.cos(normalAngle);
       const o2y = p2.y + offsetDist * Math.sin(normalAngle);
       const midx = mx + offsetDist * Math.cos(normalAngle);
-      const midy = my + offsetDist * Math.cos(normalAngle);
+      const midy = my + offsetDist * Math.sin(normalAngle);
 
       const isSelected = state.selectedEntity && state.selectedEntity.type === "dimension" && state.selectedEntity.index === idx;
-      const color = isSelected ? "#f97316" : "#0d9488";
+      const color = isSelected ? "#f97316" : dimColor;
 
       ctx.save();
       ctx.strokeStyle = color;
@@ -613,28 +625,28 @@ class ExplicitCadRenderer {
       ctx.lineTo(o2x, o2y);
       ctx.stroke();
 
-      // Filled arrowheads at both ends
-      this.drawArrowhead(ctx, o1x, o1y, o2x, o2y);
-      this.drawArrowhead(ctx, o2x, o2y, o1x, o1y);
+      // Filled arrowheads at both ends (size from style)
+      this.drawArrowhead(ctx, o1x, o1y, o2x, o2y, style.arrowSize);
+      this.drawArrowhead(ctx, o2x, o2y, o1x, o1y, style.arrowSize);
 
-      // Dimension label text background box mask
-      const labelText = `${Math.round(dim.d !== undefined ? dim.d : len)} mm`;
-      ctx.font = `bold ${10.5 / this.zoomLevel}px var(--font-sans)`;
+      // Dimension label
+      const val = dim.d !== undefined ? dim.d : len;
+      const labelText = `${Number(val).toFixed(decimals)} mm`;
+      ctx.font = `bold ${textH / this.zoomLevel}px var(--font-sans)`;
       
       const textWidth = ctx.measureText(labelText).width;
       const padX = 4.0 / this.zoomLevel;
-      const padY = 2.0 / this.zoomLevel;
       const boxW = textWidth + 2 * padX;
-      const boxH = 14 / this.zoomLevel;
+      const boxH = (textH + 4) / this.zoomLevel;
 
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = dark ? "#1e293b" : "#ffffff";
       ctx.strokeStyle = isSelected ? "#f97316" : "rgba(148, 163, 184, 0.45)";
       ctx.lineWidth = 0.5 / this.zoomLevel;
       ctx.fillRect(midx - boxW / 2, midy - boxH / 2, boxW, boxH);
       ctx.strokeRect(midx - boxW / 2, midy - boxH / 2, boxW, boxH);
 
       // Text label centered
-      ctx.fillStyle = isSelected ? "#f97316" : "#0f172a";
+      ctx.fillStyle = isSelected ? "#f97316" : (dark ? "#e2e8f0" : "#0f172a");
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(labelText, midx, midy);
@@ -706,10 +718,31 @@ class ExplicitCadRenderer {
     });
   }
 
+  drawConstraintIcons(ctx, icons, dark = false) {
+    ctx.save();
+    icons.forEach(ic => {
+      const s = 7 / this.zoomLevel;
+      ctx.fillStyle = dark ? "#1e293b" : "#ffffff";
+      ctx.strokeStyle = ic.type === "horizontal" ? "#2563eb" : "#7c3aed";
+      ctx.lineWidth = 1.4 / this.zoomLevel;
+      ctx.beginPath();
+      ctx.arc(ic.x, ic.y, s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = ic.type === "horizontal" ? "#2563eb" : "#7c3aed";
+      ctx.font = `bold ${8 / this.zoomLevel}px var(--font-sans)`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(ic.type === "horizontal" ? "H" : "V", ic.x, ic.y);
+    });
+    ctx.restore();
+  }
+
   // Draw arrow head on vectors
-  drawArrowhead(ctx, x1, y1, x2, y2) {
-    const arrowLen = 5.5 / this.zoomLevel;
-    const arrowWidth = 3.5 / this.zoomLevel;
+  drawArrowhead(ctx, x1, y1, x2, y2, sizeMm) {
+    const scale = sizeMm != null ? sizeMm / 3 : 1;
+    const arrowLen = (5.5 * scale) / this.zoomLevel;
+    const arrowWidth = (3.5 * scale) / this.zoomLevel;
 
     const dx = x2 - x1;
     const dy = y2 - y1;
