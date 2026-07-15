@@ -174,11 +174,51 @@ document.addEventListener("DOMContentLoaded", () => {
         { type: "pinned", x: offset },
         { type: "roller", x: parseFloat((L - offset).toFixed(2)) }
       ];
+    } else if (val === "continuous-2" || val === "continuous-3" || val === "continuous-4") {
+      // Equal-span continuous beam: n spans → n+1 supports (pinned start, rollers after)
+      const spans = val === "continuous-2" ? 2 : (val === "continuous-3" ? 3 : 4);
+      supports = [];
+      for (let i = 0; i <= spans; i++) {
+        const x = parseFloat(((L * i) / spans).toFixed(3));
+        supports.push({ type: i === 0 ? "pinned" : "roller", x });
+      }
     }
     
     supportPresetsSelect.value = "";
     recalculate();
   });
+
+  // Load combination presets (point + UDL combos)
+  const loadComboSelect = document.getElementById("load-combo-presets");
+  if (loadComboSelect) {
+    loadComboSelect.addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (!val) return;
+      if (val === "point-mid") {
+        loads = [{ type: "point", val: -15.0, x1: parseFloat((L / 2).toFixed(3)), x2: 0 }];
+      } else if (val === "udl-full") {
+        loads = [{ type: "udl", val: -5.0, x1: 0, x2: L }];
+      } else if (val === "point-plus-udl") {
+        loads = [
+          { type: "udl", val: -4.0, x1: 0, x2: L },
+          { type: "point", val: -20.0, x1: parseFloat((L / 2).toFixed(3)), x2: 0 }
+        ];
+      } else if (val === "two-points") {
+        loads = [
+          { type: "point", val: -12.0, x1: parseFloat((L / 3).toFixed(3)), x2: 0 },
+          { type: "point", val: -12.0, x1: parseFloat((2 * L / 3).toFixed(3)), x2: 0 }
+        ];
+      } else if (val === "udl-plus-end-moment") {
+        loads = [
+          { type: "udl", val: -3.0, x1: 0, x2: L },
+          { type: "moment", val: 15.0, x1: 0, x2: 0 }
+        ];
+      }
+      loadComboSelect.value = "";
+      recalculate();
+      if (window.showToast) window.showToast("Load combination applied.");
+    });
+  }
 
   // --- Helper Math / Utility Functions ---
 
@@ -2329,6 +2369,67 @@ document.addEventListener("DOMContentLoaded", () => {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
+  function applyDraftingVertices(vertices, sourceLabel) {
+    if (!Array.isArray(vertices) || vertices.length < 3) {
+      alert("A valid closed drawing profile must have at least 3 nodes.");
+      return false;
+    }
+    // Normalize {x,y} points
+    const pts = vertices.map(v => ({
+      x: parseFloat(v.x),
+      y: parseFloat(v.y)
+    })).filter(v => !isNaN(v.x) && !isNaN(v.y));
+    if (pts.length < 3) {
+      alert("Could not parse vertex coordinates from the drawing.");
+      return false;
+    }
+
+    const props = calculatePolygonProperties(pts);
+    if (props.A <= 0.1) {
+      alert("Calculated cross-sectional area is invalid. Ensure the shape is a non-zero closed loop.");
+      return false;
+    }
+
+    sketchedVertices = pts;
+    sketchedIz = props.Iz;
+    sketchedD = props.height;
+    sketchedA = props.A;
+    sketchedSz = props.Sz;
+
+    document.getElementById("section-shape").value = "custom";
+    document.querySelectorAll(".shape-input-group").forEach(el => el.classList.add("hidden"));
+    document.querySelector(".custom-fields").classList.remove("hidden");
+    // Keep drafting fields visible for re-import
+    const draftFields = document.getElementById("import-drafting-fields");
+    if (draftFields) draftFields.classList.remove("hidden");
+
+    document.getElementById("cust-i").value = props.Iz.toFixed(2);
+    document.getElementById("cust-d").value = props.height.toFixed(1);
+    sectionShape = "custom";
+    readShapeParameters();
+    recalculate();
+
+    const status = document.getElementById("drafting-import-status");
+    if (status) {
+      status.innerHTML = `Loaded <strong>${escapeHTML(sourceLabel || "profile")}</strong>: A=${props.A.toFixed(2)} cm² · Iz=${props.Iz.toFixed(2)} cm⁴ · d=${props.height.toFixed(1)} mm · Sz=${props.Sz.toFixed(2)} cm³`;
+      status.style.color = "var(--success, #10b981)";
+    }
+    if (window.showToast) {
+      window.showToast(`Section imported from ${sourceLabel || "drafting board"}`);
+    }
+    return true;
+  }
+
+  function extractVerticesFromDraftingConfig(config) {
+    if (!config) return null;
+    if (Array.isArray(config.vertices)) return config.vertices;
+    if (config.config && Array.isArray(config.config.vertices)) return config.config.vertices;
+    // Some exports nest sketch state
+    if (config.sketch && Array.isArray(config.sketch.vertices)) return config.sketch.vertices;
+    if (Array.isArray(config.points)) return config.points;
+    return null;
+  }
+
   window.loadSelectedDraftingDrawing = () => {
     const select = document.getElementById("import-drawing-select");
     if (!select) return;
@@ -2339,40 +2440,160 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     const drawing = window.loadedDraftingDrawings.find(d => d.id === projId);
-    if (!drawing || !drawing.config || !drawing.config.vertices) {
-      alert("Selected drawing does not contain valid CAD data.");
+    if (!drawing) {
+      alert("Selected drawing not found.");
       return;
     }
-    
-    const vertices = drawing.config.vertices;
-    if (vertices.length < 3) {
-      alert("A valid closed drawing profile must have at least 3 nodes.");
+    const vertices = extractVerticesFromDraftingConfig(drawing.config) || extractVerticesFromDraftingConfig(drawing);
+    if (!vertices) {
+      alert("Selected drawing does not contain valid CAD vertex data.");
       return;
     }
-    
-    const props = calculatePolygonProperties(vertices);
-    if (props.A <= 0.1) {
-      alert("Calculated cross-sectional area is invalid. Please ensure the shape represents a non-zero area closed loop.");
-      return;
+    applyDraftingVertices(vertices, drawing.name || "cloud drawing");
+  };
+
+  window.importDraftingJsonFile = (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        const vertices = extractVerticesFromDraftingConfig(data)
+          || extractVerticesFromDraftingConfig(data.config)
+          || (Array.isArray(data) ? data : null);
+        if (!vertices) {
+          alert("JSON did not contain a vertices array. Export from the drafting board or include { vertices: [...] }.");
+          return;
+        }
+        applyDraftingVertices(vertices, file.name);
+      } catch (err) {
+        alert("Failed to parse drafting JSON: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  };
+
+  // ── Diagram PNG / PDF export ─────────────────────────────────
+  function svgToPngBlob(svgEl, scale = 2) {
+    return new Promise((resolve, reject) => {
+      if (!svgEl) return reject(new Error("SVG not found"));
+      const clone = svgEl.cloneNode(true);
+      // Ensure white background for print/export
+      const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bg.setAttribute("width", "100%");
+      bg.setAttribute("height", "100%");
+      bg.setAttribute("fill", "#ffffff");
+      clone.insertBefore(bg, clone.firstChild);
+
+      const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+      const w = (vb && vb.width) || svgEl.clientWidth || 1000;
+      const h = (vb && vb.height) || svgEl.clientHeight || 220;
+      clone.setAttribute("width", w);
+      clone.setAttribute("height", h);
+
+      const xml = new XMLSerializer().serializeToString(clone);
+      const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = w * scale;
+        canvas.height = h * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("PNG encode failed"));
+        }, "image/png");
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to rasterize SVG"));
+      };
+      img.src = url;
+    });
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  window.exportDiagramPng = async (svgId, label) => {
+    try {
+      const svg = document.getElementById(svgId);
+      const blob = await svgToPngBlob(svg);
+      downloadBlob(blob, `beam-${label.toLowerCase()}-${Date.now()}.png`);
+      if (window.showToast) window.showToast(`${label} exported as PNG.`);
+    } catch (err) {
+      console.error(err);
+      alert("Export failed: " + err.message);
     }
-    
-    // Load calculated properties into custom inputs
-    document.getElementById("section-shape").value = "custom";
-    
-    // Trigger toggling of fields manually
-    document.querySelectorAll(".shape-input-group").forEach(el => el.classList.add("hidden"));
-    document.querySelector(".custom-fields").classList.remove("hidden");
-    
-    // Set parameters in inputs
-    document.getElementById("cust-i").value = props.Iz.toFixed(2);
-    document.getElementById("cust-d").value = props.height.toFixed(1);
-    
-    // Update global state section shape
-    sectionShape = "custom";
-    
-    readShapeParameters();
-    recalculate();
-    
-    alert(`Successfully imported "${drawing.name}"!\nProperties Calculated & Loaded:\n- Area (A): ${props.A.toFixed(2)} cm²\n- Inertia (Iz): ${props.Iz.toFixed(2)} cm⁴\n- Height (d): ${props.height.toFixed(1)} mm`);
+  };
+
+  window.exportAllDiagramsPdf = async () => {
+    try {
+      const ids = [
+        { id: "beam-schematic-svg", title: "Beam Schematic" },
+        { id: "sfd-svg", title: "Shear Force Diagram (SFD)" },
+        { id: "bmd-svg", title: "Bending Moment Diagram (BMD)" },
+        { id: "deflection-svg", title: "Deflection Curve" }
+      ];
+      const parts = [];
+      for (const item of ids) {
+        const svg = document.getElementById(item.id);
+        if (!svg) continue;
+        const blob = await svgToPngBlob(svg, 2);
+        const dataUrl = await new Promise((res) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result);
+          r.readAsDataURL(blob);
+        });
+        parts.push({ title: item.title, dataUrl });
+      }
+
+      const w = window.open("", "_blank");
+      if (!w) {
+        alert("Pop-up blocked. Allow pop-ups to open the PDF/print view.");
+        return;
+      }
+      const meta = [
+        `L = ${L} m`,
+        `E = ${E} GPa`,
+        `σy = ${yieldStrength} MPa`,
+        `${supports.length} supports`,
+        `${loads.length} loads`
+      ].join(" · ");
+      w.document.write(`<!DOCTYPE html><html><head><title>Beam Analysis Report</title>
+        <style>
+          body { font-family: system-ui, sans-serif; margin: 24px; color: #0f172a; }
+          h1 { font-size: 20px; margin: 0 0 4px; }
+          .meta { color: #64748b; font-size: 12px; margin-bottom: 20px; }
+          h2 { font-size: 14px; margin: 18px 0 8px; }
+          img { width: 100%; max-width: 960px; border: 1px solid #e2e8f0; border-radius: 8px; }
+          @media print { body { margin: 12px; } .noprint { display: none; } }
+        </style></head><body>
+        <button class="noprint" onclick="window.print()" style="padding:8px 14px;margin-bottom:16px;cursor:pointer;">Print / Save as PDF</button>
+        <h1>Structural Beam Analysis</h1>
+        <div class="meta">${meta} · Generated ${new Date().toLocaleString()}</div>
+        ${parts.map(p => `<h2>${p.title}</h2><img src="${p.dataUrl}" alt="${p.title}" />`).join("")}
+        </body></html>`);
+      w.document.close();
+      if (window.showToast) window.showToast("Print/PDF view opened.");
+    } catch (err) {
+      console.error(err);
+      alert("PDF export failed: " + err.message);
+    }
   };
 });

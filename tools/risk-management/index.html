@@ -57,7 +57,13 @@
             <div class="card">
                 <!-- Toolbar: Filter + Add Button -->
                 <div class="toolbar">
-                    <div class="filter-bar" style="flex:1">
+                    <div class="filter-bar" style="flex:1; flex-wrap: wrap; gap: 10px;">
+                        <div class="filter-group">
+                            <label for="risk-register-select">Register / Site</label>
+                            <select id="risk-register-select" title="Switch risk register (local multi-project)">
+                                <option value="default">Default Register</option>
+                            </select>
+                        </div>
                         <div class="filter-group">
                             <label for="filter-category">Category</label>
                             <input id="filter-category" type="text" placeholder="e.g., Schedule" />
@@ -71,6 +77,8 @@
                                 <option>Closed</option>
                             </select>
                         </div>
+                        <button class="btn-secondary" id="new-register-btn" type="button" title="Create another risk register">+ Register</button>
+                        <button class="btn-secondary" id="export-matrix-btn" type="button" title="Export risk matrix PDF/print">Matrix PDF</button>
                         <button class="btn-primary" id="add-risk-btn" title="Add a new risk">
                             <i data-lucide="plus"></i> Add Risk
                         </button>
@@ -88,7 +96,9 @@
                                 <th class="center">S</th>
                                 <th class="center">P</th>
                                 <th class="center">Score</th>
+                                <th class="center">Residual</th>
                                 <th class="center">Level</th>
+                                <th>Link</th>
                                 <th>Status</th>
                                 <th>Next Checkpoint</th>
                                 <th class="center">Actions</th>
@@ -211,9 +221,37 @@
                     <label for="risk-mitigation">Mitigation</label>
                     <textarea id="risk-mitigation" rows="2" placeholder="Planned mitigation actions…"></textarea>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="risk-residual-severity">Residual Severity (after mitigation)</label>
+                        <select id="risk-residual-severity">
+                            <option value="">— Same as inherent —</option>
+                            <option value="1">1 – Negligible</option>
+                            <option value="2">2 – Minor</option>
+                            <option value="3">3 – Moderate</option>
+                            <option value="4">4 – Major</option>
+                            <option value="5">5 – Critical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="risk-residual-probability">Residual Probability</label>
+                        <select id="risk-residual-probability">
+                            <option value="">— Same as inherent —</option>
+                            <option value="1">1 – Rare</option>
+                            <option value="2">2 – Unlikely</option>
+                            <option value="3">3 – Possible</option>
+                            <option value="4">4 – Likely</option>
+                            <option value="5">5 – Almost Certain</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="form-group full-width">
                     <label for="risk-blockers">Blockers</label>
                     <input id="risk-blockers" type="text" placeholder="Any blockers?" />
+                </div>
+                <div class="form-group full-width">
+                    <label for="risk-jira-link">Jira / External Link</label>
+                    <input id="risk-jira-link" type="url" placeholder="https://jira.example.com/browse/PROJ-123" />
                 </div>
                 <div class="form-row">
                     <div class="form-group">

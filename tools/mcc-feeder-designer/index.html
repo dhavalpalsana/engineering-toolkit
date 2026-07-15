@@ -216,6 +216,46 @@
           </div>
         </div>
 
+        <div class="panel-section" style="margin-top: 12px;">
+          <h3>Templates &amp; Exports</h3>
+          <div class="form-group">
+            <label for="mcc-template-select">MCC Layout Template</label>
+            <select id="mcc-template-select" class="form-select">
+              <option value="">-- Load template --</option>
+              <option value="single-dol">Single DOL feeder</option>
+              <option value="dual-motor">Dual motor (DOL + VFD)</option>
+              <option value="soft-lineup">Soft starter lineup (3 motors)</option>
+            </select>
+          </div>
+          <button type="button" class="btn" style="width:100%;margin-top:8px;font-size:12px;" onclick="applyMccTemplate()">Load Template</button>
+          <button type="button" class="btn" style="width:100%;margin-top:8px;font-size:12px;" onclick="exportPanelScheduleCsv()">Export Panel Schedule CSV</button>
+        </div>
+
+        <div class="panel-section" style="margin-top: 12px;">
+          <h3>Cable Tray Fill</h3>
+          <div class="form-group">
+            <label for="tray-width">Tray width (mm)</label>
+            <input type="number" id="tray-width" value="300" min="50" step="10">
+          </div>
+          <div class="form-group">
+            <label for="tray-depth">Tray usable depth (mm)</label>
+            <input type="number" id="tray-depth" value="100" min="20" step="5">
+          </div>
+          <div class="form-group">
+            <label for="tray-fill-limit">Fill limit (%)</label>
+            <input type="number" id="tray-fill-limit" value="40" min="10" max="100" step="1">
+          </div>
+          <button type="button" class="btn" style="width:100%;margin-top:8px;font-size:12px;" onclick="updateTrayFillCalc()">Calculate Fill</button>
+          <div id="tray-fill-results" style="font-size:11px;margin-top:8px;line-height:1.45;color:var(--text-secondary);"></div>
+        </div>
+
+        <div class="panel-section" style="margin-top: 12px;">
+          <h3>Bus Short-Circuit</h3>
+          <p class="section-desc" style="font-size:11px;">Uses source SCC (kA) and main feed impedance estimate at the busbar.</p>
+          <div id="bus-sc-results" style="font-size:11px;line-height:1.45;color:var(--text-secondary);">Run calculations after loading a design.</div>
+          <button type="button" class="btn" style="width:100%;margin-top:8px;font-size:12px;" onclick="updateBusShortCircuit()">Refresh SC Estimate</button>
+        </div>
+
         <div class="canvas-help-info">
           <h4>💡 Wiring Guide</h4>
           <ul>

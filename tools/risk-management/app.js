@@ -37,6 +37,7 @@ let riskData = [];
 let editingRiskId = null;
 let authListenerAttached = false;
 let loadedFromShareLink = false;
+let activeRegisterId = localStorage.getItem("riskManagementActiveRegister") || "default";
 
 // ----- Firebase Helpers -----
 async function getCurrentUser() {
@@ -149,9 +150,31 @@ async function bulkWriteRisksToFirestore(risks) {
 }
 
 // ----- Local Storage Fallback -----
+function registerStorageKey(regId) {
+  const id = regId || activeRegisterId || "default";
+  return id === "default" ? "riskManagementRisks" : `riskManagementRisks__${id}`;
+}
+
+function listRegisters() {
+  try {
+    const raw = localStorage.getItem("riskManagementRegisters");
+    const list = raw ? JSON.parse(raw) : [];
+    if (!list.find(r => r.id === "default")) {
+      list.unshift({ id: "default", name: "Default Register" });
+    }
+    return list;
+  } catch (_) {
+    return [{ id: "default", name: "Default Register" }];
+  }
+}
+
+function saveRegisterList(list) {
+  localStorage.setItem("riskManagementRegisters", JSON.stringify(list));
+}
+
 function loadRisksFromLocal() {
   try {
-    const json = localStorage.getItem("riskManagementRisks");
+    const json = localStorage.getItem(registerStorageKey());
     return json ? JSON.parse(json) : [];
   } catch (_) {
     return [];
@@ -159,7 +182,7 @@ function loadRisksFromLocal() {
 }
 
 function clearLocalRisks() {
-  localStorage.removeItem("riskManagementRisks");
+  localStorage.removeItem(registerStorageKey());
 }
 
 /**
@@ -169,9 +192,11 @@ function clearLocalRisks() {
 async function persistRisks() {
   const user = await getCurrentUser();
   if (!user) {
-    localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+    localStorage.setItem(registerStorageKey(), JSON.stringify(riskData));
     return;
   }
+  // Cloud path still uses per-user risk_registers; register id stored on each doc
+  riskData.forEach(r => { r.registerId = activeRegisterId; });
   await bulkWriteRisksToFirestore(riskData);
 }
 
@@ -182,14 +207,26 @@ async function replaceRiskData(risks) {
   renderAll();
 }
 
+function residualScore(r) {
+  const s = parseInt(r.residualSeverity, 10);
+  const p = parseInt(r.residualProbability, 10);
+  if (!s || !p) return computeScore(r.severity, r.probability);
+  return s * p;
+}
+
 function normalizeRisk(r) {
   if (!r || typeof r !== "object") return r;
   const score = computeScore(r.severity, r.probability);
+  const resScore = residualScore(r);
   return {
     ...r,
     id: r.id || ("risk-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8)),
     score,
-    level: determineLevel(score).level
+    residualScore: resScore,
+    level: determineLevel(score).level,
+    residualLevel: determineLevel(resScore).level,
+    registerId: r.registerId || activeRegisterId,
+    jiraLink: r.jiraLink || ""
   };
 }
 
@@ -288,7 +325,7 @@ function renderRiskList() {
 
   if (filtered.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="10">
+    tr.innerHTML = `<td colspan="12">
       <div class="empty-state">
         <i data-lucide="shield-off"></i>
         <p><strong>No risks found</strong></p>
@@ -301,7 +338,12 @@ function renderRiskList() {
 
   filtered.forEach(risk => {
     const score = computeScore(risk.severity, risk.probability);
+    const res = residualScore(risk);
     const lvl = determineLevel(score);
+    const resLvl = determineLevel(res);
+    const linkHtml = risk.jiraLink
+      ? `<a href="${escapeHTML(risk.jiraLink)}" target="_blank" rel="noopener" title="${escapeHTML(risk.jiraLink)}" style="color:var(--accent-primary);">Jira</a>`
+      : '<span style="color:var(--text-muted)">—</span>';
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHTML(risk.description)}</td>
@@ -310,7 +352,9 @@ function renderRiskList() {
       <td class="center"><span class="score-pill">${risk.severity}</span></td>
       <td class="center"><span class="score-pill">${risk.probability}</span></td>
       <td class="center"><span class="score-pill">${score}</span></td>
+      <td class="center"><span class="score-pill" title="Residual ${resLvl.level}">${res}</span></td>
       <td class="center"><span class="badge ${lvl.cssClass}">${lvl.level}</span></td>
+      <td>${linkHtml}</td>
       <td><span class="status-badge ${getStatusClass(risk.status)}">${escapeHTML(risk.status)}</span></td>
       <td>${risk.nextCheckpoint ? escapeHTML(risk.nextCheckpoint) : '<span style="color:var(--text-muted)">—</span>'}</td>
       <td class="center">
@@ -342,7 +386,7 @@ async function deleteRisk(id) {
   // Keep localStorage in sync when logged out
   const user = await getCurrentUser();
   if (!user) {
-    localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+    localStorage.setItem(registerStorageKey(), JSON.stringify(riskData));
   }
   renderAll();
 }
@@ -595,6 +639,12 @@ function openEditRisk(id) {
   if (blk) blk.value = risk.blockers || "";
   if (stat) stat.value = risk.status || "Open";
   if (chk) chk.value = risk.nextCheckpoint || "";
+  const resS = document.getElementById("risk-residual-severity");
+  const resP = document.getElementById("risk-residual-probability");
+  const jira = document.getElementById("risk-jira-link");
+  if (resS) resS.value = risk.residualSeverity || "";
+  if (resP) resP.value = risk.residualProbability || "";
+  if (jira) jira.value = risk.jiraLink || "";
 
   openModal("risk-modal");
 }
@@ -608,24 +658,32 @@ async function saveRisk() {
   const description = document.getElementById("risk-description")?.value.trim();
   if (!description) return;
 
+  const resSevRaw = document.getElementById("risk-residual-severity")?.value;
+  const resProbRaw = document.getElementById("risk-residual-probability")?.value;
   const riskObj = {
     description,
     owner: document.getElementById("risk-owner")?.value.trim() || "",
     category: document.getElementById("risk-category")?.value.trim() || "",
     severity: parseInt(document.getElementById("risk-severity")?.value) || 3,
     probability: parseInt(document.getElementById("risk-probability")?.value) || 3,
+    residualSeverity: resSevRaw ? parseInt(resSevRaw, 10) : null,
+    residualProbability: resProbRaw ? parseInt(resProbRaw, 10) : null,
     rationaleSeverity: document.getElementById("risk-rationale-severity")?.value.trim() || "",
     rationaleProbability: document.getElementById("risk-rationale-probability")?.value.trim() || "",
     mitigation: document.getElementById("risk-mitigation")?.value.trim() || "",
     blockers: document.getElementById("risk-blockers")?.value.trim() || "",
+    jiraLink: document.getElementById("risk-jira-link")?.value.trim() || "",
     status: document.getElementById("risk-status")?.value || "Open",
     nextCheckpoint: document.getElementById("risk-checkpoint")?.value || "",
+    registerId: activeRegisterId,
     dateCreated: new Date().toISOString(),
     dateResolved: null
   };
 
   riskObj.score = computeScore(riskObj.severity, riskObj.probability);
   riskObj.level = determineLevel(riskObj.score).level;
+  riskObj.residualScore = residualScore(riskObj);
+  riskObj.residualLevel = determineLevel(riskObj.residualScore).level;
 
   if (editingRiskId) {
     // Update existing
@@ -646,7 +704,7 @@ async function saveRisk() {
   if (user) {
     await saveRiskToFirestore(riskObj);
   } else {
-    localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+    localStorage.setItem(registerStorageKey(), JSON.stringify(riskData));
   }
   renderAll();
   closeModal("risk-modal");
@@ -736,9 +794,131 @@ function init() {
   // Initialize default view
   switchView('edit');
 
+  // Multi-register + matrix export
+  populateRegisterSelect();
+  document.getElementById("risk-register-select")?.addEventListener("change", onRegisterChange);
+  document.getElementById("new-register-btn")?.addEventListener("click", createNewRegister);
+  document.getElementById("export-matrix-btn")?.addEventListener("click", exportRiskMatrixPdf);
+
   // Load data (wait for auth; migrate local → cloud on sign-in)
   loadInitialRiskData();
   attachAuthListener();
+}
+
+function populateRegisterSelect() {
+  const sel = document.getElementById("risk-register-select");
+  if (!sel) return;
+  const list = listRegisters();
+  sel.innerHTML = list.map(r =>
+    `<option value="${escapeHTML(r.id)}" ${r.id === activeRegisterId ? "selected" : ""}>${escapeHTML(r.name)}</option>`
+  ).join("");
+}
+
+async function onRegisterChange(e) {
+  const next = e.target.value || "default";
+  if (next === activeRegisterId) return;
+  // Persist current register before switching
+  await persistRisks();
+  activeRegisterId = next;
+  localStorage.setItem("riskManagementActiveRegister", activeRegisterId);
+  riskData = loadRisksFromLocal();
+  ensureSampleRisk(false);
+  renderAll();
+  if (window.showToast) window.showToast(`Switched to register: ${next}`);
+}
+
+async function createNewRegister() {
+  const name = prompt("Name for the new risk register (e.g. Plant A / Site B):");
+  if (!name || !name.trim()) return;
+  const id = "reg-" + Date.now().toString(36);
+  const list = listRegisters();
+  list.push({ id, name: name.trim() });
+  saveRegisterList(list);
+  await persistRisks();
+  activeRegisterId = id;
+  localStorage.setItem("riskManagementActiveRegister", activeRegisterId);
+  riskData = [];
+  ensureSampleRisk(false);
+  populateRegisterSelect();
+  renderAll();
+  if (window.showToast) window.showToast(`Created register "${name.trim()}"`);
+}
+
+function exportRiskMatrixPdf() {
+  const regName = listRegisters().find(r => r.id === activeRegisterId)?.name || activeRegisterId;
+  // Build 5x5 counts for inherent + residual
+  const inherent = {};
+  const residual = {};
+  riskData.forEach(r => {
+    const ik = `${r.severity}-${r.probability}`;
+    inherent[ik] = (inherent[ik] || 0) + 1;
+    const rs = parseInt(r.residualSeverity, 10) || r.severity;
+    const rp = parseInt(r.residualProbability, 10) || r.probability;
+    const rk = `${rs}-${rp}`;
+    residual[rk] = (residual[rk] || 0) + 1;
+  });
+
+  const cell = (map, s, p) => map[`${s}-${p}`] || 0;
+  const gridHtml = (map, title) => {
+    let rows = "";
+    for (let s = 5; s >= 1; s--) {
+      rows += "<tr>";
+      rows += `<td style="font-weight:700;padding:6px;">S${s}</td>`;
+      for (let p = 1; p <= 5; p++) {
+        const sc = s * p;
+        const bg = sc >= 16 ? "#fecdd3" : sc >= 12 ? "#fed7aa" : sc >= 6 ? "#fef08a" : "#bbf7d0";
+        rows += `<td style="text-align:center;padding:10px;background:${bg};border:1px solid #e2e8f0;">${cell(map, s, p) || "·"}</td>`;
+      }
+      rows += "</tr>";
+    }
+    return `<h2>${title}</h2>
+      <table style="border-collapse:collapse;margin-bottom:20px;">
+        <tr><td></td><td class="c">P1</td><td class="c">P2</td><td class="c">P3</td><td class="c">P4</td><td class="c">P5</td></tr>
+        ${rows}
+      </table>`;
+  };
+
+  const tableRows = riskData.map(r => {
+    const res = residualScore(r);
+    return `<tr>
+      <td>${escapeHTML(r.description)}</td>
+      <td>${escapeHTML(r.owner || "")}</td>
+      <td>${escapeHTML(r.category || "")}</td>
+      <td style="text-align:center">${r.severity}×${r.probability}=${computeScore(r.severity, r.probability)}</td>
+      <td style="text-align:center">${res}</td>
+      <td>${escapeHTML(r.status || "")}</td>
+      <td>${r.jiraLink ? `<a href="${escapeHTML(r.jiraLink)}">${escapeHTML(r.jiraLink)}</a>` : ""}</td>
+    </tr>`;
+  }).join("");
+
+  const w = window.open("", "_blank");
+  if (!w) {
+    alert("Pop-up blocked — allow pop-ups for matrix PDF export.");
+    return;
+  }
+  w.document.write(`<!DOCTYPE html><html><head><title>Risk Matrix — ${escapeHTML(regName)}</title>
+    <style>
+      body{font-family:system-ui,sans-serif;margin:24px;color:#0f172a}
+      h1{font-size:20px;margin:0 0 4px}
+      .meta{color:#64748b;font-size:12px;margin-bottom:16px}
+      table.data{width:100%;border-collapse:collapse;font-size:12px}
+      table.data th,table.data td{border:1px solid #e2e8f0;padding:6px 8px;text-align:left}
+      table.data th{background:#f8fafc}
+      .c{text-align:center;font-weight:600;padding:6px}
+      @media print{.noprint{display:none}}
+    </style></head><body>
+    <button class="noprint" onclick="window.print()" style="padding:8px 14px;margin-bottom:16px;cursor:pointer">Print / Save as PDF</button>
+    <h1>Risk Matrix Report</h1>
+    <div class="meta">Register: ${escapeHTML(regName)} · ${riskData.length} risks · ${new Date().toLocaleString()}</div>
+    ${gridHtml(inherent, "Inherent Risk Matrix (count per cell)")}
+    ${gridHtml(residual, "Residual Risk Matrix (after mitigation)")}
+    <h2>Risk Register</h2>
+    <table class="data">
+      <thead><tr><th>Description</th><th>Owner</th><th>Category</th><th>Inherent</th><th>Residual</th><th>Status</th><th>Link</th></tr></thead>
+      <tbody>${tableRows || "<tr><td colspan=7>No risks</td></tr>"}</tbody>
+    </table>
+    </body></html>`);
+  w.document.close();
 }
 
 async function loadInitialRiskData() {
@@ -819,7 +999,7 @@ function ensureSampleRisk(skipPersist) {
     riskData.push(dummyRisk);
     // Never auto-write the sample risk to Firestore
     if (!skipPersist) {
-      localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+      localStorage.setItem(registerStorageKey(), JSON.stringify(riskData));
     }
   }
 }
