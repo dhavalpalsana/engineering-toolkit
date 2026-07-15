@@ -236,9 +236,36 @@
     }
   }
 
+  /**
+   * Sync tool page header logo with the hub card icon from registryIcons.
+   * Hub (app.js) and tool headers must share the same SVG artwork.
+   */
+  function syncHeaderIcon(tool) {
+    if (!tool || !tool.icon) return;
+    const icons = window.registryIcons;
+    if (!icons || !icons[tool.icon]) return;
+
+    const host = document.querySelector("header .hdr-icon");
+    if (!host) return;
+
+    // Use the exact same SVG markup as the main page tool cards
+    host.innerHTML = icons[tool.icon];
+
+    // Normalize size so header styling matches (header.css targets .hdr-icon svg)
+    host.querySelectorAll("svg").forEach((svg) => {
+      svg.setAttribute("width", "22");
+      svg.setAttribute("height", "22");
+      svg.removeAttribute("class");
+      // Keep stroke currentColor for theme consistency
+      if (!svg.getAttribute("fill")) svg.setAttribute("fill", "none");
+      if (!svg.getAttribute("stroke")) svg.setAttribute("stroke", "currentColor");
+    });
+  }
+
   function boot() {
     const toolId = detectToolId();
     const tool = getToolMeta(toolId);
+    syncHeaderIcon(tool);
     injectBetaBanner(tool);
     ensureFooter();
 
@@ -246,6 +273,7 @@
     window.ToolShell = window.ToolShell || {};
     window.ToolShell.toolId = toolId;
     window.ToolShell.toolMeta = tool;
+    window.ToolShell.syncHeaderIcon = syncHeaderIcon;
   }
 
   window.ToolShell = {
@@ -254,7 +282,8 @@
     detectToolId,
     getToolMeta,
     openBugReport,
-    openSuggest
+    openSuggest,
+    syncHeaderIcon
   };
 
   if (document.readyState === "loading") {

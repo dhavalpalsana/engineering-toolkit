@@ -100,15 +100,23 @@ header {
   color: #fff;
   box-shadow: 0 4px 12px var(--accent-primary-glow);
 }
+/* Match hub card icons (registryIcons) — white stroke on accent badge */
 .hdr-icon svg,
 .hdr-icon i[data-lucide] {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
+  max-width: 20px;
+  max-height: 20px;
   stroke: currentColor;
+  color: #fff;
   fill: none;
-  stroke-width: 2.2;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.hdr-icon svg * {
+  stroke: currentColor;
 }
 
 /* Title + subtitle */
