@@ -88,14 +88,523 @@ document.addEventListener("DOMContentLoaded", () => {
   // Layer Configuration
   let layers = {
     "FOREGROUND": { color: "#000000", visible: true, frozen: false },
-    "BACKGROUND": { color: "#475569", visible: true, frozen: false }
+    "BACKGROUND": { color: "#475569", visible: true, frozen: false },
+    "HOLES": { color: "#2563eb", visible: true, frozen: false },
+    "CONSTRUCTION": { color: "#94a3b8", visible: true, frozen: false }
   };
+  let activeLayerName = "FOREGROUND";
   let activeBlockToInsert = null;
 
   // Status Toggles
   window.orthoLockEnabled = false;
   window.gridVisible = true;
   window.snapEnabled = true;
+
+  // ── Phase B: Undo / Redo ───────────────────────────────────
+  const MAX_UNDO = 60;
+  let undoStack = [];
+  let redoStack = [];
+  let suppressUndo = false;
+
+  function captureDrawingSnapshot() {
+    return JSON.stringify({
+      vertices: sketchVertices,
+      profiles: sketchProfiles,
+      activeProfileStartIndex,
+      circles: sketchCircles,
+      insertions: sketchInsertions,
+      customDimensions,
+      isSketchClosed,
+      activeLayerName
+    });
+  }
+
+  function applyDrawingSnapshot(json) {
+    const data = typeof json === "string" ? JSON.parse(json) : json;
+    sketchVertices = data.vertices || [];
+    sketchProfiles = data.profiles || [];
+    activeProfileStartIndex = data.activeProfileStartIndex !== undefined ? data.activeProfileStartIndex : sketchVertices.length;
+    sketchCircles = data.circles || [];
+    sketchInsertions = data.insertions || [];
+    customDimensions = data.customDimensions || [];
+    isSketchClosed = !!data.isSketchClosed;
+    if (data.activeLayerName) activeLayerName = data.activeLayerName;
+    selectedEntity = null;
+    selectedVertexIndex = -1;
+    activeGrip = null;
+    xform = { tool: null, stage: 0, base: null, seed: null, preview: null };
+    rebuildSpatialIndexes();
+    showEntityInspector();
+    updateLiveProperties();
+    syncLayerSelect();
+    drawSketchCanvas();
+    updateToolPromptUI();
+  }
+
+  function pushUndo(label) {
+    if (suppressUndo) return;
+    undoStack.push({ label: label || "edit", snap: captureDrawingSnapshot() });
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    redoStack = [];
+  }
+
+  window.cadUndo = () => {
+    if (undoStack.length === 0) {
+      if (window.showToast) window.showToast("Nothing to undo", false);
+      return;
+    }
+    redoStack.push({ label: "redo", snap: captureDrawingSnapshot() });
+    const item = undoStack.pop();
+    suppressUndo = true;
+    applyDrawingSnapshot(item.snap);
+    suppressUndo = false;
+    if (window.showToast) window.showToast(`Undo: ${item.label || "edit"}`);
+  };
+
+  window.cadRedo = () => {
+    if (redoStack.length === 0) {
+      if (window.showToast) window.showToast("Nothing to redo", false);
+      return;
+    }
+    undoStack.push({ label: "undo", snap: captureDrawingSnapshot() });
+    const item = redoStack.pop();
+    suppressUndo = true;
+    applyDrawingSnapshot(item.snap);
+    suppressUndo = false;
+    if (window.showToast) window.showToast("Redo");
+  };
+
+  // ── Phase B: Grips + transforms ─────────────────────────────
+  let activeGrip = null; // { kind: 'vertex'|'circle-center'|'circle-radius'|'insertion', index }
+  let xform = { tool: null, stage: 0, base: null, seed: null, preview: null };
+  // seed: { type, index, clone of entity data for multi-op }
+
+  function getGripPoints(entity) {
+    if (!entity) return [];
+    const grips = [];
+    if (entity.type === "vertex") {
+      const v = sketchVertices[entity.index];
+      if (v) grips.push({ kind: "vertex", index: entity.index, x: v.x, y: v.y });
+    } else if (entity.type === "line") {
+      const a = sketchVertices[entity.index];
+      // find partner endpoint of segment
+      let b = null;
+      for (const prof of sketchProfiles) {
+        const limit = prof.isClosed ? prof.count : prof.count - 1;
+        for (let i = 0; i < limit; i++) {
+          if (prof.startIndex + i === entity.index) {
+            b = sketchVertices[prof.startIndex + (i + 1) % prof.count];
+            grips.push({ kind: "vertex", index: entity.index, x: a.x, y: a.y });
+            grips.push({ kind: "vertex", index: prof.startIndex + (i + 1) % prof.count, x: b.x, y: b.y });
+            grips.push({ kind: "mid", index: entity.index, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+            return grips;
+          }
+        }
+      }
+      // active polyline
+      if (a && sketchVertices[entity.index + 1]) {
+        b = sketchVertices[entity.index + 1];
+        grips.push({ kind: "vertex", index: entity.index, x: a.x, y: a.y });
+        grips.push({ kind: "vertex", index: entity.index + 1, x: b.x, y: b.y });
+        grips.push({ kind: "mid", index: entity.index, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      }
+    } else if (entity.type === "circle") {
+      const c = sketchCircles[entity.index];
+      if (c) {
+        grips.push({ kind: "circle-center", index: entity.index, x: c.cx, y: c.cy });
+        grips.push({ kind: "circle-radius", index: entity.index, x: c.cx + c.r, y: c.cy });
+      }
+    } else if (entity.type === "insertion") {
+      const ins = sketchInsertions[entity.index];
+      if (ins) grips.push({ kind: "insertion", index: entity.index, x: ins.x, y: ins.y });
+    }
+    return grips;
+  }
+
+  function findGripAt(pos) {
+    if (editorMode !== "select" || !selectedEntity) return null;
+    const grips = getGripPoints(selectedEntity);
+    const tol = 10;
+    for (const g of grips) {
+      if (Math.hypot(pos.x - g.x, pos.y - g.y) < tol) return g;
+    }
+    return null;
+  }
+
+  function cloneEntityForXform(entity) {
+    if (!entity) return null;
+    if (entity.type === "circle") {
+      const c = sketchCircles[entity.index];
+      return c ? { type: "circle", index: entity.index, data: { ...c } } : null;
+    }
+    if (entity.type === "insertion") {
+      const ins = sketchInsertions[entity.index];
+      return ins ? { type: "insertion", index: entity.index, data: { ...ins } } : null;
+    }
+    if (entity.type === "vertex") {
+      const v = sketchVertices[entity.index];
+      return v ? { type: "vertex", index: entity.index, data: { ...v } } : null;
+    }
+    if (entity.type === "line") {
+      // collect both endpoints of segment
+      const idx = entity.index;
+      let i2 = idx + 1;
+      for (const prof of sketchProfiles) {
+        const limit = prof.isClosed ? prof.count : prof.count - 1;
+        for (let i = 0; i < limit; i++) {
+          if (prof.startIndex + i === idx) {
+            i2 = prof.startIndex + (i + 1) % prof.count;
+          }
+        }
+      }
+      return {
+        type: "line",
+        index: idx,
+        indices: [idx, i2],
+        data: [
+          { ...sketchVertices[idx] },
+          { ...sketchVertices[i2] }
+        ]
+      };
+    }
+    return null;
+  }
+
+  function applyXformToSeed(seed, base, dest, tool, extra) {
+    if (!seed) return;
+    const dx = dest.x - base.x;
+    const dy = dest.y - base.y;
+    if (tool === "move" || tool === "copy") {
+      if (seed.type === "circle") {
+        const c = sketchCircles[seed.index];
+        if (c) { c.cx = seed.data.cx + dx; c.cy = seed.data.cy + dy; }
+      } else if (seed.type === "insertion") {
+        const ins = sketchInsertions[seed.index];
+        if (ins) { ins.x = seed.data.x + dx; ins.y = seed.data.y + dy; }
+      } else if (seed.type === "vertex") {
+        sketchVertices[seed.index] = { x: seed.data.x + dx, y: seed.data.y + dy };
+      } else if (seed.type === "line" && seed.indices) {
+        seed.indices.forEach((vi, i) => {
+          sketchVertices[vi] = { x: seed.data[i].x + dx, y: seed.data[i].y + dy };
+        });
+      }
+    } else if (tool === "rotate") {
+      const ang = (extra && extra.angle != null) ? extra.angle : Math.atan2(dy, dx);
+      const cos = Math.cos(ang), sin = Math.sin(ang);
+      const rot = (px, py) => {
+        const rx = px - base.x, ry = py - base.y;
+        return { x: base.x + rx * cos - ry * sin, y: base.y + rx * sin + ry * cos };
+      };
+      if (seed.type === "circle") {
+        const c = sketchCircles[seed.index];
+        if (c) {
+          const p = rot(seed.data.cx, seed.data.cy);
+          c.cx = p.x; c.cy = p.y;
+        }
+      } else if (seed.type === "insertion") {
+        const ins = sketchInsertions[seed.index];
+        if (ins) {
+          const p = rot(seed.data.x, seed.data.y);
+          ins.x = p.x; ins.y = p.y;
+          ins.rotation = (seed.data.rotation || 0) + ang * 180 / Math.PI;
+        }
+      } else if (seed.type === "vertex") {
+        sketchVertices[seed.index] = rot(seed.data.x, seed.data.y);
+      } else if (seed.type === "line" && seed.indices) {
+        seed.indices.forEach((vi, i) => {
+          sketchVertices[vi] = rot(seed.data[i].x, seed.data[i].y);
+        });
+      }
+    } else if (tool === "mirror") {
+      // Mirror across line base→dest
+      const ax = base.x, ay = base.y, bx = dest.x, by = dest.y;
+      const mirrorPt = (px, py) => {
+        const dxm = bx - ax, dym = by - ay;
+        const len2 = dxm * dxm + dym * dym || 1;
+        const t = ((px - ax) * dxm + (py - ay) * dym) / len2;
+        const projx = ax + t * dxm, projy = ay + t * dym;
+        return { x: 2 * projx - px, y: 2 * projy - py };
+      };
+      if (seed.type === "circle") {
+        const c = sketchCircles[seed.index];
+        if (c) {
+          const p = mirrorPt(seed.data.cx, seed.data.cy);
+          c.cx = p.x; c.cy = p.y;
+        }
+      } else if (seed.type === "insertion") {
+        const ins = sketchInsertions[seed.index];
+        if (ins) {
+          const p = mirrorPt(seed.data.x, seed.data.y);
+          ins.x = p.x; ins.y = p.y;
+          ins.scaleX = -(seed.data.scaleX !== undefined ? seed.data.scaleX : 1);
+        }
+      } else if (seed.type === "vertex") {
+        sketchVertices[seed.index] = mirrorPt(seed.data.x, seed.data.y);
+      } else if (seed.type === "line" && seed.indices) {
+        seed.indices.forEach((vi, i) => {
+          sketchVertices[vi] = mirrorPt(seed.data[i].x, seed.data[i].y);
+        });
+      }
+    }
+  }
+
+  function finishCopyFromSeed(seed, base, dest) {
+    // Create new geometry as copy (don't move original)
+    const dx = dest.x - base.x;
+    const dy = dest.y - base.y;
+    if (seed.type === "circle") {
+      sketchCircles.push({
+        ...seed.data,
+        cx: seed.data.cx + dx,
+        cy: seed.data.cy + dy,
+        layer: seed.data.layer || activeLayerName
+      });
+    } else if (seed.type === "insertion") {
+      sketchInsertions.push({
+        ...seed.data,
+        x: seed.data.x + dx,
+        y: seed.data.y + dy
+      });
+    } else if (seed.type === "line" && seed.data) {
+      const a = { x: seed.data[0].x + dx, y: seed.data[0].y + dy };
+      const b = { x: seed.data[1].x + dx, y: seed.data[1].y + dy };
+      const start = sketchVertices.length;
+      sketchVertices.push(a, b);
+      sketchProfiles.push({ startIndex: start, count: 2, isClosed: false });
+      activeProfileStartIndex = sketchVertices.length;
+    } else if (seed.type === "vertex") {
+      // skip lone vertex copy
+    }
+  }
+
+  function offsetLineEntity(entity, distance) {
+    // Offset selected line segment by distance (left of direction)
+    if (!entity || entity.type !== "line") return false;
+    const idx = entity.index;
+    let i2 = idx + 1;
+    for (const prof of sketchProfiles) {
+      const limit = prof.isClosed ? prof.count : prof.count - 1;
+      for (let i = 0; i < limit; i++) {
+        if (prof.startIndex + i === idx) {
+          i2 = prof.startIndex + (i + 1) % prof.count;
+        }
+      }
+    }
+    const a = sketchVertices[idx];
+    const b = sketchVertices[i2];
+    if (!a || !b) return false;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len * distance;
+    const ny = dx / len * distance;
+    const start = sketchVertices.length;
+    sketchVertices.push(
+      { x: a.x + nx, y: a.y + ny },
+      { x: b.x + nx, y: b.y + ny }
+    );
+    sketchProfiles.push({ startIndex: start, count: 2, isClosed: false });
+    activeProfileStartIndex = sketchVertices.length;
+    return true;
+  }
+
+  function extendLineEntity(entity, clickPos) {
+    if (!entity || entity.type !== "line") return false;
+    const idx = entity.index;
+    let i2 = idx + 1;
+    for (const prof of sketchProfiles) {
+      const limit = prof.isClosed ? prof.count : prof.count - 1;
+      for (let i = 0; i < limit; i++) {
+        if (prof.startIndex + i === idx) {
+          i2 = prof.startIndex + (i + 1) % prof.count;
+        }
+      }
+    }
+    const A = sketchVertices[idx];
+    const B = sketchVertices[i2];
+    if (!A || !B) return false;
+
+    // Which end is closer to click?
+    const dA = Math.hypot(clickPos.x - A.x, clickPos.y - A.y);
+    const dB = Math.hypot(clickPos.x - B.x, clickPos.y - B.y);
+    const freeIdx = dA < dB ? idx : i2;
+    const fixed = dA < dB ? B : A;
+    const free = dA < dB ? A : B;
+    const dir = { x: free.x - fixed.x, y: free.y - fixed.y };
+    const dirLen = Math.hypot(dir.x, dir.y) || 1;
+    dir.x /= dirLen; dir.y /= dirLen;
+
+    // Ray from free outward (away from fixed)
+    const rayOrigin = free;
+    const rayDir = dir;
+
+    // Find nearest intersection with other lines ahead of free end
+    let bestT = Infinity;
+    let bestPt = null;
+
+    const considerSeg = (C, D) => {
+      // ray-segment intersection
+      const rx = rayDir.x, ry = rayDir.y;
+      const sx = D.x - C.x, sy = D.y - C.y;
+      const denom = rx * sy - ry * sx;
+      if (Math.abs(denom) < 1e-9) return;
+      const qpx = C.x - rayOrigin.x, qpy = C.y - rayOrigin.y;
+      const t = (qpx * sy - qpy * sx) / denom;
+      const u = (qpx * ry - qpy * rx) / denom;
+      if (t > 1e-3 && u >= 0 && u <= 1 && t < bestT) {
+        bestT = t;
+        bestPt = { x: rayOrigin.x + t * rx, y: rayOrigin.y + t * ry };
+      }
+    };
+
+    sketchProfiles.forEach(prof => {
+      const limit = prof.isClosed ? prof.count : prof.count - 1;
+      for (let i = 0; i < limit; i++) {
+        const s = prof.startIndex + i;
+        if (s === idx) continue;
+        const C = sketchVertices[s];
+        const D = sketchVertices[prof.startIndex + (i + 1) % prof.count];
+        considerSeg(C, D);
+      }
+    });
+    // active polyline segments
+    const aStart = activeProfileStartIndex;
+    const aCount = sketchVertices.length - aStart;
+    for (let i = 0; i < aCount - 1; i++) {
+      const s = aStart + i;
+      if (s === idx) continue;
+      considerSeg(sketchVertices[s], sketchVertices[s + 1]);
+    }
+
+    if (!bestPt) {
+      // extend by fixed distance if no hit
+      bestPt = { x: free.x + dir.x * 20, y: free.y + dir.y * 20 };
+    }
+    sketchVertices[freeIdx] = { x: Math.round(bestPt.x * 100) / 100, y: Math.round(bestPt.y * 100) / 100 };
+    return true;
+  }
+
+  // ── Dynamic input (length / angle) ─────────────────────────
+  function showDynInput(show) {
+    const bar = document.getElementById("dyn-input-bar");
+    if (!bar) return;
+    bar.classList.toggle("hidden", !show);
+    if (show) {
+      const field = document.getElementById("dyn-input-field");
+      if (field) {
+        field.value = "";
+        setTimeout(() => field.focus(), 0);
+      }
+    }
+  }
+
+  function parseDynInput(str) {
+    // Formats: "50" length, "@50<90" polar, "45d" angle degrees, "50@90"
+    const s = String(str || "").trim().replace(/\s+/g, "");
+    if (!s) return null;
+    // @dist<angle
+    let m = s.match(/^@?([-+]?\d*\.?\d+)<([-+]?\d*\.?\d+)$/);
+    if (m) return { kind: "polar", dist: parseFloat(m[1]), angleDeg: parseFloat(m[2]) };
+    // dist@angle
+    m = s.match(/^([-+]?\d*\.?\d+)@([-+]?\d*\.?\d+)$/);
+    if (m) return { kind: "polar", dist: parseFloat(m[1]), angleDeg: parseFloat(m[2]) };
+    // angle with d
+    m = s.match(/^([-+]?\d*\.?\d+)d$/i);
+    if (m) return { kind: "angle", angleDeg: parseFloat(m[1]) };
+    // plain length
+    m = s.match(/^([-+]?\d*\.?\d+)$/);
+    if (m) return { kind: "length", dist: parseFloat(m[1]) };
+    return null;
+  }
+
+  function applyDynInputValue() {
+    const field = document.getElementById("dyn-input-field");
+    if (!field) return;
+    const parsed = parseDynInput(field.value);
+    if (!parsed) {
+      if (window.showToast) window.showToast("Use length, @len<ang, or angd", false);
+      return;
+    }
+
+    if (editorMode === "draw") {
+      const activeStart = activeProfileStartIndex;
+      const activeCount = sketchVertices.length - activeStart;
+      if (activeCount < 1) {
+        if (window.showToast) window.showToast("Place first point, then type length", false);
+        return;
+      }
+      const last = sketchVertices[sketchVertices.length - 1];
+      let ang = 0;
+      if (parsed.kind === "polar") ang = parsed.angleDeg * Math.PI / 180;
+      else if (parsed.kind === "angle") ang = parsed.angleDeg * Math.PI / 180;
+      else if (activeCount >= 2) {
+        const prev = sketchVertices[sketchVertices.length - 2];
+        ang = Math.atan2(last.y - prev.y, last.x - prev.x);
+      } else if (window.orthoLockEnabled || shiftPressed) {
+        ang = 0;
+      } else if (mousePos) {
+        ang = Math.atan2(mousePos.y - last.y, mousePos.x - last.x);
+      }
+      const dist = parsed.kind === "angle" ? Math.hypot((mousePos?.x || 0) - last.x, (mousePos?.y || 0) - last.y) || 10 : parsed.dist;
+      pushUndo("line input");
+      const pt = {
+        x: Math.round((last.x + dist * Math.cos(ang)) * 100) / 100,
+        y: Math.round((last.y + dist * Math.sin(ang)) * 100) / 100
+      };
+      sketchVertices.push(pt);
+      lastAnchorPos = { ...pt };
+      field.value = "";
+      rebuildSpatialIndexes();
+      drawSketchCanvas();
+      updateLiveProperties();
+      updateToolPromptUI();
+      return;
+    }
+
+    if (editorMode === "offset" && selectedEntity && selectedEntity.type === "line") {
+      const dist = parsed.kind === "length" || parsed.kind === "polar" ? parsed.dist : 5;
+      pushUndo("offset");
+      offsetLineEntity(selectedEntity, dist);
+      rebuildSpatialIndexes();
+      drawSketchCanvas();
+      updateLiveProperties();
+      setEditorMode("select");
+      field.value = "";
+      return;
+    }
+
+    if (editorMode === "rotate" && xform.stage >= 1 && xform.base && xform.seed) {
+      if (parsed.kind === "angle" || parsed.kind === "polar") {
+        pushUndo("rotate");
+        // restore seed then rotate
+        restoreSeedGeometry(xform.seed);
+        applyXformToSeed(xform.seed, xform.base, xform.base, "rotate", { angle: (parsed.angleDeg || 0) * Math.PI / 180 });
+        rebuildSpatialIndexes();
+        drawSketchCanvas();
+        updateLiveProperties();
+        setEditorMode("select");
+        field.value = "";
+      }
+    }
+  }
+
+  function restoreSeedGeometry(seed) {
+    if (!seed) return;
+    if (seed.type === "circle") Object.assign(sketchCircles[seed.index], seed.data);
+    else if (seed.type === "insertion") Object.assign(sketchInsertions[seed.index], seed.data);
+    else if (seed.type === "vertex") sketchVertices[seed.index] = { ...seed.data };
+    else if (seed.type === "line" && seed.indices) {
+      seed.indices.forEach((vi, i) => { sketchVertices[vi] = { ...seed.data[i] }; });
+    }
+  }
+
+  function syncLayerSelect() {
+    const sel = document.getElementById("status-layer-select");
+    if (!sel) return;
+    const names = Object.keys(layers);
+    sel.innerHTML = names.map(n =>
+      `<option value="${n}" ${n === activeLayerName ? "selected" : ""}>${n}</option>`
+    ).join("");
+  }
 
   // --- Canvas setup ---
   const canvasEl = document.getElementById("cad-canvas");
@@ -462,12 +971,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const statusText = document.getElementById("cad-status-text");
     const toolName = document.getElementById("status-tool-name");
     const cursorPrompt = document.getElementById("cursor-prompt");
-    const layerEl = document.getElementById("status-layer");
 
     if (toolName) toolName.textContent = prompts.toolLabel;
     if (statusText) statusText.textContent = prompts.status;
     if (instr) instr.textContent = prompts.banner;
-    if (layerEl) layerEl.textContent = "Layer: FOREGROUND";
+    const layerSelect = document.getElementById("status-layer-select");
+    if (layerSelect && layerSelect.value !== activeLayerName) {
+      // keep options in sync if layers changed
+      if (![...layerSelect.options].some(o => o.value === activeLayerName)) syncLayerSelect();
+      layerSelect.value = activeLayerName;
+    }
 
     if (cursorPrompt) {
       if (prompts.cursor && editorMode !== "select" && editorMode !== "pan") {
@@ -485,6 +998,12 @@ document.addEventListener("DOMContentLoaded", () => {
       box.classList.toggle("mode-pan", editorMode === "pan" || spacePanHeld);
       box.classList.toggle("mode-select", editorMode === "select");
     }
+
+    // Dynamic input visibility for draw/offset/rotate
+    const showDyn = (editorMode === "draw" && (sketchVertices.length - activeProfileStartIndex) >= 1) ||
+      editorMode === "offset" ||
+      (editorMode === "rotate" && xform.stage >= 1);
+    showDynInput(!!showDyn);
 
     updateZoomPctDisplay();
   }
@@ -563,8 +1082,50 @@ document.addEventListener("DOMContentLoaded", () => {
         return {
           toolLabel: "INSERT",
           status: `Place ${activeBlockToInsert || "block"}${snapLabel}`,
-          banner: `Insert: click to place ${activeBlockToInsert || "block"}.`,
+          banner: `Insert: click to place ${activeBlockToInsert || "block"} (ghost preview follows cursor).`,
           cursor: "Place block"
+        };
+      case "move":
+        return {
+          toolLabel: "MOVE",
+          status: xform.stage === 0 ? (selectedEntity ? "Specify base point" : "Select entity") : "Specify destination",
+          banner: "Move: select → base point → destination. Esc cancel.",
+          cursor: xform.stage === 0 ? "Base point" : "Destination"
+        };
+      case "copy":
+        return {
+          toolLabel: "COPY",
+          status: xform.stage === 0 ? (selectedEntity ? "Specify base point" : "Select entity") : "Specify destination",
+          banner: "Copy: select → base point → destination.",
+          cursor: xform.stage === 0 ? "Base point" : "Second point"
+        };
+      case "rotate":
+        return {
+          toolLabel: "ROTATE",
+          status: xform.stage === 0 ? (selectedEntity ? "Specify base point" : "Select entity") : "Specify angle (click or type 45d)",
+          banner: "Rotate: select → base → reference direction. Type 45d in input bar.",
+          cursor: xform.stage === 0 ? "Base point" : "Angle"
+        };
+      case "mirror":
+        return {
+          toolLabel: "MIRROR",
+          status: xform.stage === 0 ? (selectedEntity ? "Specify first axis point" : "Select entity") : "Specify second axis point",
+          banner: "Mirror: select → two points defining mirror axis (creates copy).",
+          cursor: xform.stage === 0 ? "Axis P1" : "Axis P2"
+        };
+      case "offset":
+        return {
+          toolLabel: "OFFSET",
+          status: selectedEntity && selectedEntity.type === "line" ? "Click side or type distance" : "Select a line",
+          banner: "Offset: select line → click offset side or type distance (mm).",
+          cursor: "Offset"
+        };
+      case "extend":
+        return {
+          toolLabel: "EXTEND",
+          status: "Click near the end of a line to extend",
+          banner: "Extend: click near free end; extends to nearest boundary.",
+          cursor: "Select end"
         };
       default:
         return { toolLabel: String(editorMode).toUpperCase(), status: "Ready", banner: "", cursor: "" };
@@ -655,8 +1216,26 @@ document.addEventListener("DOMContentLoaded", () => {
     updateDeltaDisplay();
     updateToolPromptUI();
 
-    // Handle active vertex dragging (select or draw)
-    if ((editorMode === "draw" || editorMode === "select") && selectedVertexIndex !== -1) {
+    // Handle grip / vertex dragging
+    if (editorMode === "select" && activeGrip) {
+      if (layers["FOREGROUND"].frozen) return;
+      if (activeGrip.kind === "vertex" || selectedVertexIndex !== -1) {
+        const vi = activeGrip.kind === "vertex" ? activeGrip.index : selectedVertexIndex;
+        sketchVertices[vi] = { x: finalSnapped.x, y: finalSnapped.y };
+        runConstraintSolver(vi);
+      } else if (activeGrip.kind === "circle-center") {
+        const c = sketchCircles[activeGrip.index];
+        if (c) { c.cx = finalSnapped.x; c.cy = finalSnapped.y; }
+      } else if (activeGrip.kind === "circle-radius") {
+        const c = sketchCircles[activeGrip.index];
+        if (c) c.r = Math.max(0.5, Math.hypot(finalSnapped.x - c.cx, finalSnapped.y - c.cy));
+      } else if (activeGrip.kind === "insertion") {
+        const ins = sketchInsertions[activeGrip.index];
+        if (ins) { ins.x = finalSnapped.x; ins.y = finalSnapped.y; }
+      }
+      rebuildSpatialIndexes();
+      updateLiveProperties();
+    } else if (editorMode === "draw" && selectedVertexIndex !== -1) {
       if (layers["FOREGROUND"].frozen) return;
       sketchVertices[selectedVertexIndex] = finalSnapped;
       runConstraintSolver(selectedVertexIndex);
@@ -664,7 +1243,117 @@ document.addEventListener("DOMContentLoaded", () => {
       updateLiveProperties();
     }
 
-    drawSketchCanvas(editorMode === "draw" || editorMode === "circle" || editorMode === "rect" || editorMode === "poly");
+    // Transform preview: restore seed + apply tentative xform
+    if (xform.tool && xform.stage >= 1 && xform.base && xform.seed && ["move", "rotate", "mirror"].includes(xform.tool)) {
+      restoreSeedGeometry(xform.seed);
+      if (xform.tool === "move") applyXformToSeed(xform.seed, xform.base, finalSnapped, "move");
+      else if (xform.tool === "rotate") applyXformToSeed(xform.seed, xform.base, finalSnapped, "rotate");
+      else if (xform.tool === "mirror") applyXformToSeed(xform.seed, xform.base, finalSnapped, "mirror");
+      rebuildSpatialIndexes();
+    }
+
+    drawSketchCanvas(
+      editorMode === "draw" || editorMode === "circle" || editorMode === "rect" ||
+      editorMode === "poly" || editorMode === "insert_block" ||
+      ["move", "copy", "rotate", "mirror", "offset"].includes(editorMode)
+    );
+  }
+
+  function handleTransformClick(pos) {
+    const snapPt = hoveredSnapTarget || pos;
+
+    // Stage 0: need selection
+    if (!selectedEntity && xform.stage === 0) {
+      const hit = findEntityAt(pos, false);
+      if (hit) {
+        selectedEntity = hit;
+        showEntityInspector();
+        drawSketchCanvas();
+        updateToolPromptUI();
+        if (window.showToast) window.showToast("Entity selected — specify base point");
+      } else if (window.showToast) {
+        window.showToast("Select an entity first", false);
+      }
+      return;
+    }
+
+    if (xform.stage === 0) {
+      xform.tool = editorMode;
+      xform.base = { x: snapPt.x, y: snapPt.y };
+      xform.seed = cloneEntityForXform(selectedEntity);
+      xform.stage = 1;
+      if (!xform.seed) {
+        if (window.showToast) window.showToast("Cannot transform this entity type", false);
+        xform = { tool: null, stage: 0, base: null, seed: null, preview: null };
+        return;
+      }
+      pushUndo(editorMode);
+      // For copy: keep original; seed still holds original coords
+      updateToolPromptUI();
+      return;
+    }
+
+    // Stage 1: second point completes
+    if (xform.stage === 1) {
+      const dest = { x: snapPt.x, y: snapPt.y };
+      if (editorMode === "copy") {
+        // Don't move original — pushUndo already saved; restore if preview moved
+        restoreSeedGeometry(xform.seed);
+        finishCopyFromSeed(xform.seed, xform.base, dest);
+      } else if (editorMode === "move") {
+        restoreSeedGeometry(xform.seed);
+        applyXformToSeed(xform.seed, xform.base, dest, "move");
+      } else if (editorMode === "rotate") {
+        restoreSeedGeometry(xform.seed);
+        applyXformToSeed(xform.seed, xform.base, dest, "rotate");
+      } else if (editorMode === "mirror") {
+        restoreSeedGeometry(xform.seed);
+        // Mirror creates copy by default (CAD-ish) — keep original + mirrored copy
+        const seedCopy = JSON.parse(JSON.stringify(xform.seed));
+        // For circle/insertion/line create mirrored copy
+        if (seedCopy.type === "circle") {
+          const c = { ...seedCopy.data };
+          const tmp = { type: "circle", index: sketchCircles.length, data: c };
+          // apply mirror math into a temp object
+          const ax = xform.base.x, ay = xform.base.y, bx = dest.x, by = dest.y;
+          const mirrorPt = (px, py) => {
+            const dxm = bx - ax, dym = by - ay;
+            const len2 = dxm * dxm + dym * dym || 1;
+            const t = ((px - ax) * dxm + (py - ay) * dym) / len2;
+            return { x: 2 * (ax + t * dxm) - px, y: 2 * (ay + t * dym) - py };
+          };
+          const p = mirrorPt(c.cx, c.cy);
+          sketchCircles.push({ ...c, cx: p.x, cy: p.y });
+        } else if (seedCopy.type === "line") {
+          applyXformToSeed(seedCopy, xform.base, dest, "mirror");
+          // seedCopy indices still point at original — clone endpoints as new line
+          const a = sketchVertices[seedCopy.indices[0]];
+          const b = sketchVertices[seedCopy.indices[1]];
+          // restore originals first
+          restoreSeedGeometry(xform.seed);
+          const start = sketchVertices.length;
+          // recompute mirrored points from original seed data
+          const ax = xform.base.x, ay = xform.base.y, bx = dest.x, by = dest.y;
+          const mirrorPt = (px, py) => {
+            const dxm = bx - ax, dym = by - ay;
+            const len2 = dxm * dxm + dym * dym || 1;
+            const t = ((px - ax) * dxm + (py - ay) * dym) / len2;
+            return { x: 2 * (ax + t * dxm) - px, y: 2 * (ay + t * dym) - py };
+          };
+          sketchVertices.push(mirrorPt(seedCopy.data[0].x, seedCopy.data[0].y));
+          sketchVertices.push(mirrorPt(seedCopy.data[1].x, seedCopy.data[1].y));
+          sketchProfiles.push({ startIndex: start, count: 2, isClosed: false });
+          activeProfileStartIndex = sketchVertices.length;
+        } else {
+          applyXformToSeed(xform.seed, xform.base, dest, "mirror");
+        }
+      }
+      xform = { tool: null, stage: 0, base: null, seed: null, preview: null };
+      rebuildSpatialIndexes();
+      drawSketchCanvas();
+      updateLiveProperties();
+      setEditorMode("select");
+    }
   }
 
   // --- Cleanup Unused Vertices in the database ---
@@ -863,6 +1552,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Reset / Clear board ---
   window.clearSketchCanvas = () => {
+    if (!confirm("Clear the entire drawing board?")) return;
+    pushUndo("clear board");
     sketchVertices = [];
     sketchProfiles = [];
     activeProfileStartIndex = 0;
@@ -876,6 +1567,7 @@ document.addEventListener("DOMContentLoaded", () => {
     measureEndPos = null;
     isMeasuring = false;
     selectedEntity = null;
+    activeGrip = null;
     
     rebuildSpatialIndexes();
     showEntityInspector();
@@ -901,6 +1593,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const activeStart = activeProfileStartIndex;
     const activeCount = sketchVertices.length - activeStart;
     if (activeCount >= 3) {
+      pushUndo("close shape");
       sketchProfiles.push({
         startIndex: activeStart,
         count: activeCount,
@@ -943,7 +1636,11 @@ document.addEventListener("DOMContentLoaded", () => {
         activeRectStart,
         activePolyCenter,
         orthoLockEnabled: window.orthoLockEnabled || shiftPressed,
-        crosshairEnabled: window.crosshairEnabled !== false
+        crosshairEnabled: window.crosshairEnabled !== false,
+        grips: (editorMode === "select" && selectedEntity) ? getGripPoints(selectedEntity) : [],
+        insertPreview: (editorMode === "insert_block" && activeBlockToInsert && mousePos)
+          ? { blockName: activeBlockToInsert, x: mousePos.x, y: mousePos.y, scaleX: 1, scaleY: 1, rotation: 0 }
+          : null
       });
     }
   }
@@ -1155,19 +1852,85 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // ── SELECT MODE ──
+      // ── SELECT MODE (grips + pick) ──
       if (editorMode === "select") {
+        const grip = findGripAt(pos);
+        if (grip && grip.kind !== "mid") {
+          activeGrip = grip;
+          if (grip.kind === "vertex") selectedVertexIndex = grip.index;
+          pushUndo("grip edit");
+          updateToolPromptUI();
+          return;
+        }
         const hit = findEntityAt(pos, false);
         if (hit && hit.type === "vertex") {
           selectedVertexIndex = hit.index;
           selectedEntity = hit;
+          activeGrip = { kind: "vertex", index: hit.index };
         } else {
           selectedVertexIndex = -1;
           selectedEntity = hit;
+          activeGrip = null;
         }
         showEntityInspector();
         updateToolPromptUI();
         drawSketchCanvas();
+        return;
+      }
+
+      // ── TRANSFORM TOOLS: move / copy / rotate / mirror ──
+      if (["move", "copy", "rotate", "mirror"].includes(editorMode)) {
+        handleTransformClick(pos);
+        return;
+      }
+
+      // ── OFFSET ──
+      if (editorMode === "offset") {
+        if (!selectedEntity || selectedEntity.type !== "line") {
+          const hit = findEntityAt(pos, true);
+          if (hit && hit.type === "line") {
+            selectedEntity = hit;
+            showEntityInspector();
+            updateToolPromptUI();
+            drawSketchCanvas();
+            if (window.showToast) window.showToast("Line selected — type offset distance or click side");
+          } else if (window.showToast) {
+            window.showToast("Select a line first", false);
+          }
+          return;
+        }
+        // Second click: side of line determines sign of offset
+        const seed = cloneEntityForXform(selectedEntity);
+        if (seed && seed.type === "line") {
+          const a = seed.data[0], b = seed.data[1];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const len = Math.hypot(dx, dy) || 1;
+          // signed distance from point to line
+          const cross = (pos.x - a.x) * dy - (pos.y - a.y) * dx;
+          const sign = cross >= 0 ? 1 : -1;
+          const dist = Math.abs(cross) / len || 5;
+          pushUndo("offset");
+          offsetLineEntity(selectedEntity, sign * Math.max(dist, 0.5));
+          rebuildSpatialIndexes();
+          drawSketchCanvas();
+          updateLiveProperties();
+          setEditorMode("select");
+        }
+        return;
+      }
+
+      // ── EXTEND ──
+      if (editorMode === "extend") {
+        const hit = findEntityAt(pos, true);
+        if (hit && hit.type === "line") {
+          pushUndo("extend");
+          if (extendLineEntity(hit, pos)) {
+            rebuildSpatialIndexes();
+            drawSketchCanvas();
+            updateLiveProperties();
+            if (window.showToast) window.showToast("Segment extended");
+          }
+        }
         return;
       }
 
@@ -1498,11 +2261,13 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           const radius = Math.round(Math.hypot(snapPt.x - activeCircleCenter.x, snapPt.y - activeCircleCenter.y));
           if (radius > 1) {
+            pushUndo("circle");
             sketchCircles.push({
               cx: activeCircleCenter.x,
               cy: activeCircleCenter.y,
               r: radius,
-              construction: false
+              construction: false,
+              layer: activeLayerName
             });
           }
           activeCircleCenter = null;
@@ -1625,6 +2390,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
+        if ((sketchVertices.length - activeProfileStartIndex) === 0) pushUndo("line");
         sketchVertices.push(snapPt);
         lastAnchorPos = { x: snapPt.x, y: snapPt.y };
         rebuildSpatialIndexes();
@@ -1642,7 +2408,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     canvasEl.addEventListener("mouseup", (e) => {
-      if (editorMode !== "select") selectedVertexIndex = -1;
+      if (editorMode === "select") {
+        activeGrip = null;
+        // keep selectedVertexIndex only while dragging; clear drag handle
+      } else {
+        selectedVertexIndex = -1;
+      }
+    });
+
+    // Dynamic input apply
+    document.getElementById("dyn-input-apply")?.addEventListener("click", applyDynInputValue);
+    document.getElementById("dyn-input-field")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyDynInputValue();
+      }
+    });
+    document.getElementById("status-layer-select")?.addEventListener("change", (e) => {
+      activeLayerName = e.target.value || "FOREGROUND";
+      updateToolPromptUI();
     });
 
     // Escape → cancel in-progress command and return to Select
@@ -1660,6 +2444,18 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // Undo / Redo
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        cadUndo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
+        e.preventDefault();
+        cadRedo();
+        return;
+      }
+
       // Tool shortcuts
       const key = e.key.toLowerCase();
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -1672,7 +2468,23 @@ document.addEventListener("DOMContentLoaded", () => {
         if (key === "m") { setEditorMode("measure"); return; }
         if (key === "f") { setEditorMode("fillet"); return; }
         if (key === "t") { setEditorMode("trim"); return; }
+        if (key === "x") { setEditorMode("extend"); return; }
+        if (key === "o") { setEditorMode("offset"); return; }
+        if (key === "g") { setEditorMode("move"); return; }
+        if (key === "y") { setEditorMode("copy"); return; }
+        if (key === "q") { setEditorMode("rotate"); return; }
+        if (key === "i") { setEditorMode("mirror"); return; }
         if (key === "h") { setEditorMode("pan"); return; }
+        // Type digit → focus dynamic input while drawing
+        if ((editorMode === "draw" || editorMode === "offset" || editorMode === "rotate") && /[0-9@.\-]/.test(e.key)) {
+          const bar = document.getElementById("dyn-input-bar");
+          const field = document.getElementById("dyn-input-field");
+          if (bar && field && bar.classList.contains("hidden") === false) {
+            // already visible
+          } else {
+            showDynInput(true);
+          }
+        }
       }
 
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -1714,8 +2526,12 @@ document.addEventListener("DOMContentLoaded", () => {
       activeProfileStartIndex = sketchVertices.length;
     }
 
+    // Restore any in-progress transform preview
+    if (xform.seed) restoreSeedGeometry(xform.seed);
+
     selectedEntity = null;
     selectedVertexIndex = -1;
+    activeGrip = null;
     activeCircleCenter = null;
     activeRectStart = null;
     activePolyCenter = null;
@@ -1724,6 +2540,8 @@ document.addEventListener("DOMContentLoaded", () => {
     measureStartPos = null;
     measureEndPos = null;
     lastAnchorPos = null;
+    xform = { tool: null, stage: 0, base: null, seed: null, preview: null };
+    showDynInput(false);
 
     rebuildSpatialIndexes();
     showEntityInspector();
@@ -1741,6 +2559,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function deleteSelectedEntity() {
     if (!selectedEntity) return;
+    pushUndo("delete");
     if (selectedEntity.type === "circle") {
       sketchCircles.splice(selectedEntity.index, 1);
     } else if (selectedEntity.type === "insertion") {
@@ -1754,8 +2573,15 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     } else if (selectedEntity.type === "dimension") {
       customDimensions.splice(selectedEntity.index, 1);
+    } else if (selectedEntity.type === "line") {
+      // Delete line segment by converting profile — mark endpoints only soft message
+      if (window.showToast) window.showToast("Use Trim to remove segments from polylines.", false);
+      selectedEntity = null;
+      drawSketchCanvas();
+      return;
     }
     selectedEntity = null;
+    activeGrip = null;
     rebuildSpatialIndexes();
     showEntityInspector();
     updateLiveProperties();
@@ -2290,6 +3116,12 @@ document.addEventListener("DOMContentLoaded", () => {
       activeProfileStartIndex = sketchVertices.length;
     }
 
+    // Leaving a transform tool mid-preview: restore geometry
+    if (xform.seed && !["move", "copy", "rotate", "mirror"].includes(mode)) {
+      restoreSeedGeometry(xform.seed);
+      xform = { tool: null, stage: 0, base: null, seed: null, preview: null };
+    }
+
     editorMode = mode;
     window.editorMode = mode;
     document.querySelectorAll(".tool-btn").forEach(btn => btn.classList.remove("active"));
@@ -2300,8 +3132,12 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedVertexA = -1;
     selectedVertexB = -1;
     isMeasuring = false;
+    activeGrip = null;
     if (mode !== "select") selectedVertexIndex = -1;
     if (mode === "draw") lastAnchorPos = null;
+    if (["move", "copy", "rotate", "mirror"].includes(mode)) {
+      xform = { tool: mode, stage: 0, base: null, seed: null, preview: null };
+    }
 
     updateToolPromptUI();
     drawSketchCanvas();
@@ -2827,9 +3663,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initial draw and bind events
   showEntityInspector();
   renderLayerManager();
+  syncLayerSelect();
   drawSketchCanvas();
   initSketcherEvents();
   updateLiveProperties();
   setEditorMode("select");
   updateZoomPctDisplay();
+  // Seed undo baseline
+  pushUndo("baseline");
+  undoStack.pop(); // don't keep empty baseline as undoable
 });

@@ -117,24 +117,50 @@
             <div class="group-title">Edit Geometry</div>
             <div class="group-buttons">
               <button id="tool-fillet-btn" class="tool-btn" title="Fillet Corner (F)" onclick="setEditorMode('fillet')">
-                <i data-lucide="corner-down-right"></i> Fillet Corner
+                <i data-lucide="corner-down-right"></i> Fillet
               </button>
               <button id="tool-trim-btn" class="tool-btn" title="Trim Geometry (T)" onclick="setEditorMode('trim')">
                 <i data-lucide="scissors"></i> Trim
               </button>
+              <button id="tool-extend-btn" class="tool-btn" title="Extend (X)" onclick="setEditorMode('extend')">
+                <i data-lucide="move-horizontal"></i> Extend
+              </button>
+              <button id="tool-offset-btn" class="tool-btn" title="Offset (O)" onclick="setEditorMode('offset')">
+                <i data-lucide="copy-plus"></i> Offset
+              </button>
             </div>
           </div>
           <div class="panel-group">
-            <div class="group-title">Operations</div>
+            <div class="group-title">Transform</div>
             <div class="group-buttons">
-              <button class="tool-btn" title="Close Polyline Shape" onclick="closeSketchShape()">
-                <i data-lucide="check-square"></i> Close Shape
+              <button id="tool-move-btn" class="tool-btn" title="Move (G)" onclick="setEditorMode('move')">
+                <i data-lucide="move"></i> Move
               </button>
-              <button class="tool-btn" title="Undo Last Segment Node (U)" onclick="undoSketchPoint()">
-                <i data-lucide="undo-2"></i> Undo Node
+              <button id="tool-copy-btn" class="tool-btn" title="Copy (Ctrl+C workflow / Y)" onclick="setEditorMode('copy')">
+                <i data-lucide="copy"></i> Copy
+              </button>
+              <button id="tool-rotate-btn" class="tool-btn" title="Rotate (Q)" onclick="setEditorMode('rotate')">
+                <i data-lucide="rotate-cw"></i> Rotate
+              </button>
+              <button id="tool-mirror-btn" class="tool-btn" title="Mirror (I)" onclick="setEditorMode('mirror')">
+                <i data-lucide="flip-horizontal-2"></i> Mirror
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">History</div>
+            <div class="group-buttons">
+              <button class="tool-btn" title="Undo (Ctrl+Z)" onclick="cadUndo()">
+                <i data-lucide="undo-2"></i> Undo
+              </button>
+              <button class="tool-btn" title="Redo (Ctrl+Y)" onclick="cadRedo()">
+                <i data-lucide="redo-2"></i> Redo
+              </button>
+              <button class="tool-btn" title="Close Polyline Shape" onclick="closeSketchShape()">
+                <i data-lucide="check-square"></i> Close
               </button>
               <button class="tool-btn" title="Clear Canvas Board" onclick="clearSketchCanvas()" style="color: #ef4444;">
-                <i data-lucide="trash-2"></i> Clear Board
+                <i data-lucide="trash-2"></i> Clear
               </button>
             </div>
           </div>
@@ -235,6 +261,16 @@
           Select: click an entity to inspect. Press L for Line, Esc to cancel.
         </div>
 
+        <!-- Dynamic input (type length / angle while drawing) -->
+        <div id="dyn-input-bar" class="dyn-input-bar hidden">
+          <label for="dyn-input-field">Input</label>
+          <input id="dyn-input-field" type="text" autocomplete="off" spellcheck="false"
+            placeholder="length  e.g. 50   or  @50&lt;90   or  45d"
+            title="While drawing: type length (mm), @dist&lt;angle, or angle with d suffix" />
+          <button type="button" id="dyn-input-apply" class="dyn-input-apply">Apply</button>
+          <span class="dyn-input-hint">Enter apply · Esc clear</span>
+        </div>
+
         <!-- Floating cursor prompt (follows pointer) -->
         <div id="cursor-prompt" class="cursor-prompt" aria-hidden="true"></div>
 
@@ -281,7 +317,13 @@
             <button class="status-toggle-btn active" id="grid-toggle" onclick="toggleGrid()" title="Toggle grid">GRID</button>
             <button class="status-toggle-btn active" id="crosshair-toggle" onclick="toggleCrosshair()" title="Full crosshair cursor">CROSS</button>
           </div>
-          <span class="status-layer" id="status-layer">Layer: FOREGROUND</span>
+          <label class="status-layer-wrap" title="Active layer for new geometry">
+            <span>Layer</span>
+            <select id="status-layer-select" class="status-layer-select">
+              <option value="FOREGROUND">FOREGROUND</option>
+              <option value="BACKGROUND">BACKGROUND</option>
+            </select>
+          </label>
         </div>
       </div>
       <!-- Snap filter popover -->

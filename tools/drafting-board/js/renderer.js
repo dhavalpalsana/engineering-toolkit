@@ -204,11 +204,76 @@ class ExplicitCadRenderer {
       this.drawCrosshair(ctx, state.mousePos);
     }
 
-    // 9. Draw Object Snap Targets
+    // 9. Block insert ghost preview
+    if (state.insertPreview && state.blockDefinitions) {
+      this.drawInsertPreview(ctx, state);
+    }
+
+    // 10. Selection grips (Phase B)
+    if (state.grips && state.grips.length) {
+      this.drawGrips(ctx, state.grips);
+    }
+
+    // 11. Draw Object Snap Targets
     if (state.hoveredSnapTarget) {
       this.drawSnapIndicator(ctx, state.hoveredSnapTarget);
     }
 
+    ctx.restore();
+  }
+
+  drawGrips(ctx, grips) {
+    ctx.save();
+    const s = 5 / this.zoomLevel;
+    grips.forEach(g => {
+      ctx.fillStyle = g.kind === "mid" ? "#fbbf24" : "#38bdf8";
+      ctx.strokeStyle = "#0f172a";
+      ctx.lineWidth = 1.2 / this.zoomLevel;
+      ctx.fillRect(g.x - s, g.y - s, s * 2, s * 2);
+      ctx.strokeRect(g.x - s, g.y - s, s * 2, s * 2);
+    });
+    ctx.restore();
+  }
+
+  drawInsertPreview(ctx, state) {
+    const ins = state.insertPreview;
+    const block = state.blockDefinitions[ins.blockName];
+    if (!block) return;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.strokeStyle = "#0d9488";
+    ctx.lineWidth = 1.5 / this.zoomLevel;
+    ctx.setLineDash([4 / this.zoomLevel, 3 / this.zoomLevel]);
+    const transformPoint = (px, py) => {
+      const rad = ((ins.rotation || 0) * Math.PI) / 180;
+      let sx = px * (ins.scaleX !== undefined ? ins.scaleX : 1);
+      let sy = py * (ins.scaleY !== undefined ? ins.scaleY : 1);
+      return {
+        x: sx * Math.cos(rad) - sy * Math.sin(rad) + ins.x,
+        y: sx * Math.sin(rad) + sy * Math.cos(rad) + ins.y
+      };
+    };
+    block.entities.forEach(ent => {
+      if (ent.type === "LINE") {
+        const p1 = transformPoint(ent.x1, ent.y1);
+        const p2 = transformPoint(ent.x2, ent.y2);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      } else if (ent.type === "CIRCLE") {
+        const c = transformPoint(ent.cx, ent.cy);
+        const r = ent.r * Math.abs(ins.scaleX !== undefined ? ins.scaleX : 1);
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+    // base point marker
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#0d9488";
+    const m = 3 / this.zoomLevel;
+    ctx.fillRect(ins.x - m, ins.y - m, m * 2, m * 2);
     ctx.restore();
   }
 
