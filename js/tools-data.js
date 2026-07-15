@@ -161,7 +161,7 @@ const TOOLS_DATA = [
     tags: ["management", "risk", "analytics", "heatmap"],
     icon: "shield-alert",
     path: "./tools/risk-management/index.html",
-    status: "active",
+    status: "beta",
     releaseDate: "2026-07-14T12:00:00Z"
   }
 
