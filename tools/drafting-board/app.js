@@ -3162,6 +3162,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (activePanel) activePanel.classList.add("active");
   };
 
+  function ribbonTabForMode(mode) {
+    if (["select", "draw", "circle", "rect", "poly"].includes(mode)) return "draw";
+    if (["fillet", "trim", "extend", "offset", "move", "copy", "rotate", "mirror"].includes(mode)) return "modify";
+    if (["dimension", "measure", "pan"].includes(mode)) return "annotate";
+    if (mode === "insert_block") return "insert";
+    return null;
+  }
+
   window.setEditorMode = (mode) => {
     if (editorMode === "draw" && mode !== "draw") {
       const activeStart = activeProfileStartIndex;
@@ -3190,6 +3198,10 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const activeBtn = document.getElementById(`tool-${mode}-btn`);
     if (activeBtn) activeBtn.classList.add("active");
+
+    // Keep ribbon tab in sync with the active tool
+    const tab = ribbonTabForMode(mode);
+    if (tab) switchRibbonTab(tab);
 
     selectedVertexA = -1;
     selectedVertexB = -1;

@@ -65,7 +65,9 @@
       <div class="ribbon-tabs">
         <button id="tab-draw-btn" class="ribbon-tab-btn active" onclick="switchRibbonTab('draw')">Draw</button>
         <button id="tab-modify-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('modify')">Modify</button>
-        <button id="tab-insert-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('insert')">Blocks & Layers</button>
+        <button id="tab-annotate-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('annotate')">Annotation &amp; Utility</button>
+        <button id="tab-insert-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('insert')">Blocks &amp; Layers</button>
+        <button id="tab-export-btn" class="ribbon-tab-btn" onclick="switchRibbonTab('export')">Export</button>
       </div>
       <div class="ribbon-panels">
         <!-- Draw Tab Panel -->
@@ -92,20 +94,6 @@
               </button>
               <button id="tool-poly-btn" class="tool-btn" title="Polygon (P)" onclick="setEditorMode('poly')">
                 <i data-lucide="hexagon"></i> Poly
-              </button>
-            </div>
-          </div>
-          <div class="panel-group">
-            <div class="group-title">Annotation & Utility</div>
-            <div class="group-buttons">
-              <button id="tool-dimension-btn" class="tool-btn" title="Smart Dimension (D)" onclick="setEditorMode('dimension')">
-                <i data-lucide="scaling"></i> Smart Dim
-              </button>
-              <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (M)" onclick="setEditorMode('measure')">
-                <i data-lucide="ruler"></i> Measure
-              </button>
-              <button id="tool-pan-btn" class="tool-btn" title="Pan Mode (Shift+Click)" onclick="setEditorMode('pan')">
-                <i data-lucide="hand"></i> Pan
               </button>
             </div>
           </div>
@@ -165,6 +153,34 @@
             </div>
           </div>
         </div>
+
+        <!-- Annotation & Utility Tab Panel -->
+        <div id="panel-annotate" class="ribbon-panel">
+          <div class="panel-group">
+            <div class="group-title">Dimensions</div>
+            <div class="group-buttons">
+              <button id="tool-dimension-btn" class="tool-btn" title="Smart Dimension (D)" onclick="setEditorMode('dimension')">
+                <i data-lucide="scaling"></i> Smart Dim
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">Measure</div>
+            <div class="group-buttons">
+              <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (M)" onclick="setEditorMode('measure')">
+                <i data-lucide="ruler"></i> Measure
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">View</div>
+            <div class="group-buttons">
+              <button id="tool-pan-btn" class="tool-btn" title="Pan Mode (H / Space+drag)" onclick="setEditorMode('pan')">
+                <i data-lucide="hand"></i> Pan
+              </button>
+            </div>
+          </div>
+        </div>
         
         <!-- Blocks & Layers Panel -->
         <div id="panel-insert" class="ribbon-panel">
@@ -194,6 +210,10 @@
               </select>
             </div>
           </div>
+        </div>
+
+        <!-- Export Tab Panel -->
+        <div id="panel-export" class="ribbon-panel">
           <div class="panel-group">
             <div class="group-title">Vector Exports</div>
             <div class="group-buttons">
@@ -202,6 +222,20 @@
               </button>
               <button class="tool-btn" onclick="exportDXFDrawing()" title="Export AutoCAD DXF file">
                 <i data-lucide="file-text"></i> Export DXF
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">Project Data</div>
+            <div class="group-buttons">
+              <button class="tool-btn" onclick="exportJSON()" title="Export drawing JSON">
+                <i data-lucide="download"></i> Export JSON
+              </button>
+              <button class="tool-btn" onclick="document.getElementById('import-file-input').click()" title="Import JSON or DXF">
+                <i data-lucide="upload"></i> Import Drawing
+              </button>
+              <button class="tool-btn" onclick="shareLink()" title="Copy share link">
+                <i data-lucide="share-2"></i> Share Link
               </button>
             </div>
           </div>
