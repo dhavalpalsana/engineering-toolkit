@@ -11,10 +11,6 @@
   <link rel="stylesheet" href="style.css">
   
   <!-- Inline theme initializer to prevent flickering -->
-  <script>
-    const savedTheme = localStorage.getItem("theme") || "light";
-    document.documentElement.setAttribute("data-theme", savedTheme);
-  </script>
   
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -69,11 +65,6 @@
           <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
         </button>
         
-        <!-- Standard Theme Toggle -->
-        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
-          <i data-lucide="moon" class="moon-icon"></i>
-          <i data-lucide="sun" class="sun-icon"></i>
-        </button>
       </div>
     </div>
   </header>

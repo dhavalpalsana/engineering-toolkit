@@ -117,14 +117,6 @@ header {
   transition: border-color var(--transition-normal), background var(--transition-normal);
 }
 
-/* Ensure backdrop-filter works on dark theme */
-[data-theme="dark"] header {
-  background: rgba(15, 20, 34, 0.85);
-}
-[data-theme="light"] header {
-  background: rgba(255, 255, 255, 0.85);
-}
-
 .header-container {
   height: 72px;
   display: flex;
@@ -163,37 +155,7 @@ header {
   gap: 16px;
 }
 
-.theme-toggle {
-  background: none;
-  border: 1px solid var(--border-color);
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  transition: all var(--transition-fast);
-}
 
-.theme-toggle:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-.theme-toggle .sun-icon {
-  display: none;
-}
-
-[data-theme="dark"] .theme-toggle .sun-icon {
-  display: block;
-}
-
-[data-theme="dark"] .theme-toggle .moon-icon {
-  display: none;
-}
 
 #auth-btn {
   display: flex;

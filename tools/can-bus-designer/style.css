@@ -21,11 +21,6 @@
   --tr: var(--transition-normal);
 }
 
-[data-theme="dark"] {
-  --accent-light: var(--accent-secondary-glow);
-  --accent-glow: var(--accent-primary-glow);
-}
-
 * {
   box-sizing: border-box;
   margin: 0;
@@ -55,10 +50,6 @@ header {
   background: rgba(255,255,255,.90);
   backdrop-filter: blur(12px);
   transition: background var(--tr), border-color var(--tr);
-}
-
-[data-theme="dark"] header {
-  background: rgba(15, 20, 34, .90);
 }
 
 .hdr {
@@ -946,4 +937,3 @@ input[type="number"] {
   border-radius: var(--r-sm);
   padding: 4px;
 }
-

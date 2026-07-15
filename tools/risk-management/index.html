@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Risk Management – Engineering Toolkit</title>
+    <meta name="description" content="Capture, score and visualise project risks. Heat‑map, category view, top‑5 risks and weekly trends.">
+    <meta name="keywords" content="risk management, risk register, heat map, severity, probability, risk score, engineering tool">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://eng-toolkit.web.app/tools/risk-management/">
+    <meta property="og:title" content="Risk Management – Engineering Toolkit">
+    <meta property="og:description" content="Capture, score and visualise project risks. Heat‑map, category view, top‑5 risks and weekly trends.">
+    <meta property="og:image" content="https://eng-toolkit.web.app/assets/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Risk Management – Engineering Toolkit">
+    <meta name="twitter:description" content="Capture, score and visualise project risks. Heat‑map, category view, top‑5 risks and weekly trends.">
+    <meta name="twitter:image" content="https://eng-toolkit.web.app/assets/og-image.png">
+    <link rel="stylesheet" href="../../css/theme.css">
+    <link rel="stylesheet" href="../../css/header.css">
+    <link rel="stylesheet" href="../../css/tailwind.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@0.460.0"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="hdr">
+            <div class="hdr-left">
+                <a href="../../index.html" class="hdr-back-btn" title="Back to Engineering Toolkit">
+                    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </a>
+                <div class="hdr-icon"><svg viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 4.81 17 6 19 6a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
+                <div class="hdr-titles"><h1>Risk Management</h1><p>Capture, score and visualise project risks</p></div>
+            </div>
+            <div class="hdr-right">
+                <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard"><i data-lucide="share-2"></i> Share Link</button>
+                <button onclick="exportJSON()" class="hdr-btn" title="Export risk register to JSON file"><i data-lucide="download"></i> Export JSON</button>
+                <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import risk register from JSON file"><i data-lucide="upload"></i> Import JSON</button>
+                <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" />
+                <div class="hdr-divider"></div>
+                <button id="auth-btn" title="Sign In"><i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span></button>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-content">
+        <!-- View Toggle -->
+        <div class="view-toggle">
+            <button id="edit-view-btn" class="view-toggle-btn active" title="Edit Risks"><i data-lucide="table-2"></i> Risk Register</button>
+            <button id="dashboard-view-btn" class="view-toggle-btn" title="Dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+        </div>
+
+        <!-- ═══════════════ EDIT VIEW ═══════════════ -->
+        <section id="edit-view">
+            <div class="card">
+                <!-- Toolbar: Filter + Add Button -->
+                <div class="toolbar">
+                    <div class="filter-bar" style="flex:1">
+                        <div class="filter-group">
+                            <label for="filter-category">Category</label>
+                            <input id="filter-category" type="text" placeholder="e.g., Schedule" />
+                        </div>
+                        <div class="filter-group">
+                            <label for="filter-status">Status</label>
+                            <select id="filter-status">
+                                <option value="">All</option>
+                                <option>Open</option>
+                                <option>In Progress</option>
+                                <option>Closed</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" id="add-risk-btn" title="Add a new risk">
+                            <i data-lucide="plus"></i> Add Risk
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Risk Table -->
+                <div class="risk-table-wrapper" style="margin-top: 16px;">
+                    <table class="risk-table">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Owner</th>
+                                <th>Category</th>
+                                <th class="center">S</th>
+                                <th class="center">P</th>
+                                <th class="center">Score</th>
+                                <th class="center">Level</th>
+                                <th>Status</th>
+                                <th>Next Checkpoint</th>
+                                <th class="center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="risk-table-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Configure link -->
+                <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                    <button id="config-btn" class="config-link" title="Configure severity and probability definitions">
+                        <i data-lucide="settings"></i> Configure Levels
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════════════ DASHBOARD VIEW ═══════════════ -->
+        <section id="dashboard-view" class="section-hidden">
+            <!-- Summary Stats -->
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Risks</div>
+                    <div class="stat-value accent" id="stat-total">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Critical</div>
+                    <div class="stat-value critical" id="stat-critical">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Open</div>
+                    <div class="stat-value" id="stat-open">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Score</div>
+                    <div class="stat-value" id="stat-avg">0</div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Heatmap -->
+                <div class="card">
+                    <div class="card-title"><i data-lucide="grid-3x3"></i> Risk Heat Map</div>
+                    <div id="heatmap"></div>
+                </div>
+
+                <!-- Top 5 -->
+                <div class="card">
+                    <div class="card-title"><i data-lucide="alert-triangle"></i> Top 5 Risks</div>
+                    <ul id="top5" class="top5-list"></ul>
+                </div>
+            </div>
+
+            <!-- Trend Chart -->
+            <div class="card" style="margin-top: 20px;">
+                <div class="card-title"><i data-lucide="trending-up"></i> Risk Trend (Weekly)</div>
+                <div class="trend-wrapper" id="trend-wrapper">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ═══════════════ ADD / EDIT RISK MODAL ═══════════════ -->
+    <div id="risk-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="risk-modal-title">Add Risk</h3>
+                <button class="modal-close" id="risk-modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <form id="risk-form" class="modal-body" autocomplete="off">
+                <div class="form-group full-width">
+                    <label for="risk-description">Description *</label>
+                    <textarea id="risk-description" rows="2" placeholder="Describe the risk…" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="risk-owner">Owner</label>
+                        <input id="risk-owner" type="text" placeholder="Person responsible" />
+                    </div>
+                    <div class="form-group">
+                        <label for="risk-category">Category</label>
+                        <input id="risk-category" type="text" placeholder="e.g., Schedule, Cost" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="risk-severity">Severity (1–5)</label>
+                        <select id="risk-severity">
+                            <option value="1">1 – Negligible</option>
+                            <option value="2">2 – Minor</option>
+                            <option value="3" selected>3 – Moderate</option>
+                            <option value="4">4 – Major</option>
+                            <option value="5">5 – Critical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="risk-probability">Probability (1–5)</label>
+                        <select id="risk-probability">
+                            <option value="1">1 – Rare</option>
+                            <option value="2">2 – Unlikely</option>
+                            <option value="3" selected>3 – Possible</option>
+                            <option value="4">4 – Likely</option>
+                            <option value="5">5 – Almost Certain</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="risk-rationale-severity">Severity Rationale</label>
+                        <input id="risk-rationale-severity" type="text" placeholder="Why this severity?" />
+                    </div>
+                    <div class="form-group">
+                        <label for="risk-rationale-probability">Probability Rationale</label>
+                        <input id="risk-rationale-probability" type="text" placeholder="Why this probability?" />
+                    </div>
+                </div>
+                <div class="form-group full-width">
+                    <label for="risk-mitigation">Mitigation</label>
+                    <textarea id="risk-mitigation" rows="2" placeholder="Planned mitigation actions…"></textarea>
+                </div>
+                <div class="form-group full-width">
+                    <label for="risk-blockers">Blockers</label>
+                    <input id="risk-blockers" type="text" placeholder="Any blockers?" />
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="risk-status">Status</label>
+                        <select id="risk-status">
+                            <option>Open</option>
+                            <option>In Progress</option>
+                            <option>Closed</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="risk-checkpoint">Next Checkpoint</label>
+                        <input id="risk-checkpoint" type="date" />
+                    </div>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="risk-modal-cancel">Cancel</button>
+                <button class="btn-primary" id="risk-modal-save"><i data-lucide="check"></i> Save Risk</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════ CONFIGURE LEVELS MODAL ═══════════════ -->
+    <div id="config-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 440px;">
+            <div class="modal-header">
+                <h3>Configure Severity & Probability</h3>
+                <button class="modal-close" id="config-modal-close"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="severity-defs">Severity Definitions (comma separated)</label>
+                    <textarea id="severity-defs" rows="3" placeholder="1: Negligible, 2: Minor, 3: Moderate, 4: Major, 5: Critical"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="probability-defs">Probability Definitions (comma separated)</label>
+                    <textarea id="probability-defs" rows="3" placeholder="1: Rare, 2: Unlikely, 3: Possible, 4: Likely, 5: Almost Certain"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="config-cancel">Cancel</button>
+                <button class="btn-primary" id="config-save"><i data-lucide="check"></i> Save</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="tool-footer"><div class="tool-footer-content"><p>&copy; 2026 Engineering Toolkit. Open-source GPLv3.</p><div class="tool-footer-links"><a href="https://buymeacoffee.com/dhavalpalsana" target="_blank" rel="noopener" class="coffee-link">☕ Buy me a coffee</a><span class="divider">|</span><a href="#" onclick="window.openFeatureSuggestionModal(event)">💡 Suggest Feature</a><span class="divider">|</span><a href="#" onclick="window.openBugReportModal(event)">🐛 Report a Bug</a><span class="divider">|</span><a href="https://github.com/dhavalpalsana/engineering-toolkit" target="_blank" rel="noopener">GitHub</a></div></div></footer>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="../../js/firebase.js"></script>
+    <script src="../../js/auth-ui.js"></script>
+    <script src="../../js/project-manager.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

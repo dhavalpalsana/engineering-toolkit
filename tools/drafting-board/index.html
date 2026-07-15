@@ -11,10 +11,6 @@
   <link rel="stylesheet" href="style.css">
   
   <!-- Inline theme initializer to prevent flickering -->
-  <script>
-    const savedTheme = localStorage.getItem("theme") || "light";
-    document.documentElement.setAttribute("data-theme", savedTheme);
-  </script>
   
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -72,11 +68,6 @@
           <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
         </button>
         
-        <!-- Standard Theme Toggle -->
-        <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
-          <i data-lucide="moon" class="moon-icon"></i>
-          <i data-lucide="sun" class="sun-icon"></i>
-        </button>
       </div>
     </div>
   </header>
@@ -133,6 +124,9 @@
             <div class="group-buttons">
               <button id="tool-fillet-btn" class="tool-btn" title="Fillet Corner (F)" onclick="setEditorMode('fillet')">
                 <i data-lucide="corner-down-right"></i> Fillet Corner
+              </button>
+              <button id="tool-trim-btn" class="tool-btn" title="Trim Geometry (T)" onclick="setEditorMode('trim')">
+                <i data-lucide="scissors"></i> Trim
               </button>
             </div>
           </div>
@@ -270,7 +264,7 @@
       <div class="cad-status-bar">
         <div class="coordinate-display" id="coords-display">X: 0.0 | Y: 0.0 mm</div>
         <div class="status-toggles">
-          <button class="status-toggle-btn active" id="snap-toggle" onclick="toggleSnap()" title="Toggle Object / Grid Snapping">SNAP</button>
+          <button class="status-toggle-btn active" id="snap-toggle" onclick="toggleSnap()" title="Toggle Object / Grid Snapping">OBJECT SNAP</button>
           <button class="status-toggle-btn" id="ortho-toggle" onclick="toggleOrtho()" title="Toggle Orthogonal Angles Constraint (Shift)">ORTHO</button>
           <button class="status-toggle-btn active" id="grid-toggle" onclick="toggleGrid()" title="Toggle Canvas Grid Lines">GRID</button>
         </div>

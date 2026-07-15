@@ -61,6 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedEntity = null; // { type: 'line'|'circle'|'vertex'|'dimension'|'insertion', index: number }
   let hoveredSnapTarget = null; // { x, y, type, index }
   let shiftPressed = false;
+  let lastRawWorldPos = null;
 
   // Sheet configuration
   let sheetSize = "A4";
@@ -261,28 +262,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 6. Dynamic Intersections, Tangents, and Perpendicular Snaps
     if (window.snapEnabled) {
-      // Intersections
-      if (n >= 4) {
-        for (let i = 0; i < limit; i++) {
-          for (let j = i + 2; j < limit; j++) {
-            if (i === 0 && j === limit - 1) continue;
-            const p1 = sketchVertices[i];
-            const p2 = sketchVertices[(i + 1) % n];
-            const q1 = sketchVertices[j];
-            const q2 = sketchVertices[(j + 1) % n];
-            
-            const d = (p2.x - p1.x) * (q2.y - q1.y) - (p2.y - p1.y) * (q2.x - q1.x);
-            if (Math.abs(d) > 1e-6) {
-              const u = ((q1.x - p1.x) * (q2.y - q1.y) - (q1.y - p1.y) * (q2.x - q1.x)) / d;
-              const v = ((q1.x - p1.x) * (p2.y - p1.y) - (q1.y - p1.y) * (p2.x - p1.x)) / d;
-              if (u >= 0 && u <= 1 && v >= 0 && v <= 1) {
-                const ix = p1.x + u * (p2.x - p1.x);
-                const iy = p1.y + u * (p2.y - p1.y);
-                snapItems.push({
-                  minX: ix - 1, minY: iy - 1, maxX: ix + 1, maxY: iy + 1,
-                  type: "intersection", index: [i, j], x: Math.round(ix), y: Math.round(iy)
-                });
-              }
+      // Collect all segments across all profiles for intersections and perpendiculars
+      const allSegments = [];
+      sketchProfiles.forEach(prof => {
+        const lim = prof.isClosed ? prof.count : prof.count - 1;
+        for (let i = 0; i < lim; i++) {
+          const p1 = sketchVertices[prof.startIndex + i];
+          const p2 = sketchVertices[prof.startIndex + (i + 1) % prof.count];
+          if (p1 && p2) {
+            allSegments.push({ p1, p2, profIdx: prof.startIndex, segIdx: i });
+          }
+        }
+      });
+
+      // Intersections between all segments
+      for (let i = 0; i < allSegments.length; i++) {
+        for (let j = i + 1; j < allSegments.length; j++) {
+          const s1 = allSegments[i];
+          const s2 = allSegments[j];
+          // Skip if they share a vertex
+          if (s1.p1 === s2.p1 || s1.p1 === s2.p2 || s1.p2 === s2.p1 || s1.p2 === s2.p2) continue;
+
+          const denom = (s1.p2.x - s1.p1.x) * (s2.p2.y - s2.p1.y) - (s1.p2.y - s1.p1.y) * (s2.p2.x - s2.p1.x);
+          if (Math.abs(denom) > 1e-6) {
+            const u = ((s2.p1.x - s1.p1.x) * (s2.p2.y - s2.p1.y) - (s2.p1.y - s1.p1.y) * (s2.p2.x - s2.p1.x)) / denom;
+            const v = ((s2.p1.x - s1.p1.x) * (s1.p2.y - s1.p1.y) - (s2.p1.y - s1.p1.y) * (s1.p2.x - s1.p1.x)) / denom;
+            if (u >= 0 && u <= 1 && v >= 0 && v <= 1) {
+              const ix = s1.p1.x + u * (s1.p2.x - s1.p1.x);
+              const iy = s1.p1.y + u * (s1.p2.y - s1.p1.y);
+              snapItems.push({
+                minX: ix - 1, minY: iy - 1, maxX: ix + 1, maxY: iy + 1,
+                type: "intersection", index: [s1.segIdx, s2.segIdx], x: Math.round(ix), y: Math.round(iy)
+              });
             }
           }
         }
@@ -316,24 +327,22 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         // Perpendiculars
-        for (let i = 0; i < limit; i++) {
-          const p1 = sketchVertices[i];
-          const p2 = sketchVertices[(i + 1) % n];
-          const dx = p2.x - p1.x;
-          const dy = p2.y - p1.y;
+        allSegments.forEach(s => {
+          const dx = s.p2.x - s.p1.x;
+          const dy = s.p2.y - s.p1.y;
           const lenSq = dx * dx + dy * dy;
           if (lenSq > 1e-6) {
-            const u = ((last.x - p1.x) * dx + (last.y - p1.y) * dy) / lenSq;
+            const u = ((last.x - s.p1.x) * dx + (last.y - s.p1.y) * dy) / lenSq;
             if (u >= 0 && u <= 1) {
-              const px = p1.x + u * dx;
-              const py = p1.y + u * dy;
+              const px = s.p1.x + u * dx;
+              const py = s.p1.y + u * dy;
               snapItems.push({
                 minX: px - 1, minY: py - 1, maxX: px + 1, maxY: py + 1,
-                type: "perpendicular", index: i, x: Math.round(px), y: Math.round(py)
+                type: "perpendicular", index: s.segIdx, x: Math.round(px), y: Math.round(py)
               });
             }
           }
-        }
+        });
       }
     }
 
@@ -342,7 +351,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- Selection Query (Hit Test) ---
-  function findEntityAt(pos) {
+  function findEntityAt(pos, excludeVertices = false) {
     const queryBox = {
       minX: pos.x - 8, minY: pos.y - 8, maxX: pos.x + 8, maxY: pos.y + 8
     };
@@ -354,6 +363,7 @@ document.addEventListener("DOMContentLoaded", () => {
     candidates.forEach(cand => {
       let dist = Infinity;
       if (cand.type === "vertex") {
+        if (excludeVertices) return;
         dist = Math.hypot(pos.x - cand.x, pos.y - cand.y);
       }
       else if (cand.type === "line") {
@@ -406,7 +416,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Snap Query ---
   function findSnapTarget(pos) {
-    if (!window.snapEnabled) return null;
+    if (!window.snapEnabled || ["trim", "fillet"].includes(editorMode)) return null;
 
     const queryBox = {
       minX: pos.x - 14, minY: pos.y - 14, maxX: pos.x + 14, maxY: pos.y + 14
@@ -427,17 +437,137 @@ document.addEventListener("DOMContentLoaded", () => {
     return bestTarget;
   }
 
+  // --- Dynamic mouse position updates with Snapping and Constraints ---
+  function updateMousePosition(pos) {
+    lastRawWorldPos = pos;
+    const rawSnapped = snapToGrid(pos.x, pos.y);
+    const snapObj = findSnapTarget(pos);
+    hoveredSnapTarget = snapObj;
+
+    let finalSnapped = snapObj ? snapObj : rawSnapped;
+
+    const activeStart = activeProfileStartIndex;
+    const activeCount = sketchVertices.length - activeStart;
+
+    // Apply Ortho lock if in draw mode
+    if (editorMode === "draw" && activeCount > 0) {
+      if (shiftPressed || window.orthoLockEnabled) {
+        const last = sketchVertices[sketchVertices.length - 1];
+        const dx = Math.abs(finalSnapped.x - last.x);
+        const dy = Math.abs(finalSnapped.y - last.y);
+        if (dx > dy) {
+          finalSnapped = { x: finalSnapped.x, y: last.y };
+        } else {
+          finalSnapped = { x: last.x, y: finalSnapped.y };
+        }
+      }
+    }
+
+    // Apply Square constraint if in rect mode
+    if (editorMode === "rect" && activeRectStart) {
+      if (shiftPressed) {
+        const w = finalSnapped.x - activeRectStart.x;
+        const h = finalSnapped.y - activeRectStart.y;
+        const side = Math.max(Math.abs(w), Math.abs(h));
+        finalSnapped = {
+          x: activeRectStart.x + Math.sign(w) * side,
+          y: activeRectStart.y + Math.sign(h) * side
+        };
+      }
+    }
+
+    // Update Coordinate HUD Display
+    document.getElementById("coords-display").textContent = `X: ${finalSnapped.x.toFixed(0)} | Y: ${finalSnapped.y.toFixed(0)} mm`;
+
+    mousePos = finalSnapped;
+
+    // Handle active vertex dragging
+    if (editorMode === "draw" && selectedVertexIndex !== -1) {
+      if (layers["FOREGROUND"].frozen) return;
+      sketchVertices[selectedVertexIndex] = finalSnapped;
+      runConstraintSolver(selectedVertexIndex);
+      rebuildSpatialIndexes();
+      updateLiveProperties();
+    }
+
+    drawSketchCanvas(editorMode === "draw");
+  }
+
+  // --- Cleanup Unused Vertices in the database ---
+  function cleanupUnusedVertices() {
+    const usedIndices = new Set();
+    
+    // Profiles
+    sketchProfiles.forEach(prof => {
+      for (let i = 0; i < prof.count; i++) {
+        usedIndices.add(prof.startIndex + i);
+      }
+    });
+    
+    // Custom dimensions
+    customDimensions.forEach(dim => {
+      usedIndices.add(dim.v1);
+      usedIndices.add(dim.v2);
+    });
+    
+    // Convert to sorted array
+    const sortedUsed = Array.from(usedIndices).sort((a, b) => a - b);
+    
+    // Map old indices to new indices
+    const indexMap = new Map();
+    const newVertices = [];
+    sortedUsed.forEach((oldIdx, newIdx) => {
+      indexMap.set(oldIdx, newIdx);
+      newVertices.push(sketchVertices[oldIdx]);
+    });
+    
+    // Update profiles
+    sketchProfiles.forEach(prof => {
+      prof.startIndex = indexMap.get(prof.startIndex);
+    });
+    
+    // Update custom dimensions
+    customDimensions = customDimensions.filter(dim => {
+      if (indexMap.has(dim.v1) && indexMap.has(dim.v2)) {
+        dim.v1 = indexMap.get(dim.v1);
+        dim.v2 = indexMap.get(dim.v2);
+        return true;
+      }
+      return false;
+    });
+    
+    // Update parametric constraints
+    parametricConstraints = parametricConstraints.filter(pc => {
+      const allExist = pc.targets.every(t => indexMap.has(t));
+      if (allExist) {
+        pc.targets = pc.targets.map(t => indexMap.get(t));
+        return true;
+      }
+      return false;
+    });
+    
+    sketchVertices = newVertices;
+  }
+
   // --- Keyboard tracking for Ortho Lock ---
   window.addEventListener("keydown", (e) => {
     if (e.key === "Shift") {
       shiftPressed = true;
-      drawSketchCanvas();
+      if (lastRawWorldPos) {
+        updateMousePosition(lastRawWorldPos);
+      } else {
+        drawSketchCanvas();
+      }
     }
   });
   window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") {
       shiftPressed = false;
-      drawSketchCanvas();
+      if (lastRawWorldPos) {
+        updateMousePosition(lastRawWorldPos);
+      } else {
+        drawSketchCanvas();
+      }
     }
   });
 
@@ -497,13 +627,21 @@ document.addEventListener("DOMContentLoaded", () => {
     window.snapEnabled = !window.snapEnabled;
     document.getElementById("snap-toggle").classList.toggle("active", window.snapEnabled);
     rebuildSpatialIndexes();
-    drawSketchCanvas();
+    if (lastRawWorldPos) {
+      updateMousePosition(lastRawWorldPos);
+    } else {
+      drawSketchCanvas();
+    }
   };
 
   window.toggleOrtho = () => {
     window.orthoLockEnabled = !window.orthoLockEnabled;
     document.getElementById("ortho-toggle").classList.toggle("active", window.orthoLockEnabled);
-    drawSketchCanvas();
+    if (lastRawWorldPos) {
+      updateMousePosition(lastRawWorldPos);
+    } else {
+      drawSketchCanvas();
+    }
   };
 
   window.toggleGrid = () => {
@@ -815,7 +953,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const pos = webglRenderer.getMouseWorldPos(e.clientX, e.clientY);
 
       // Sizer locked layers check
-      if (["draw", "circle", "rect", "poly", "fillet"].includes(editorMode) && layers["FOREGROUND"].frozen) {
+      if (["draw", "circle", "rect", "poly", "fillet", "trim"].includes(editorMode) && layers["FOREGROUND"].frozen) {
         alert("The FOREGROUND layer is frozen.");
         return;
       }
@@ -838,7 +976,236 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Coordinate click hit check
-      const clicked = findEntityAt(pos);
+      const clicked = findEntityAt(pos, editorMode === "trim");
+
+      // ── TRIM GEOMETRY ──
+      if (editorMode === "trim") {
+        if (!clicked) return;
+
+        if (clicked.type === "circle") {
+          sketchCircles.splice(clicked.index, 1);
+          rebuildSpatialIndexes();
+          drawSketchCanvas();
+          updateLiveProperties();
+          return;
+        }
+
+        if (clicked.type === "line") {
+          let targetProfile = null;
+          let targetProfileIndex = -1;
+          let segmentLocalIndex = -1;
+
+          for (let pIdx = 0; pIdx < sketchProfiles.length; pIdx++) {
+            const prof = sketchProfiles[pIdx];
+            const limit = prof.isClosed ? prof.count : prof.count - 1;
+            for (let i = 0; i < limit; i++) {
+              if (prof.startIndex + i === clicked.index) {
+                targetProfile = prof;
+                targetProfileIndex = pIdx;
+                segmentLocalIndex = i;
+                break;
+              }
+            }
+            if (targetProfile) break;
+          }
+
+          if (targetProfileIndex === -1) return;
+
+          const vIdxStart = targetProfile.startIndex + segmentLocalIndex;
+          const vIdxEnd = targetProfile.startIndex + (segmentLocalIndex + 1) % targetProfile.count;
+          const A = sketchVertices[vIdxStart];
+          const B = sketchVertices[vIdxEnd];
+
+          const intersections = [];
+          const dirX = B.x - A.x;
+          const dirY = B.y - A.y;
+          const lenSq = dirX * dirX + dirY * dirY;
+          if (lenSq < 1e-6) return;
+
+          function addT(t, pt) {
+            if (t > 1e-4 && t < 1 - 1e-4) {
+              intersections.push({ t, pt });
+            }
+          }
+
+          // Line-line intersection
+          sketchProfiles.forEach((prof) => {
+            const limit = prof.isClosed ? prof.count : prof.count - 1;
+            for (let i = 0; i < limit; i++) {
+              const otherIdxStart = prof.startIndex + i;
+              const otherIdxEnd = prof.startIndex + (i + 1) % prof.count;
+              if (otherIdxStart === vIdxStart) continue;
+
+              const C = sketchVertices[otherIdxStart];
+              const D = sketchVertices[otherIdxEnd];
+
+              const denom = (B.x - A.x) * (D.y - C.y) - (B.y - A.y) * (D.x - C.x);
+              if (Math.abs(denom) > 1e-8) {
+                const t = ((C.x - A.x) * (D.y - C.y) - (C.y - A.y) * (D.x - C.x)) / denom;
+                const u = ((C.x - A.x) * (B.y - A.y) - (C.y - A.y) * (B.x - A.x)) / denom;
+                if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+                  const pt = {
+                    x: Math.round(A.x + t * (B.x - A.x)),
+                    y: Math.round(A.y + t * (B.y - A.y))
+                  };
+                  addT(t, pt);
+                }
+              }
+            }
+          });
+
+          // Line-circle intersection
+          sketchCircles.forEach((c) => {
+            const vx = A.x - c.cx;
+            const vy = A.y - c.cy;
+            const a = lenSq;
+            const b = 2 * (vx * dirX + vy * dirY);
+            const cc = vx * vx + vy * vy - c.r * c.r;
+            const disc = b * b - 4 * a * cc;
+            if (disc >= 0) {
+              const t1 = (-b - Math.sqrt(disc)) / (2 * a);
+              const t2 = (-b + Math.sqrt(disc)) / (2 * a);
+              if (t1 >= 0 && t1 <= 1) {
+                const pt1 = {
+                  x: Math.round(A.x + t1 * dirX),
+                  y: Math.round(A.y + t1 * dirY)
+                };
+                addT(t1, pt1);
+              }
+              if (t2 >= 0 && t2 <= 1) {
+                const pt2 = {
+                  x: Math.round(A.x + t2 * dirX),
+                  y: Math.round(A.y + t2 * dirY)
+                };
+                addT(t2, pt2);
+              }
+            }
+          });
+
+          intersections.sort((a, b) => a.t - b.t);
+
+          const tList = [{ t: 0, pt: A }];
+          intersections.forEach(inter => {
+            if (Math.abs(inter.t - tList[tList.length - 1].t) > 1e-4) {
+              tList.push(inter);
+            }
+          });
+          if (Math.abs(1 - tList[tList.length - 1].t) > 1e-4) {
+            tList.push({ t: 1, pt: B });
+          }
+
+          const projDot = (pos.x - A.x) * dirX + (pos.y - A.y) * dirY;
+          const clickT = projDot / lenSq;
+
+          let trimIdx = -1;
+          for (let i = 0; i < tList.length - 1; i++) {
+            if (clickT >= tList[i].t && clickT <= tList[i+1].t) {
+              trimIdx = i;
+              break;
+            }
+          }
+          if (trimIdx === -1) {
+            let minDist = Infinity;
+            for (let i = 0; i < tList.length - 1; i++) {
+              const midT = (tList[i].t + tList[i+1].t) / 2;
+              const midPt = { x: A.x + midT * dirX, y: A.y + midT * dirY };
+              const dist = Math.hypot(pos.x - midPt.x, pos.y - midPt.y);
+              if (dist < minDist) {
+                minDist = dist;
+                trimIdx = i;
+              }
+            }
+          }
+
+          const segmentsToKeep = [];
+          const limit = targetProfile.isClosed ? targetProfile.count : targetProfile.count - 1;
+          for (let i = 0; i < limit; i++) {
+            if (i === segmentLocalIndex) continue;
+            const vS = targetProfile.startIndex + i;
+            const vE = targetProfile.startIndex + (i + 1) % targetProfile.count;
+            segmentsToKeep.push({ p1: sketchVertices[vS], p2: sketchVertices[vE] });
+          }
+
+          for (let i = 0; i < tList.length - 1; i++) {
+            if (i === trimIdx) continue;
+            segmentsToKeep.push({ p1: tList[i].pt, p2: tList[i+1].pt });
+          }
+
+          sketchProfiles.splice(targetProfileIndex, 1);
+
+          const newPolylines = [];
+          const remainingSegs = [...segmentsToKeep];
+
+          while (remainingSegs.length > 0) {
+            const first = remainingSegs.shift();
+            const poly = [first.p1, first.p2];
+            let grown = true;
+
+            while (grown) {
+              grown = false;
+              const endPt = poly[poly.length - 1];
+              for (let i = 0; i < remainingSegs.length; i++) {
+                const s = remainingSegs[i];
+                if (Math.hypot(s.p1.x - endPt.x, s.p1.y - endPt.y) < 1e-2) {
+                  poly.push(s.p2);
+                  remainingSegs.splice(i, 1);
+                  grown = true;
+                  break;
+                } else if (Math.hypot(s.p2.x - endPt.x, s.p2.y - endPt.y) < 1e-2) {
+                  poly.push(s.p1);
+                  remainingSegs.splice(i, 1);
+                  grown = true;
+                  break;
+                }
+              }
+            }
+
+            grown = true;
+            while (grown) {
+              grown = false;
+              const startPt = poly[0];
+              for (let i = 0; i < remainingSegs.length; i++) {
+                const s = remainingSegs[i];
+                if (Math.hypot(s.p2.x - startPt.x, s.p2.y - startPt.y) < 1e-2) {
+                  poly.unshift(s.p1);
+                  remainingSegs.splice(i, 1);
+                  grown = true;
+                  break;
+                } else if (Math.hypot(s.p1.x - startPt.x, s.p1.y - startPt.y) < 1e-2) {
+                  poly.unshift(s.p2);
+                  remainingSegs.splice(i, 1);
+                  grown = true;
+                  break;
+                }
+              }
+            }
+
+            let isClosed = false;
+            if (poly.length >= 4 && Math.hypot(poly[0].x - poly[poly.length - 1].x, poly[0].y - poly[poly.length - 1].y) < 1e-2) {
+              isClosed = true;
+              poly.pop();
+            }
+            newPolylines.push({ vertices: poly, isClosed });
+          }
+
+          newPolylines.forEach(p => {
+            const sIdx = sketchVertices.length;
+            sketchVertices.push(...p.vertices);
+            sketchProfiles.push({
+              startIndex: sIdx,
+              count: p.vertices.length,
+              isClosed: p.isClosed
+            });
+          });
+
+          cleanupUnusedVertices();
+
+          rebuildSpatialIndexes();
+          drawSketchCanvas();
+          updateLiveProperties();
+        }
+        return;
+      }
 
       // ── SMART DIMENSION / SELECTION ──
       if (editorMode === "dimension") {
@@ -939,12 +1306,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!activeRectStart) {
           activeRectStart = snapPt;
         } else {
+          let finalPt = snapPt;
+          if (shiftPressed) {
+            const w = snapPt.x - activeRectStart.x;
+            const h = snapPt.y - activeRectStart.y;
+            const side = Math.max(Math.abs(w), Math.abs(h));
+            finalPt = {
+              x: activeRectStart.x + Math.sign(w) * side,
+              y: activeRectStart.y + Math.sign(h) * side
+            };
+          }
           const startIdx = sketchVertices.length;
           sketchVertices.push(
             { x: activeRectStart.x, y: activeRectStart.y },
-            { x: snapPt.x, y: activeRectStart.y },
-            { x: snapPt.x, y: snapPt.y },
-            { x: activeRectStart.x, y: snapPt.y }
+            { x: finalPt.x, y: activeRectStart.y },
+            { x: finalPt.x, y: finalPt.y },
+            { x: activeRectStart.x, y: finalPt.y }
           );
           sketchProfiles.push({
             startIndex: startIdx,
@@ -1044,46 +1421,46 @@ document.addEventListener("DOMContentLoaded", () => {
 
     canvasEl.addEventListener("mousemove", (e) => {
       const pos = webglRenderer.getMouseWorldPos(e.clientX, e.clientY);
-      const rawSnapped = snapToGrid(pos.x, pos.y);
-      
-      const snapObj = findSnapTarget(pos);
-      hoveredSnapTarget = snapObj;
-
-      let finalSnapped = snapObj ? snapObj : rawSnapped;
-
-      // Update Coordinate HUD Display
-      document.getElementById("coords-display").textContent = `X: ${finalSnapped.x.toFixed(0)} | Y: ${finalSnapped.y.toFixed(0)} mm`;
-
-      mousePos = finalSnapped;
-
-      // Handle active vertex dragging
-      if (editorMode === "draw" && selectedVertexIndex !== -1) {
-        if (layers["FOREGROUND"].frozen) return;
-        sketchVertices[selectedVertexIndex] = finalSnapped;
-        runConstraintSolver(selectedVertexIndex);
-        rebuildSpatialIndexes();
-        updateLiveProperties();
-      }
-
-      // Always redraw canvas on mousemove to update snap targets, crosshairs, and shapes
-      drawSketchCanvas(editorMode === "draw");
+      updateMousePosition(pos);
     });
 
     canvasEl.addEventListener("mouseup", (e) => {
       selectedVertexIndex = -1;
     });
 
-    // Escape cancels actions
+    // Escape cancels actions or ends current drawing
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
+        if (editorMode === "draw") {
+          const activeStart = activeProfileStartIndex;
+          const activeCount = sketchVertices.length - activeStart;
+          if (activeCount >= 2) {
+            sketchProfiles.push({
+              startIndex: activeStart,
+              count: activeCount,
+              isClosed: false
+            });
+          } else {
+            sketchVertices.splice(activeStart);
+          }
+          activeProfileStartIndex = sketchVertices.length;
+        }
+
         selectedEntity = null;
         activeCircleCenter = null;
         activeRectStart = null;
         activePolyCenter = null;
         isMeasuring = false;
         
+        rebuildSpatialIndexes();
         showEntityInspector();
-        drawSketchCanvas();
+        updateLiveProperties();
+
+        if (lastRawWorldPos) {
+          updateMousePosition(lastRawWorldPos);
+        } else {
+          drawSketchCanvas();
+        }
       }
     });
 
@@ -1643,7 +2020,9 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (mode === "fillet") {
       instr.textContent = "Fillet Tool: Click connecting node handle corner to round it.";
       statusText.textContent = "Status: Fillet Modifier";
-
+    } else if (mode === "trim") {
+      instr.textContent = "Trim Tool: Click on intersecting line segments to cut/trim them.";
+      statusText.textContent = "Status: Trimming Geometry";
     } else if (mode === "dimension") {
       instr.textContent = "Smart Dim: Click line, circle, or select two vertices to dimension.";
       statusText.textContent = "Status: Dimensioning";

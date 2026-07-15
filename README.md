@@ -12,7 +12,6 @@ The toolkit runs entirely client-side as a static site with optional user authen
 
 - **Centralized Project Manager** — Unified slide-out Projects Drawer to save, search, delete, and cross-load designs.
 - **Firebase Authentication** — Multi-provider sign-in (Email/Password and Google OAuth) with Firestore database rules protecting user data.
-- **Theme Sync** — Global Light ↔ Dark mode synced across all tool pages via `localStorage`.
 - **Open Suggestion Portal** — Built-in workflow for requesting new engineering utilities.
 - **SEO & Social-Ready** — Structured schema metadata, sitemaps, and Open Graph previews.
 
@@ -45,13 +44,13 @@ engineering-toolkit/
 ├── index.html                # Hub / dashboard
 ├── css/
 │   ├── style.css             # Shared global design system (tokens, components)
-│   └── theme.css             # Theme variables (light/dark colors)
+│   └── theme.css             # Shared design tokens
 ├── js/
 │   ├── firebase.js           # Firebase app init & Firestore CRUD operations
 │   ├── auth-ui.js            # Injected sign-in/up modal & styling
 │   ├── project-manager.js    # Slide-out saved project list drawer
 │   ├── tools-data.js         # Single source of truth for tool registry
-│   └── app.js                # Dashboard search, filtering, and theme toggle
+│   └── app.js                # Dashboard search and filtering
 ├── tools/                    # Tool subdirectories (HTML, Local CSS, JS)
 │   ├── beam-calculator/
 │   ├── busbar-sizing/

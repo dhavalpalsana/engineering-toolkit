@@ -711,7 +711,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Inject "My Projects" folder button next to auth-btn
     const myProjectsBtn = document.createElement("button");
     myProjectsBtn.id = "pm-projects-btn";
-    myProjectsBtn.className = "theme-toggle"; // Uses dashboard layout button styles
+    myProjectsBtn.className = "project-btn"; // Uses project button styles
     myProjectsBtn.style.cssText = "display:none;align-items:center;gap:6px;width:auto;padding:0 12px;border-radius:var(--radius-md);height:40px;font-size:13px;font-weight:600;background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-secondary);cursor:pointer;transition:all var(--transition-fast);margin-right:8px;";
     myProjectsBtn.innerHTML = `
       <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>

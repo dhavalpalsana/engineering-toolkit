@@ -1,18 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script>
-    (function() {
-      const savedTheme = localStorage.getItem('theme') || 'light';
-      if (savedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.setAttribute('data-theme', 'light');
-      }
-    })();
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Engineering Unit Converter — Engineering Toolkit</title>
@@ -38,9 +26,6 @@
       --accent-glow: var(--accent-primary-glow);
       --radius-xl: var(--radius-lg);
       --transition: var(--transition-normal);
-    }
-    [data-theme="dark"] {
-      --accent-glow: var(--accent-primary-glow);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -255,10 +240,7 @@
           <i data-lucide="user"></i>
           <span id="auth-btn-text">Sign In</span>
         </button>
-        <button class="hdr-icon-btn" id="theme-toggle" aria-label="Toggle theme">
-          <i data-lucide="moon" class="moon-icon"></i>
-          <i data-lucide="sun" class="sun-icon"></i>
-        </button>
+
       </div>
     </div>
   </header>
@@ -1055,21 +1037,6 @@
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 2800);
   }
-
-  // Theme
-  document.getElementById('theme-toggle').addEventListener('click', () => {
-    const isDark = document.documentElement.classList.contains('dark') || 
-                   document.documentElement.getAttribute('data-theme') === 'dark';
-    const next = isDark ? 'light' : 'dark';
-    if (next === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.setAttribute('data-theme', 'light');
-    }
-    localStorage.setItem('theme', next);
-  });
 
   // ============================================================
   //  Init

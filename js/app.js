@@ -2,7 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // DOM Selection
   const searchInput = document.getElementById("search-input");
   const toolsGrid = document.getElementById("tools-grid");
-  const themeToggleBtn = document.getElementById("theme-toggle");
+
   const activeCountEl = document.getElementById("active-count");
   const totalCountEl = document.getElementById("total-count");
   const suggestBtn = document.getElementById("suggest-btn");
@@ -17,33 +17,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let popularityStats = {};
   let showOnlyFavorites = false;
 
-  // Initial Theme Sync
-  const initTheme = () => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    if (savedTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.setAttribute("data-theme", "light");
-    }
-  };
-  initTheme();
 
-  // Theme Toggler
-  themeToggleBtn.addEventListener("click", () => {
-    const isDark = document.documentElement.classList.contains("dark") || 
-                   document.documentElement.getAttribute("data-theme") === "dark";
-    const newTheme = isDark ? "light" : "dark";
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.setAttribute("data-theme", "light");
-    }
-    localStorage.setItem("theme", newTheme);
-  });
+
+
 
   // Load Icons dynamically
   const getIconSvg = (name) => {

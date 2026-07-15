@@ -75,43 +75,6 @@
   --max-width: 1600px;
 }
 
-[data-theme="dark"] {
-  /* Global Color Accents (Dark Mode Teal) */
-  --accent-primary: #14b8a6;
-  --accent-primary-hover: #2dd4bf;
-  --accent-primary-glow: rgba(20, 184, 166, 0.12);
-
-  --accent-secondary: #3b82f6;
-  --accent-secondary-hover: #60a5fa;
-  --accent-secondary-glow: rgba(59, 130, 246, 0.12);
-
-  /* Semantic Status Colors (Dark Mode) */
-  --color-success: #34d399;
-  --color-success-bg: rgba(52, 211, 153, 0.1);
-  --color-warning: #fbbf24;
-  --color-warning-bg: rgba(251, 191, 36, 0.1);
-  --color-error: #f87171;
-  --color-error-bg: rgba(248, 113, 113, 0.1);
-
-  /* Dark Theme Layout Colors */
-  --bg-primary: #090d16;
-  --bg-secondary: #0f1422;
-  --bg-tertiary: #171e30;
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --border-color: #1e293b;
-  
-  /* Interactive Fields (Inputs, Selects, Textareas) */
-  --bg-interactive: #090d16;
-  --bg-interactive-disabled: #171e30;
-  
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.02);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
-}
-
 /* ── Unified Tool Footer Styles ──────────────────────────────── */
 .tool-footer {
   width: 100%;

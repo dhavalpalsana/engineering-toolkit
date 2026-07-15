@@ -151,10 +151,10 @@
                 const panel = document.getElementById(`tab-panel-${t}`);
                 if (btn && panel) {
                     if (t === tabId) {
-                        btn.className = "px-5 py-3 border-b-2 border-teal-600 dark:border-teal-400 text-teal-600 dark:text-teal-400 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5";
+                        btn.className = "px-5 py-3 border-b-2 border-teal-600 text-teal-600 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5";
                         panel.classList.remove('hidden');
                     } else {
-                        btn.className = "px-5 py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5";
+                        btn.className = "px-5 py-3 border-b-2 border-transparent text-slate-500 hover:text-slate-900 font-bold text-xs uppercase tracking-wider shrink-0 transition-all flex items-center gap-1.5";
                         panel.classList.add('hidden');
                     }
                 }
@@ -182,9 +182,9 @@
             buttons.forEach(p => {
                 const btn = document.getElementById(`phase-${p}`);
                 if (p === phase) {
-                    btn.className = "py-2 px-3 border-2 border-teal-600 dark:border-teal-500 bg-teal-50 dark:bg-teal-950/20 text-teal-700 dark:text-teal-400 font-bold rounded-xl text-sm transition-all shadow-sm";
+                    btn.className = "py-2 px-3 border-2 border-teal-600 bg-teal-50 text-teal-700 font-bold rounded-xl text-sm transition-all shadow-sm";
                 } else {
-                    btn.className = "py-2 px-3 border-2 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400 font-bold rounded-xl text-sm transition-all";
+                    btn.className = "py-2 px-3 border-2 border-slate-200 hover:border-slate-300 text-slate-600 font-bold rounded-xl text-sm transition-all";
                 }
             });
 
@@ -262,7 +262,7 @@
             const rowId = `segment-row-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
             const tr = document.createElement('tr');
             tr.id = rowId;
-            tr.className = "group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors";
+            tr.className = "group hover:bg-slate-50 transition-colors";
 
             tr.innerHTML = `
                 <td class="py-1 px-3">
@@ -558,14 +558,14 @@
             kpiTempCardVal.textContent = `${res.max_temp.toFixed(1)} °C`;
             kpiTempCardSub.textContent = `Rise: +${res.max_temp_rise.toFixed(1)}°C | Limit ${insulation.limit}°C`;
             if (!is_t_safe) {
-                kpiTempCard.className = "bg-rose-50 dark:bg-rose-950/20 p-5 rounded-2xl border-2 border-rose-500 shadow-md transition-all flex flex-col justify-between";
-                kpiTempCardVal.className = "text-2xl font-extrabold text-rose-950 dark:text-rose-200 font-mono tracking-tight my-1";
+                kpiTempCard.className = "bg-rose-50 p-5 rounded-2xl border-2 border-rose-500 shadow-md transition-all flex flex-col justify-between";
+                kpiTempCardVal.className = "text-2xl font-extrabold text-rose-950 font-mono tracking-tight my-1";
             } else if (res.max_temp > insulation.limit * 0.85) {
-                kpiTempCard.className = "bg-amber-50 dark:bg-amber-950/20 p-5 rounded-2xl border-2 border-amber-500 shadow-md transition-all flex flex-col justify-between";
-                kpiTempCardVal.className = "text-2xl font-extrabold text-amber-950 dark:text-amber-200 font-mono tracking-tight my-1";
+                kpiTempCard.className = "bg-amber-50 p-5 rounded-2xl border-2 border-amber-500 shadow-md transition-all flex flex-col justify-between";
+                kpiTempCardVal.className = "text-2xl font-extrabold text-amber-950 font-mono tracking-tight my-1";
             } else {
-                kpiTempCard.className = "bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex flex-col justify-between";
-                kpiTempCardVal.className = "text-2xl font-extrabold text-slate-950 dark:text-slate-100 font-mono tracking-tight my-1";
+                kpiTempCard.className = "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all flex flex-col justify-between";
+                kpiTempCardVal.className = "text-2xl font-extrabold text-slate-950 font-mono tracking-tight my-1";
             }
 
             const kpiVDropCard = document.getElementById('kpi-vdrop-card');
@@ -575,11 +575,11 @@
             kpiVDropCardVal.textContent = `${res.v_pct.toFixed(2)} %`;
             kpiVDropCardSub.textContent = `-${res.v_drop.toFixed(2)} V | Target <${dropLimit}%`;
             if (!is_v_safe) {
-                kpiVDropCard.className = "bg-rose-50 dark:bg-rose-950/20 p-5 rounded-2xl border-2 border-rose-500 shadow-md transition-all flex flex-col justify-between";
-                kpiVDropCardVal.className = "text-2xl font-extrabold text-rose-950 dark:text-rose-200 font-mono tracking-tight my-1";
+                kpiVDropCard.className = "bg-rose-50 p-5 rounded-2xl border-2 border-rose-500 shadow-md transition-all flex flex-col justify-between";
+                kpiVDropCardVal.className = "text-2xl font-extrabold text-rose-950 font-mono tracking-tight my-1";
             } else {
-                kpiVDropCard.className = "bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex flex-col justify-between";
-                kpiVDropCardVal.className = "text-2xl font-extrabold text-slate-950 dark:text-slate-100 font-mono tracking-tight my-1";
+                kpiVDropCard.className = "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm transition-all flex flex-col justify-between";
+                kpiVDropCardVal.className = "text-2xl font-extrabold text-slate-950 font-mono tracking-tight my-1";
             }
 
             const kpiLossCard = document.getElementById('kpi-ploss-card');
@@ -617,7 +617,7 @@
             lossBody.innerHTML = '';
             res.segmentsData.forEach((segData, index) => {
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors";
+                tr.className = "hover:bg-slate-50 transition-colors";
                 const segVDropPct = voltage > 0 ? (segData.v_drop / voltage) * 100 : 0;
                 const formatLoss = segData.p_loss >= 1000 ? `${(segData.p_loss/1000).toFixed(3)} kW` : `${segData.p_loss.toFixed(3)} W`;
                 tr.innerHTML = `
@@ -648,7 +648,7 @@
                 traceBody.innerHTML = '';
                 res.bottle_hist.forEach(stp => {
                     const tr = document.createElement('tr');
-                    tr.className = "hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors";
+                    tr.className = "hover:bg-slate-50 transition-colors";
                     tr.innerHTML = `
                         <td class="py-2 px-3 font-semibold text-slate-500">#${stp.iteration}</td>
                         <td class="py-2 px-3 font-bold text-slate-800">${stp.temperature.toFixed(4)} °C</td>
@@ -704,23 +704,23 @@
                 const tr = document.createElement('tr');
                 const isActive = offset === 0;
                 tr.className = isActive 
-                    ? "bg-teal-50 dark:bg-teal-950/20 border-y-2 border-teal-200 dark:border-teal-800 font-semibold" 
-                    : "hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors";
+                    ? "bg-teal-50 border-y-2 border-teal-200 font-semibold" 
+                    : "hover:bg-slate-50 transition-colors";
 
                 const shiftLabel = offset > 0 ? `+${offset} Size` : (offset < 0 ? `${offset} Size` : "Active Base");
                 
                 const avgArea = optSegments.reduce((sum, os) => sum + os.wire.area, 0) / optSegments.length;
 
                 const tempColor = optRes.max_temp > insulation.limit ? "text-rose-600 font-bold" : "text-emerald-600 font-bold";
-                const dropColor = optRes.v_pct > dropLimit ? "text-amber-600 font-bold" : "text-slate-900 dark:text-slate-100";
+                const dropColor = optRes.v_pct > dropLimit ? "text-amber-600 font-bold" : "text-slate-900";
 
                 tr.innerHTML = `
-                    <td class="py-2.5 px-3 text-slate-900 dark:text-slate-100 font-bold">${shiftLabel}</td>
-                    <td class="py-2.5 px-3 text-slate-500 dark:text-slate-400">~${avgArea.toFixed(2)} mm²</td>
+                    <td class="py-2.5 px-3 text-slate-900 font-bold">${shiftLabel}</td>
+                    <td class="py-2.5 px-3 text-slate-500">~${avgArea.toFixed(2)} mm²</td>
                     <td class="py-2.5 px-3 ${tempColor}">${optRes.max_temp.toFixed(1)}°C</td>
-                    <td class="py-2.5 px-3 text-slate-400 dark:text-slate-500">+${optRes.max_temp_rise.toFixed(1)}°C</td>
+                    <td class="py-2.5 px-3 text-slate-400">+${optRes.max_temp_rise.toFixed(1)}°C</td>
                     <td class="py-2.5 px-3 ${dropColor}">${optRes.v_pct.toFixed(2)}%</td>
-                    <td class="py-2.5 px-3 text-slate-600 dark:text-slate-300">${optRes.p_loss >= 1000 ? (optRes.p_loss / 1000).toFixed(2) + ' kW' : optRes.p_loss.toFixed(1) + ' W'}</td>
+                    <td class="py-2.5 px-3 text-slate-600">${optRes.p_loss >= 1000 ? (optRes.p_loss / 1000).toFixed(2) + ' kW' : optRes.p_loss.toFixed(1) + ' W'}</td>
                 `;
 
                 optBody.appendChild(tr);
@@ -790,11 +790,11 @@
                 // Text Annotations for Gauge sizes
                 svgContent += `
                     <text x="${currentX + (segWidth/2)}" y="${(height/2) - (relativeD/2) - 8}" 
-                          font-size="9" font-weight="bold" fill="${document.documentElement.classList.contains('dark') ? '#cbd5e1' : '#334155'}" text-anchor="middle">
+                          font-size="9" font-weight="bold" fill="#334155" text-anchor="middle">
                         ${seg.label}
                     </text>
                     <text x="${currentX + (segWidth/2)}" y="${(height/2) + (relativeD/2) + 12}" 
-                          font-size="9" font-weight="bold" fill="${seg.temp > limitTemp ? '#ef4444' : (document.documentElement.classList.contains('dark') ? '#94a3b8' : '#475569')}" text-anchor="middle">
+                          font-size="9" font-weight="bold" fill="${seg.temp > limitTemp ? '#ef4444' : '#475569'}" text-anchor="middle">
                         ${seg.temp.toFixed(1)}°C
                     </text>
                 `;
@@ -943,28 +943,6 @@
 
 
     
-        // Theme Toggle Event Listener
-        document.addEventListener('DOMContentLoaded', () => {
-            const themeToggleBtn = document.getElementById("theme-toggle");
-            if (themeToggleBtn) {
-                themeToggleBtn.addEventListener("click", () => {
-                    const isDark = document.documentElement.classList.contains('dark');
-                    const newTheme = isDark ? 'light' : 'dark';
-                    if (newTheme === 'dark') {
-                        document.documentElement.classList.add('dark');
-                        document.documentElement.setAttribute('data-theme', 'dark');
-                    } else {
-                        document.documentElement.classList.remove('dark');
-                        document.documentElement.setAttribute('data-theme', 'light');
-                    }
-                    localStorage.setItem('theme', newTheme);
-                    
-                    // Trigger calculate to update SVG text colors
-                    triggerCalculate();
-                });
-            }
-        });
-
         // Register project manager hooks
         window.projectManagerConfig = {
             toolId: "wire-gauge",

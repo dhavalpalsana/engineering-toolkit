@@ -47,7 +47,7 @@
             teal: {
                 primary: '#0d9488', // teal-600
                 primaryLight: '#2dd4bf', // teal-400
-                primaryDark: '#0f766e', // teal-700
+                primaryDeep: '#0f766e', // teal-700
                 primaryGlow: 'rgba(13, 148, 136, 0.12)',
                 accent: '#0284c7', // sky-600
                 textOnPrimary: '#ffffff',
@@ -56,7 +56,7 @@
             blue: {
                 primary: '#2563eb', // blue-600
                 primaryLight: '#60a5fa', // blue-400
-                primaryDark: '#1d4ed8', // blue-700
+                primaryDeep: '#1d4ed8', // blue-700
                 primaryGlow: 'rgba(37, 99, 235, 0.12)',
                 accent: '#db2777', // rose-600
                 textOnPrimary: '#ffffff',
@@ -65,7 +65,7 @@
             crimson: {
                 primary: '#db2777', // rose-600
                 primaryLight: '#f472b6', // pink-400
-                primaryDark: '#be185d', // rose-700
+                primaryDeep: '#be185d', // rose-700
                 primaryGlow: 'rgba(219, 39, 119, 0.12)',
                 accent: '#7c3aed', // violet-600
                 textOnPrimary: '#ffffff',
@@ -74,7 +74,7 @@
             emerald: {
                 primary: '#059669', // emerald-600
                 primaryLight: '#34d399', // emerald-400
-                primaryDark: '#047857', // emerald-700
+                primaryDeep: '#047857', // emerald-700
                 primaryGlow: 'rgba(5, 150, 105, 0.12)',
                 accent: '#d97706', // amber-600
                 textOnPrimary: '#ffffff',
@@ -83,7 +83,7 @@
             amber: {
                 primary: '#d97706', // amber-600
                 primaryLight: '#fbbf24', // amber-400
-                primaryDark: '#b45309', // amber-700
+                primaryDeep: '#b45309', // amber-700
                 primaryGlow: 'rgba(217, 119, 6, 0.12)',
                 accent: '#dc2626', // red-600
                 textOnPrimary: '#ffffff',
@@ -92,7 +92,7 @@
             slate: {
                 primary: '#475569', // slate-600
                 primaryLight: '#94a3b8', // slate-400
-                primaryDark: '#334155', // slate-700
+                primaryDeep: '#334155', // slate-700
                 primaryGlow: 'rgba(71, 85, 105, 0.12)',
                 accent: '#0d9488', // teal-600
                 textOnPrimary: '#ffffff',
@@ -105,38 +105,26 @@
             'todo': {
                 label: 'To-Do',
                 bgLight: 'rgba(241, 245, 249, 0.65)',
-                bgDark: 'rgba(30, 41, 59, 0.45)',
                 textLight: '#475569',
-                textDark: '#cbd5e1',
                 borderLight: '#cbd5e1',
-                borderDark: '#475569'
             },
             'under-investigation': {
                 label: 'Under Investigation',
                 bgLight: 'rgba(254, 243, 199, 0.7)',
-                bgDark: 'rgba(120, 53, 4, 0.35)',
                 textLight: '#b45309',
-                textDark: '#fde047',
                 borderLight: '#f59e0b',
-                borderDark: '#b45309'
             },
             'ruled-out': {
                 label: 'Ruled Out',
                 bgLight: 'rgba(254, 226, 226, 0.7)',
-                bgDark: 'rgba(153, 27, 27, 0.35)',
                 textLight: '#b91c1c',
-                textDark: '#fca5a5',
                 borderLight: '#f87171',
-                borderDark: '#b91c1c'
             },
             'confirmed-cause': {
                 label: 'Confirmed Cause',
                 bgLight: 'rgba(209, 250, 229, 0.75)',
-                bgDark: 'rgba(6, 95, 70, 0.35)',
                 textLight: '#047857',
-                textDark: '#6ee7b7',
                 borderLight: '#34d399',
-                borderDark: '#047857'
             }
         };
 
@@ -386,16 +374,16 @@
             }
         });
 
-        // --- THEME SYNC ---
+        // --- PALETTE UI SYNC ---
         function syncThemeUI() {
             // Colors update of options
             document.querySelectorAll('.palette-option').forEach(btn => {
                 const pid = btn.id.replace('palette-btn-', '');
                 if (pid === state.theme) {
-                    btn.classList.add('border-teal-600', 'dark:border-teal-400');
+                    btn.classList.add('border-teal-600');
                     btn.classList.remove('border-transparent');
                 } else {
-                    btn.classList.remove('border-teal-600', 'dark:border-teal-400');
+                    btn.classList.remove('border-teal-600');
                     btn.classList.add('border-transparent');
                 }
             });
@@ -404,10 +392,10 @@
                 const sid = btn.id.replace('shape-btn-', '');
                 if (sid === state.shapeStyle) {
                     btn.classList.add('bg-teal-600', 'text-white', 'border-teal-600');
-                    btn.classList.remove('border-slate-200', 'dark:border-slate-800', 'text-slate-700', 'dark:text-slate-300');
+                    btn.classList.remove('border-slate-200', 'text-slate-700');
                 } else {
                     btn.classList.remove('bg-teal-600', 'text-white', 'border-teal-600');
-                    btn.classList.add('border-slate-200', 'dark:border-slate-800', 'text-slate-700', 'dark:text-slate-300');
+                    btn.classList.add('border-slate-200', 'text-slate-700');
                 }
             });
 
@@ -415,10 +403,10 @@
                 const lid = btn.id.replace('line-btn-', '');
                 if (lid === state.lineStyle) {
                     btn.classList.add('bg-teal-600', 'text-white', 'border-teal-600');
-                    btn.classList.remove('border-slate-200', 'dark:border-slate-800', 'text-slate-700', 'dark:text-slate-300');
+                    btn.classList.remove('border-slate-200', 'text-slate-700');
                 } else {
                     btn.classList.remove('bg-teal-600', 'text-white', 'border-teal-600');
-                    btn.classList.add('border-slate-200', 'dark:border-slate-800', 'text-slate-700', 'dark:text-slate-300');
+                    btn.classList.add('border-slate-200', 'text-slate-700');
                 }
             });
         }
@@ -465,8 +453,8 @@
         function switchTab(tabId) {
             activeTab = tabId;
             document.querySelectorAll("[id^='tab-btn-']").forEach(btn => {
-                btn.classList.remove('tab-active', 'border-teal-600', 'dark:border-teal-400');
-                btn.classList.add('text-slate-500', 'dark:text-slate-400');
+                btn.classList.remove('tab-active', 'border-teal-600');
+                btn.classList.add('text-slate-500');
             });
             document.querySelectorAll("[id^='tab-content-']").forEach(content => {
                 content.classList.add('hidden');
@@ -474,8 +462,8 @@
 
             const activeBtn = document.getElementById('tab-btn-' + tabId);
             if (activeBtn) {
-                activeBtn.classList.add('tab-active', 'border-teal-600', 'dark:border-teal-400');
-                activeBtn.classList.remove('text-slate-500', 'dark:text-slate-400');
+                activeBtn.classList.add('tab-active', 'border-teal-600');
+                activeBtn.classList.remove('text-slate-500');
             }
             const activeContent = document.getElementById('tab-content-' + tabId);
             if (activeContent) {
@@ -494,6 +482,7 @@
                 setTimeout(fitCanvas, 50);
             }
         }
+        window.applyPreset = applyPreset;
 
         // --- DATA STATE MODIFICATIONS ---
         function updateEffect(val) {
@@ -593,26 +582,26 @@
             categoriesEditorList.innerHTML = "";
             state.categories.forEach((cat, catIdx) => {
                 const catCard = document.createElement("div");
-                catCard.className = "border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-950/20";
+                catCard.className = "border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50";
                 
                 const isCollapsed = !!cat.collapsed;
                 const chevronIcon = isCollapsed ? 'chevron-right' : 'chevron-down';
 
                 catCard.innerHTML = `
-                    <div class="bg-slate-100/50 dark:bg-slate-900/40 p-2 flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800">
+                    <div class="bg-slate-100/50 p-2 flex items-center justify-between gap-2 border-b border-slate-100">
                         <div class="flex items-center gap-1 w-full">
-                            <button onclick="toggleCategoryCollapse(${catIdx})" class="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-950 dark:hover:text-white rounded-lg transition-all shrink-0" title="${isCollapsed ? 'Expand' : 'Collapse'} Category">
+                            <button onclick="toggleCategoryCollapse(${catIdx})" class="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-950 rounded-lg transition-all shrink-0" title="${isCollapsed ? 'Expand' : 'Collapse'} Category">
                                 <i data-lucide="${chevronIcon}" class="w-4 h-4"></i>
                             </button>
                             <input type="text" value="${escapeHtml(cat.name)}" 
                                    onchange="updateCategoryName(${catIdx}, this.value)"
-                                   class="bg-transparent border-0 hover:bg-white dark:hover:bg-slate-900 focus:bg-white dark:focus:bg-slate-900 text-xs font-bold text-slate-800 dark:text-white px-1.5 py-0.5 rounded focus:ring-1 focus:ring-teal-500 w-full focus:outline-none font-semibold" />
+                                   class="bg-transparent border-0 hover:bg-white focus:bg-white text-xs font-bold text-slate-800 px-1.5 py-0.5 rounded focus:ring-1 focus:ring-teal-500 w-full focus:outline-none font-semibold" />
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
-                            <button onclick="addCause(${catIdx})" class="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-950 dark:hover:text-white rounded-lg transition-all" title="Add Cause">
+                            <button onclick="addCause(${catIdx})" class="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-950 rounded-lg transition-all" title="Add Cause">
                                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                             </button>
-                            <button onclick="deleteCategory(${catIdx})" class="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 rounded-lg transition-all" title="Delete Category">
+                            <button onclick="deleteCategory(${catIdx})" class="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all" title="Delete Category">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
@@ -628,21 +617,21 @@
                     cat.causes.forEach((cause, causeIdx) => {
                         const causeObj = getCauseObj(cause);
                         const causeCard = document.createElement("div");
-                        causeCard.className = "border border-slate-200 dark:border-slate-800 rounded-xl p-2 bg-white dark:bg-slate-900/50 space-y-1.5 group shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-700";
+                        causeCard.className = "border border-slate-200 rounded-xl p-2 bg-white space-y-1.5 group shadow-sm transition-all hover:border-slate-300";
                         
                         causeCard.innerHTML = `
                             <!-- Cause Text Row -->
                             <div class="flex items-start gap-1.5">
                                 <textarea rows="1" onchange="updateCauseText(${catIdx}, ${causeIdx}, this.value)"
-                                          class="w-full bg-transparent border-0 hover:bg-slate-50 dark:hover:bg-slate-950 focus:bg-slate-50 dark:focus:bg-slate-950 focus:ring-1 focus:ring-teal-500 rounded px-1.5 py-0.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none font-medium resize-none leading-normal overflow-hidden">${escapeHtml(causeObj.text)}</textarea>
-                                <button onclick="deleteCause(${catIdx}, ${causeIdx})" class="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600 rounded-lg transition-all shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete Cause">
+                                          class="w-full bg-transparent border-0 hover:bg-slate-50 focus:bg-slate-50 focus:ring-1 focus:ring-teal-500 rounded px-1.5 py-0.5 text-xs text-slate-700 focus:outline-none font-medium resize-none leading-normal overflow-hidden">${escapeHtml(causeObj.text)}</textarea>
+                                <button onclick="deleteCause(${catIdx}, ${causeIdx})" class="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete Cause">
                                     <i data-lucide="x" class="w-3.5 h-3.5"></i>
                                 </button>
                             </div>
                             <!-- Status & Comment Row -->
-                            <div class="flex items-center gap-1.5 text-[10px] pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+                            <div class="flex items-center gap-1.5 text-[10px] pt-1.5 border-t border-slate-100">
                                 <select onchange="updateCauseStatus(${catIdx}, ${causeIdx}, this.value)" 
-                                        class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 shrink-0 cursor-pointer max-w-[110px]">
+                                        class="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500 shrink-0 cursor-pointer max-w-[110px]">
                                     <option value="" ${causeObj.status === '' ? 'selected' : ''}>No Status</option>
                                     <option value="todo" ${causeObj.status === 'todo' ? 'selected' : ''}>To-Do</option>
                                     <option value="under-investigation" ${causeObj.status === 'under-investigation' ? 'selected' : ''}>Under Investigation</option>
@@ -651,7 +640,7 @@
                                 </select>
                                 <input type="text" placeholder="Add comments/notes..." value="${escapeHtml(causeObj.comment)}" 
                                        onchange="updateCauseComment(${catIdx}, ${causeIdx}, this.value)" 
-                                       class="w-full bg-slate-50/50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded px-1.5 py-0.5 text-[10px] text-slate-600 dark:text-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white dark:focus:bg-slate-950" />
+                                       class="w-full bg-slate-50/50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] text-slate-600 focus:outline-none focus:border-teal-500 focus:bg-white" />
                             </div>
                         `;
 
@@ -699,10 +688,8 @@
         function renderDefs() {
             const defs = document.getElementById('svg-defs');
             const pal = PALETTES[state.theme] || PALETTES.teal;
-            const isDark = document.documentElement.classList.contains('dark');
-            
-            const gridColor = isDark ? '#1e293b' : '#cbd5e1';
-            const shadowColor = isDark ? 'rgba(0,0,0,0.5)' : 'rgba(15,23,42,0.08)';
+            const gridColor = '#cbd5e1';
+            const shadowColor = 'rgba(15,23,42,0.08)';
 
             defs.innerHTML = `
                 <pattern id="grid-pattern" width="30" height="30" patternUnits="userSpaceOnUse">
@@ -719,7 +706,7 @@
 
                 <linearGradient id="head-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stop-color="${pal.primary}" />
-                    <stop offset="100%" stop-color="${pal.primaryDark}" />
+                    <stop offset="100%" stop-color="${pal.primaryDeep}" />
                 </linearGradient>
             `;
         }
@@ -751,14 +738,13 @@
 
         function renderFishbone() {
             const pal = PALETTES[state.theme] || PALETTES.teal;
-            const isDark = document.documentElement.classList.contains('dark');
             const fontScale = state.layout?.fontScale || 1.0;
             const branchWidth = state.layout?.branchWidth || 110;
             const boneOffset = state.layout?.boneOffset || 110;
 
-            const textPrimaryColor = isDark ? '#f8fafc' : '#0f172a';
-            const textMutedColor   = isDark ? '#94a3b8' : '#475569';
-            const boneColor        = isDark ? '#334155' : '#cbd5e1';
+            const textPrimaryColor = '#0f172a';
+            const textMutedColor   = '#475569';
+            const boneColor        = '#cbd5e1';
 
             const C           = state.categories.length;
             const causeFontSz = Math.round(10 * fontScale);
@@ -830,13 +816,13 @@
             let headShape = '';
             if (state.shapeStyle === 'hexagon') {
                 headShape = `<polygon points="${headX},${spineY} ${headX+30},${effBoxY} ${headX+headW-30},${effBoxY} ${headX+headW},${spineY} ${headX+headW-30},${effBoxY+headH} ${headX+30},${effBoxY+headH}"
-                                       fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2.5" filter="url(#box-shadow)" />`;
+                                       fill="url(#head-gradient)" stroke="${pal.primaryDeep}" stroke-width="2.5" filter="url(#box-shadow)" />`;
             } else if (state.shapeStyle === 'sharp') {
                 headShape = `<rect x="${headX}" y="${effBoxY}" width="${headW}" height="${headH}"
-                                   fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2" filter="url(#box-shadow)" />`;
+                                   fill="url(#head-gradient)" stroke="${pal.primaryDeep}" stroke-width="2" filter="url(#box-shadow)" />`;
             } else {
                 headShape = `<rect x="${headX}" y="${effBoxY}" width="${headW}" height="${headH}" rx="16" ry="16"
-                                   fill="url(#head-gradient)" stroke="${pal.primaryDark}" stroke-width="2.5" filter="url(#box-shadow)" />`;
+                                   fill="url(#head-gradient)" stroke="${pal.primaryDeep}" stroke-width="2.5" filter="url(#box-shadow)" />`;
             }
 
             const effLineSp  = effectFontSz + 4;
@@ -883,8 +869,8 @@
                     const catBX  = xOuter - catW / 2;
                     const catBY  = isTop ? yOuter - catH : yOuter;
                     const catFSz = Math.round(11 * fontScale);
-                    const bdrClr = isDark ? pal.primaryLight : pal.primary;
-                    const fillClr= isDark ? '#111827' : '#ffffff';
+                    const bdrClr = pal.primary;
+                    const fillClr= '#ffffff';
 
                     let catShape = '';
                     if (state.shapeStyle === 'hexagon') {
@@ -983,9 +969,9 @@
                             let strikeT  = '';
 
                             if (cfg) {
-                                const bgFill = isDark ? cfg.bgDark   : cfg.bgLight;
-                                const bgStrk = isDark ? cfg.borderDark : cfg.borderLight;
-                                textClr = isDark ? cfg.textDark : cfg.textLight;
+                                const bgFill = cfg.bgLight;
+                                const bgStrk = cfg.borderLight;
+                                textClr = cfg.textLight;
                                 sRect   = `<rect x="${xLineL-4}" y="${triggerY+2}" width="${useW+8}" height="${triggerH-4}"
                                                  rx="6" ry="6" fill="${bgFill}" stroke="${bgStrk}" stroke-width="1.2"/>`;
                                 if (status === 'ruled-out') {
@@ -1346,8 +1332,7 @@
                     canvas.height = 600 * scaleFactor;
                     
                     const ctx = canvas.getContext('2d');
-                    const isDark = document.documentElement.classList.contains('dark');
-                    ctx.fillStyle = isDark ? '#070b12' : '#fcfdfe';
+                    ctx.fillStyle = '#fcfdfe';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                     ctx.scale(scaleFactor, scaleFactor);
@@ -1382,23 +1367,6 @@
         function closeAlert() {
             document.getElementById('alert-modal').classList.add('hidden');
         }
-
-        // --- LIGHT/DARK SYSTEM EVENT TRIGGER ---
-        document.getElementById("theme-toggle").addEventListener("click", () => {
-            const isDark = document.documentElement.classList.contains('dark');
-            const newTheme = isDark ? 'light' : 'dark';
-            
-            if (newTheme === 'dark') {
-                document.documentElement.classList.add('dark');
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-                document.documentElement.setAttribute('data-theme', 'light');
-            }
-            localStorage.setItem('theme', newTheme);
-            
-            updateUI();
-        });
 
         // Register project manager hooks
         window.projectManagerConfig = {

@@ -403,12 +403,11 @@ const btnShare = document.getElementById('btn-share');
 const btnExport = document.getElementById('btn-export');
 const btnImport = document.getElementById('btn-import');
 const fileImport = document.getElementById('file-import');
-const themeToggle = document.getElementById('theme-toggle');
 
 // Initialize App
 function init() {
   bindEvents();
-  loadTheme();
+
   loadURLOrPreset();
   resizeWaveformCanvas();
   initCanvasInteractions();
@@ -465,9 +464,6 @@ function bindEvents() {
   btnImport.addEventListener('click', () => fileImport.click());
   fileImport.addEventListener('change', importStateJSON);
   btnShare.addEventListener('click', shareState);
-
-  // Theme Toggler
-  themeToggle.addEventListener('click', toggleTheme);
 
   // Scope and Eye Diagram Toggles
   document.getElementById('scope-btn-scope').addEventListener('click', () => setScopeMode('scope'));
@@ -2409,34 +2405,7 @@ function importStateJSON(event) {
   reader.readAsText(file);
 }
 
-// Light / Dark Theme Syncer
-function loadTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-  syncThemeIcon(currentTheme);
-}
 
-function toggleTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme');
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  
-  document.documentElement.setAttribute('data-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  syncThemeIcon(newTheme);
-  render(); // Redraw canvas/SVG grid colors
-}
-
-function syncThemeIcon(theme) {
-  const iconMoon = document.querySelector('.theme-icon-moon');
-  const iconSun = document.querySelector('.theme-icon-sun');
-  
-  if (theme === 'dark') {
-    if (iconMoon) iconMoon.style.display = 'none';
-    if (iconSun) iconSun.style.display = 'block';
-  } else {
-    if (iconMoon) iconMoon.style.display = 'block';
-    if (iconSun) iconSun.style.display = 'none';
-  }
-}
 
 // Run initializer
 init();

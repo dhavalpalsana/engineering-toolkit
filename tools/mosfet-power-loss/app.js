@@ -553,47 +553,7 @@ window.importJSON = function(e) {
   reader.readAsText(file);
 };
 
-// ================================================================
-//  INIT - Executed on script load
-// ================================================================
 document.addEventListener("DOMContentLoaded", () => {
-  // Theme toggle initialization
-  const themeToggle = document.getElementById('theme-toggle');
-  if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
-      const isDark = document.documentElement.classList.contains('dark') || 
-                     document.documentElement.getAttribute('data-theme') === 'dark';
-      const next = isDark ? 'light' : 'dark';
-      const sunIcon = document.querySelector('.sun-icon');
-      const moonIcon = document.querySelector('.moon-icon');
-      
-      if (next === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.setAttribute('data-theme', 'dark');
-        if (sunIcon) sunIcon.style.display = 'inline';
-        if (moonIcon) moonIcon.style.display = 'none';
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.setAttribute('data-theme', 'light');
-        if (sunIcon) sunIcon.style.display = 'none';
-        if (moonIcon) moonIcon.style.display = 'inline';
-      }
-      localStorage.setItem('theme', next);
-    });
-  }
-
-  // Initialize theme icons
-  const theme = localStorage.getItem('theme') || 'light';
-  const sunIcon = document.querySelector('.sun-icon');
-  const moonIcon = document.querySelector('.moon-icon');
-  if (theme === 'dark') {
-    if (sunIcon) sunIcon.style.display = 'inline';
-    if (moonIcon) moonIcon.style.display = 'none';
-  } else {
-    if (sunIcon) sunIcon.style.display = 'none';
-    if (moonIcon) moonIcon.style.display = 'inline';
-  }
-
   // Load from URL if design param is present
   const urlParams = new URLSearchParams(window.location.search);
   const design = urlParams.get('design');

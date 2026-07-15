@@ -6,7 +6,7 @@ This document outlines the core architecture guidelines, design rules, and user 
 
 ## 1. Global CSS Design Tokens & Theme System
 * **Central Token Registry**: All design tokens (colors, font sizes, weights, spacing, borders, shadows, and transitions) are defined in `/css/theme.css`.
-* **CSS Variable Priority**: Always use custom CSS properties (e.g., `var(--bg-primary)`, `var(--text-primary)`, `var(--border-color)`, `var(--font-sans)`) rather than hardcoding hexadecimal, RGB, or HSL values. This guarantees correct light/dark theme synchronization.
+* **CSS Variable Priority**: Always use custom CSS properties (e.g., `var(--bg-primary)`, `var(--text-primary)`, `var(--border-color)`, `var(--font-sans)`) rather than hardcoding hexadecimal, RGB, or HSL values. This preserves a consistent shared design system.
 * **Tailwind Compilation**:
   * **Do NOT use the Tailwind CDN script** (`<script src="https://cdn.tailwindcss.com">`) on any page. It bloats page load times and causes flickering.
   * Instead, define classes in the tool HTML/JS and compile them to a static, minified file via the Tailwind CLI:
@@ -71,11 +71,6 @@ The header markup must match this structure exactly:
         <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
       </button>
       
-      <!-- Standard Theme Toggle -->
-      <button id="theme-toggle" class="hdr-icon-btn" title="Toggle Light/Dark Theme">
-        <i data-lucide="moon" class="moon-icon"></i>
-        <i data-lucide="sun" class="sun-icon"></i>
-      </button>
     </div>
   </div>
 </header>
@@ -112,11 +107,11 @@ For tools supporting import/export, buttons in the `.hdr-right` toolbar must use
 
 ---
 
-## 5. Page Layout Containment, Typography & Themes
+## 5. Page Layout Containment & Typography
 To maintain styling parity with the rest of the project and ensure pages do not stretch to the full width of wide monitors:
 
 ### CSS Base & Typography
-In the tool's local stylesheet (e.g. `style.css`), always style the `body` tag using project-wide design tokens for typography and background theme synchronization:
+In the tool's local stylesheet (e.g. `style.css`), always style the `body` tag using project-wide design tokens for typography and background consistency:
 ```css
 body {
   margin: 0;
