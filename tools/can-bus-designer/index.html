@@ -86,143 +86,254 @@
       <div class="panel-header">
         <span class="panel-title">
           <i data-lucide="sliders" style="color: var(--accent);"></i>
-          Harness Configuration
+          Configuration
         </span>
       </div>
+
+      <!-- Mode tabs: Harness | Advanced | CANopen -->
+      <div class="config-mode-tabs" role="tablist" aria-label="Configuration modes">
+        <button type="button" class="config-mode-tab active" data-mode="harness" role="tab" aria-selected="true">Harness</button>
+        <button type="button" class="config-mode-tab" data-mode="advanced" role="tab" aria-selected="false">Advanced</button>
+        <button type="button" class="config-mode-tab" data-mode="canopen" role="tab" aria-selected="false">CANopen</button>
+      </div>
+
       <div class="panel-body">
-        
-        <!-- Preset Selector Card -->
-        <div class="section-card">
-          <span class="section-title">Design Presets</span>
-          <div class="form-group full-width">
-            <select id="select-preset" class="input-field">
-               <option value="ideal-250">Ideal Daisy-Chain Network (250 kbps)</option>
-              <option value="canfd-5mbps">CAN FD High-Speed (500k/5M Data Phase)</option>
-              <option value="highspeed-err">High-Speed Limit Violations (1 Mbps)</option>
-              <option value="term-err-mid">Improper Mid-Bus Termination (500 kbps)</option>
-              <option value="multiterm-err">Over-terminated Network (500 kbps, 4 Resistors)</option>
-              <option value="long-stubs">Aerospace J1939-15 Long Stubs (250 kbps)</option>
-              <option value="empty">Clear / New Design</option>
-            </select>
-          </div>
-          <div class="form-group full-width" style="margin-top: 10px;">
-            <label for="select-unit">Length Unit</label>
-            <select id="select-unit" class="input-field">
-              <option value="m" selected>Meters (m)</option>
-              <option value="mm">Millimeters (mm)</option>
-              <option value="cm">Centimeters (cm)</option>
-              <option value="in">Inches (in)</option>
-              <option value="ft">Feet (ft)</option>
-            </select>
-          </div>
-        </div>
 
-        <!-- Bus Electrical Parameters Card -->
-        <div class="section-card">
-          <span class="section-title">Network & Cable Physics</span>
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="input-baud">Baud Rate (kbps)</label>
-              <select id="input-baud" class="input-field">
-                <option value="1000">1000 kbps (1 Mbps)</option>
-                <option value="800">800 kbps</option>
-                <option value="500">500 kbps</option>
-                <option value="250" selected>250 kbps</option>
-                <option value="125">125 kbps</option>
-                <option value="50">50 kbps</option>
-                <option value="20">20 kbps</option>
-                <option value="10">10 kbps</option>
+        <!-- ═══ HARNESS MODE ═══ -->
+        <div class="config-mode-panel" id="mode-panel-harness" data-mode-panel="harness">
+          <!-- Preset Selector Card -->
+          <div class="section-card">
+            <span class="section-title">Design Presets</span>
+            <div class="form-group full-width">
+              <select id="select-preset" class="input-field">
+                 <option value="ideal-250">Ideal Daisy-Chain Network (250 kbps)</option>
+                <option value="canfd-5mbps">CAN FD High-Speed (500k/5M Data Phase)</option>
+                <option value="highspeed-err">High-Speed Limit Violations (1 Mbps)</option>
+                <option value="term-err-mid">Improper Mid-Bus Termination (500 kbps)</option>
+                <option value="multiterm-err">Over-terminated Network (500 kbps, 4 Resistors)</option>
+                <option value="long-stubs">Aerospace J1939-15 Long Stubs (250 kbps)</option>
+                <option value="empty">Clear / New Design</option>
               </select>
             </div>
-            <div class="form-group">
-              <label for="input-sample-point">Sample Point (%)</label>
-              <input type="number" id="input-sample-point" class="input-field" value="80" min="50" max="95" step="1">
-            </div>
-            <div class="form-group">
-              <label for="input-prop-delay">Prop. Delay (ns/m)</label>
-              <input type="number" id="input-prop-delay" class="input-field" value="5.0" min="2.0" max="10.0" step="0.1">
-            </div>
-            <div class="form-group">
-              <label for="input-loop-delay">Transceiver Loop (ns)</label>
-              <input type="number" id="input-loop-delay" class="input-field" value="150" min="50" max="500" step="10">
-            </div>
-            <div class="form-group" style="grid-column: span 2; display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-              <input type="checkbox" id="input-canfd" style="width: 15px; height: 15px; cursor: pointer;">
-              <label for="input-canfd" style="cursor: pointer; font-weight: 700;">Enable CAN FD (Flexible Data-Rate)</label>
-            </div>
-            <div class="form-group" id="group-data-baud" style="display: none;">
-              <label for="input-data-baud">Data Phase Baud Rate</label>
-              <select id="input-data-baud" class="input-field">
-                <option value="1000">1000 kbps (1 Mbps)</option>
-                <option value="2000" selected>2000 kbps (2 Mbps)</option>
-                <option value="4000">4000 kbps (4 Mbps)</option>
-                <option value="5000">5000 kbps (5 Mbps)</option>
-                <option value="8000">8000 kbps (8 Mbps)</option>
+            <div class="form-group full-width" style="margin-top: 10px;">
+              <label for="select-unit">Length Unit</label>
+              <select id="select-unit" class="input-field">
+                <option value="m" selected>Meters (m)</option>
+                <option value="mm">Millimeters (mm)</option>
+                <option value="cm">Centimeters (cm)</option>
+                <option value="in">Inches (in)</option>
+                <option value="ft">Feet (ft)</option>
               </select>
             </div>
-            <div class="form-group" id="group-data-sp" style="display: none;">
-              <label for="input-data-sp">Data Sample Point (%)</label>
-              <input type="number" id="input-data-sp" class="input-field" value="75" min="50" max="95" step="1">
+          </div>
+
+          <!-- Bus Electrical Parameters Card -->
+          <div class="section-card">
+            <span class="section-title">Network & Cable Physics</span>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="input-baud">Baud Rate (kbps)</label>
+                <select id="input-baud" class="input-field">
+                  <option value="1000">1000 kbps (1 Mbps)</option>
+                  <option value="800">800 kbps</option>
+                  <option value="500">500 kbps</option>
+                  <option value="250" selected>250 kbps</option>
+                  <option value="125">125 kbps</option>
+                  <option value="50">50 kbps</option>
+                  <option value="20">20 kbps</option>
+                  <option value="10">10 kbps</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="input-sample-point">Sample Point (%)</label>
+                <input type="number" id="input-sample-point" class="input-field" value="80" min="50" max="95" step="1">
+              </div>
+              <div class="form-group">
+                <label for="input-prop-delay">Prop. Delay (ns/m)</label>
+                <input type="number" id="input-prop-delay" class="input-field" value="5.0" min="2.0" max="10.0" step="0.1">
+              </div>
+              <div class="form-group">
+                <label for="input-loop-delay">Transceiver Loop (ns)</label>
+                <input type="number" id="input-loop-delay" class="input-field" value="150" min="50" max="500" step="10">
+              </div>
+              <div class="form-group" style="grid-column: span 2; display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                <input type="checkbox" id="input-canfd" style="width: 15px; height: 15px; cursor: pointer;">
+                <label for="input-canfd" style="cursor: pointer; font-weight: 700;">Enable CAN FD (Flexible Data-Rate)</label>
+              </div>
+              <div class="form-group" id="group-data-baud" style="display: none;">
+                <label for="input-data-baud">Data Phase Baud Rate</label>
+                <select id="input-data-baud" class="input-field">
+                  <option value="1000">1000 kbps (1 Mbps)</option>
+                  <option value="2000" selected>2000 kbps (2 Mbps)</option>
+                  <option value="4000">4000 kbps (4 Mbps)</option>
+                  <option value="5000">5000 kbps (5 Mbps)</option>
+                  <option value="8000">8000 kbps (8 Mbps)</option>
+                </select>
+              </div>
+              <div class="form-group" id="group-data-sp" style="display: none;">
+                <label for="input-data-sp">Data Sample Point (%)</label>
+                <input type="number" id="input-data-sp" class="input-field" value="75" min="50" max="95" step="1">
+              </div>
+            </div>
+          </div>
+
+          <!-- Station Configuration Card -->
+          <div class="section-card" style="background: none; border: none; padding: 0;">
+            <div class="section-title" style="margin-bottom: 12px;">
+              <span>Harness Stations (Spaced Segments)</span>
+              <button id="btn-add-station" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
+                <i data-lucide="plus" style="width: 12px; height: 12px;"></i> Add Station
+              </button>
+            </div>
+            <div id="station-list-container" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Dynamically populated with station cards -->
             </div>
           </div>
         </div>
 
-        <!-- Bit Timing Calculator -->
-        <div class="section-card">
-          <span class="section-title">Bit Timing Calculator</span>
-          <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.4;">
-            Solves CAN nominal bit timing (ISO 11898) for a controller clock: BRP, TSEG1/TSEG2, SJW, and time quantum.
-          </p>
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="input-can-clock">Controller Clock (MHz)</label>
-              <input type="number" id="input-can-clock" class="input-field" value="40" min="1" max="200" step="1">
+        <!-- ═══ ADVANCED MODE ═══ -->
+        <div class="config-mode-panel hidden" id="mode-panel-advanced" data-mode-panel="advanced">
+          <p class="mode-panel-intro">Physical-layer deep tools and exports. Harness topology still lives under the Harness tab.</p>
+
+          <!-- Bit Timing Calculator -->
+          <div class="section-card">
+            <span class="section-title">Bit Timing Calculator</span>
+            <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.4;">
+              Solves CAN nominal bit timing (ISO 11898) for a controller clock: BRP, TSEG1/TSEG2, SJW, and time quantum.
+            </p>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="input-can-clock">Controller Clock (MHz)</label>
+                <input type="number" id="input-can-clock" class="input-field" value="40" min="1" max="200" step="1">
+              </div>
+              <div class="form-group">
+                <label for="input-sjw">SJW (tq, max)</label>
+                <input type="number" id="input-sjw" class="input-field" value="4" min="1" max="4" step="1">
+              </div>
             </div>
-            <div class="form-group">
-              <label for="input-sjw">SJW (tq, max)</label>
-              <input type="number" id="input-sjw" class="input-field" value="4" min="1" max="4" step="1">
+            <div id="bit-timing-results" class="bit-timing-results" style="margin-top: 10px; font-size: 12px; font-family: var(--font-mono); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; line-height: 1.55; color: var(--text-secondary);">
+              Configure baud rate and sample point to compute timing.
             </div>
           </div>
-          <div id="bit-timing-results" class="bit-timing-results" style="margin-top: 10px; font-size: 12px; font-family: var(--font-mono); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; line-height: 1.55; color: var(--text-secondary);">
-            Configure baud rate and sample point to compute timing.
+
+          <!-- DBC Import Snippet -->
+          <div class="section-card">
+            <span class="section-title">DBC Import Snippet</span>
+            <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px; line-height: 1.4;">
+              Paste a <code>BO_</code> / <code>SG_</code> fragment to list message IDs and signals (nodes stay on the harness canvas).
+            </p>
+            <textarea id="dbc-import-text" class="input-field" rows="5" style="width:100%; resize:vertical; font-family: var(--font-mono); font-size: 11px;" placeholder="BO_ 256 EngineStatus: 8 Vector__XXX&#10; SG_ RPM : 0|16@1+ (0.25,0) [0|8000] &quot;rpm&quot; Vector__XXX"></textarea>
+            <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+              <button type="button" id="btn-parse-dbc" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;">Parse DBC</button>
+              <button type="button" id="btn-clear-dbc" class="btn" style="padding: 6px 12px; font-size: 12px;">Clear</button>
+            </div>
+            <div id="dbc-parse-results" style="margin-top: 10px; font-size: 12px; max-height: 160px; overflow: auto;"></div>
           </div>
-        </div>
 
-        <!-- DBC Import Snippet -->
-        <div class="section-card">
-          <span class="section-title">DBC Import Snippet</span>
-          <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px; line-height: 1.4;">
-            Paste a <code>BO_</code> / <code>SG_</code> fragment to list message IDs and signals (nodes stay on the harness canvas).
-          </p>
-          <textarea id="dbc-import-text" class="input-field" rows="5" style="width:100%; resize:vertical; font-family: var(--font-mono); font-size: 11px;" placeholder="BO_ 256 EngineStatus: 8 Vector__XXX&#10; SG_ RPM : 0|16@1+ (0.25,0) [0|8000] &quot;rpm&quot; Vector__XXX"></textarea>
-          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-            <button type="button" id="btn-parse-dbc" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;">Parse DBC</button>
-            <button type="button" id="btn-clear-dbc" class="btn" style="padding: 6px 12px; font-size: 12px;">Clear</button>
-          </div>
-          <div id="dbc-parse-results" style="margin-top: 10px; font-size: 12px; max-height: 160px; overflow: auto;"></div>
-        </div>
-
-        <!-- Harness BOM Export -->
-        <div class="section-card">
-          <span class="section-title">Harness BOM Export</span>
-          <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px; line-height: 1.4;">
-            Export a parts list: trunk segments, devices/stubs, and terminators as CSV.
-          </p>
-          <button type="button" id="btn-export-bom" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; width: 100%;">
-            <i data-lucide="file-spreadsheet" style="width:14px;height:14px;"></i> Export BOM CSV
-          </button>
-        </div>
-
-        <!-- Station Configuration Card -->
-        <div class="section-card" style="background: none; border: none; padding: 0;">
-          <div class="section-title" style="margin-bottom: 12px;">
-            <span>Harness Stations (Spaced Segments)</span>
-            <button id="btn-add-station" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
-              <i data-lucide="plus" style="width: 12px; height: 12px;"></i> Add Station
+          <!-- Harness BOM Export -->
+          <div class="section-card">
+            <span class="section-title">Harness BOM Export</span>
+            <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px; line-height: 1.4;">
+              Export a parts list: trunk segments, devices/stubs, and terminators as CSV.
+            </p>
+            <button type="button" id="btn-export-bom" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; width: 100%;">
+              <i data-lucide="file-spreadsheet" style="width:14px;height:14px;"></i> Export BOM CSV
             </button>
           </div>
-          <div id="station-list-container" style="display: flex; flex-direction: column; gap: 12px;">
-            <!-- Dynamically populated with station cards -->
+        </div>
+
+        <!-- ═══ CANOPEN MODE ═══ -->
+        <div class="config-mode-panel hidden" id="mode-panel-canopen" data-mode-panel="canopen">
+          <p class="mode-panel-intro">CiA 301 helpers for node addressing, standard COB-IDs, heartbeat, and bus-load estimate. Assign Node-IDs to harness devices below.</p>
+
+          <div class="section-card">
+            <span class="section-title">Network Profile</span>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="canopen-sync-period">SYNC period (ms)</label>
+                <input type="number" id="canopen-sync-period" class="input-field" value="10" min="1" max="10000" step="1">
+              </div>
+              <div class="form-group">
+                <label for="canopen-heartbeat">Default heartbeat (ms)</label>
+                <input type="number" id="canopen-heartbeat" class="input-field" value="500" min="0" max="60000" step="10">
+              </div>
+              <div class="form-group full-width" style="grid-column: span 2;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="canopen-sync-producer" checked style="width:15px;height:15px;">
+                  Network has a SYNC producer
+                </label>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+              <button type="button" id="btn-canopen-auto-ids" class="btn btn-primary" style="padding:6px 12px;font-size:12px;">Auto-assign Node-IDs</button>
+              <button type="button" id="btn-canopen-export" class="btn" style="padding:6px 12px;font-size:12px;">Export Node Map CSV</button>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <span class="section-title">Device Node Map</span>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;line-height:1.4;">
+              Node-ID range 1–127 (CiA 301). COB-IDs update live from the standard pre-defined connection set.
+            </p>
+            <div id="canopen-node-list" class="canopen-node-list"></div>
+          </div>
+
+          <div class="section-card">
+            <span class="section-title">COB-ID Calculator</span>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="canopen-cob-node">Node-ID</label>
+                <input type="number" id="canopen-cob-node" class="input-field" value="1" min="1" max="127" step="1">
+              </div>
+              <div class="form-group">
+                <label for="canopen-cob-object">Object</label>
+                <select id="canopen-cob-object" class="input-field">
+                  <option value="nmt">NMT (global)</option>
+                  <option value="sync">SYNC</option>
+                  <option value="emcy">EMCY</option>
+                  <option value="tpdo1">TPDO1</option>
+                  <option value="rpdo1">RPDO1</option>
+                  <option value="tpdo2">TPDO2</option>
+                  <option value="rpdo2">RPDO2</option>
+                  <option value="tpdo3">TPDO3</option>
+                  <option value="rpdo3">RPDO3</option>
+                  <option value="tpdo4">TPDO4</option>
+                  <option value="rpdo4">RPDO4</option>
+                  <option value="sdotx">SDO TX (server→client)</option>
+                  <option value="sdorx">SDO RX (client→server)</option>
+                  <option value="heartbeat">HEARTBEAT / Node Guarding</option>
+                  <option value="timestamp">TIME stamp</option>
+                </select>
+              </div>
+            </div>
+            <div id="canopen-cob-result" class="canopen-cob-result"></div>
+          </div>
+
+          <div class="section-card">
+            <span class="section-title">Bus Load Estimate</span>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;line-height:1.4;">
+              Rough load from heartbeat + optional SYNC + PDO traffic (classic CAN 11-bit, worst-case bit stuffing ignored).
+            </p>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="canopen-pdo-per-node">PDOs / node / cycle</label>
+                <input type="number" id="canopen-pdo-per-node" class="input-field" value="2" min="0" max="8" step="1">
+              </div>
+              <div class="form-group">
+                <label for="canopen-pdo-dlc">PDO DLC (bytes)</label>
+                <input type="number" id="canopen-pdo-dlc" class="input-field" value="8" min="0" max="8" step="1">
+              </div>
+              <div class="form-group">
+                <label for="canopen-pdo-cycle">PDO cycle (ms)</label>
+                <input type="number" id="canopen-pdo-cycle" class="input-field" value="10" min="1" max="10000" step="1">
+              </div>
+            </div>
+            <div id="canopen-busload-results" class="canopen-busload-results"></div>
+          </div>
+
+          <div class="section-card">
+            <span class="section-title">Standard COB-ID Cheat Sheet</span>
+            <div class="canopen-cheatsheet" id="canopen-cheatsheet"></div>
           </div>
         </div>
 
