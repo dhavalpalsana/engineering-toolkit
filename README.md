@@ -34,6 +34,7 @@ The toolkit runs entirely client-side as a static site with optional user authen
 | [**Interactive Time Planner**](tools/timezone-converter/) | General Utility | Multi-timezone alignment layout with visual daylight/night/work segments, horizontal continuous gradients, and JDN/Julian conversions. |
 | [**MCC Feeder & Starter Designer**](tools/mcc-feeder-designer/) | Electrical / Control | Design Motor Control Center Single Line Diagrams. Drag & drop DOL starters, VFDs, soft starters, and cables with real-time sizing calculations. |
 | [**MOSFET Power Loss Calculator**](tools/mosfet-power-loss/) | Electrical / Thermo | Physics-based semiconductor power loss modeler. Calculate and compare conduction, switching, gate charge, dead-time, and Coss losses side-by-side for multiple devices. |
+| [**Risk Management Dashboard**](tools/risk-management/) | Management / Quality | Capture, score, and visualise project risks with heat-map, category filters, top-5 view, and weekly trend charts. Cloud sync for signed-in users. |
 
 ---
 
@@ -62,6 +63,7 @@ engineering-toolkit/
 │   ├── mcc-feeder-designer/
 │   ├── mosfet-power-loss/
 │   ├── plot-extractor/
+│   ├── risk-management/
 │   ├── timezone-converter/
 │   ├── unit-converter/
 │   └── wire-gauge/

@@ -615,7 +615,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const designParam = urlParams.get("design");
   if (designParam) {
     try {
-      const decoded = JSON.parse(atob(designParam));
+      const decoded = (window.decodeShareState ? window.decodeShareState(designParam) : JSON.parse(decodeURIComponent(escape(atob(designParam)))));
       window.projectManagerConfig.setInputs(decoded);
     } catch (err) {
       console.error("Failed to parse URL design param:", err);
@@ -2204,7 +2204,7 @@ document.addEventListener("DOMContentLoaded", () => {
       customDimensions,
       isSketchClosed
     };
-    const encoded = btoa(JSON.stringify(state));
+    const encoded = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
     const url = `${window.location.origin}${window.location.pathname}?design=${encoded}`;
     navigator.clipboard.writeText(url).then(() => {
       alert("Sharing URL copied to clipboard.");

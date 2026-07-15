@@ -1405,7 +1405,7 @@ window.projectManagerConfig = {
 window.shareLink = function() {
   try {
     const configData = getInputsConfig();
-    const serialized = btoa(JSON.stringify(configData));
+    const serialized = (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
     const url = new URL(window.location.href);
     url.searchParams.set('design', serialized);
     
@@ -1461,7 +1461,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const design = urlParams.get('design');
 if (design) {
   try {
-    const decoded = JSON.parse(atob(design));
+    const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
     setInputsConfig(decoded);
   } catch (err) {
     console.error("Failed to load design from URL:", err);

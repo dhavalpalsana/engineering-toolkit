@@ -2266,7 +2266,7 @@ function shareState() {
       }))
     };
 
-    const serialized = btoa(JSON.stringify(configData));
+    const serialized = (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
     const url = new URL(window.location.href);
     url.searchParams.set('design', serialized);
     
@@ -2285,7 +2285,7 @@ function loadURLOrPreset() {
 
   if (design) {
     try {
-      const decoded = JSON.parse(atob(design));
+      const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
       networkConfig.baudRate = decoded.baud || 250;
       networkConfig.samplePoint = decoded.sp || 80;
       networkConfig.propDelay = decoded.prop || 5.0;

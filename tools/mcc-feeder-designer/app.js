@@ -1701,7 +1701,7 @@ function shareLink() {
   };
   
   // Serialize state to base64
-  const serialized = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  const serialized = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
   const url = new URL(window.location.href);
   url.hash = `design=${serialized}`;
   
@@ -1719,7 +1719,7 @@ function loadInitialState() {
   if (hash.startsWith("#design=")) {
     try {
       const serialized = hash.substring(8);
-      const decoded = JSON.parse(decodeURIComponent(escape(atob(serialized))));
+      const decoded = (window.decodeShareState ? window.decodeShareState(serialized) : JSON.parse(decodeURIComponent(escape(atob(serialized)))));
       if (decoded.nodes && decoded.wires) {
         systemGlobals = decoded.systemGlobals || systemGlobals;
         nodes = decoded.nodes;

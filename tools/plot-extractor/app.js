@@ -1532,7 +1532,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (state.compressedImgData && state.compressedImgData.length > 10000) {
         const stateNoImg = { ...state };
         delete stateNoImg.compressedImgData;
-        const serialized = btoa(JSON.stringify(stateNoImg));
+        const serialized = (window.encodeShareState ? window.encodeShareState(stateNoImg) : btoa(unescape(encodeURIComponent(JSON.stringify(stateNoImg)))));
         const url = new URL(window.location.href);
         url.searchParams.set('design', serialized);
         
@@ -1542,7 +1542,7 @@ document.addEventListener("DOMContentLoaded", () => {
           alert("Failed to write to clipboard automatically. Link is too long.");
         });
       } else {
-        const serialized = btoa(JSON.stringify(state));
+        const serialized = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
         const url = new URL(window.location.href);
         url.searchParams.set('design', serialized);
         
@@ -1998,7 +1998,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const urlParams = new URLSearchParams(window.location.search);
       const design = urlParams.get('design');
       if (design) {
-        const decoded = JSON.parse(atob(design));
+        const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
         setPlotExtractorState(decoded);
       }
     } catch (err) {

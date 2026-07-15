@@ -127,7 +127,7 @@
             const stateParam = urlParams.get('state');
             if (stateParam) {
                 try {
-                    const decoded = JSON.parse(atob(stateParam));
+                    const decoded = (window.decodeShareState ? window.decodeShareState(stateParam) : JSON.parse(decodeURIComponent(escape(atob(stateParam)))));
                     loadStateObject(decoded);
                     // Clear the query param silently to keep URL clean
                     window.history.replaceState({}, document.title, window.location.pathname);
@@ -922,7 +922,7 @@
         function shareState() {
             const state = captureCurrentState();
             const stringified = JSON.stringify(state);
-            const encoded = btoa(stringified);
+            const encoded = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(stringified))));
             const shareUrl = `${window.location.origin}${window.location.pathname}?state=${encoded}`;
 
             // robust copying to clipboard supporting frames/sandboxes via traditional text area injection fallback

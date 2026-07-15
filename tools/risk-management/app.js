@@ -1,16 +1,13 @@
 // risk-management/app.js
 
-// Register the tool with the global project manager (must be defined before project-manager.js loads)
+// Register the tool with the global project manager before DOMContentLoaded.
+// (project-manager.js defers boot, but top-level registration is still safest.)
 window.projectManagerConfig = {
   toolId: "risk-management",
-  // Export current risk data for sharing/exporting
   getInputs: () => ({ risks: riskData }),
-  // Load imported JSON data into the tool
   setInputs: (data) => {
     if (data && Array.isArray(data.risks)) {
-      riskData = data.risks;
-      persistRisks();
-      renderAll();
+      replaceRiskData(data.risks);
     }
   }
 };
@@ -31,34 +28,60 @@ const PROBABILITY_DEFINITIONS = {
   5: "Almost Certain"
 };
 
+// Shared risk-score thresholds (table badges + heatmap cells)
+// CRITICAL ≥ 16, HIGH ≥ 12, MEDIUM ≥ 6, else LOW
+const RISK_THRESHOLDS = { critical: 16, high: 12, medium: 6 };
+
 // ----- State -----
 let riskData = [];
-let editingRiskId = null; // Track which risk is being edited
+let editingRiskId = null;
+let authListenerAttached = false;
+let loadedFromShareLink = false;
 
 // ----- Firebase Helpers -----
 async function getCurrentUser() {
+  // Prefer fbHelper which waits for the first auth state event
+  if (window.fbHelper && window.fbHelper.isConfigured()) {
+    try {
+      return await window.fbHelper.getUser();
+    } catch (_) { /* fall through */ }
+  }
   if (window.firebase && firebase.auth && firebase.auth().currentUser) {
     return firebase.auth().currentUser;
   }
   return null;
 }
 
+function risksCollection(user) {
+  return firebase.firestore()
+    .collection("risk_registers")
+    .doc(user.uid)
+    .collection("risks");
+}
+
 async function loadRisksFromFirestore() {
   const user = await getCurrentUser();
   if (!user) return [];
   try {
-    const snap = await firebase.firestore()
-      .collection("risk_registers")
-      .doc(user.uid)
-      .collection("risks")
-      .orderBy("dateCreated", "desc")
-      .get();
+    const snap = await risksCollection(user).orderBy("dateCreated", "desc").get();
     const arr = [];
     snap.forEach(doc => arr.push({ id: doc.id, ...doc.data() }));
     return arr;
   } catch (e) {
     console.warn("Failed to load risks from Firestore", e);
-    return [];
+    // Fallback without orderBy if index is missing
+    try {
+      const user2 = await getCurrentUser();
+      if (!user2) return [];
+      const snap = await risksCollection(user2).get();
+      const arr = [];
+      snap.forEach(doc => arr.push({ id: doc.id, ...doc.data() }));
+      arr.sort((a, b) => new Date(b.dateCreated || 0) - new Date(a.dateCreated || 0));
+      return arr;
+    } catch (e2) {
+      console.warn("Firestore risk load fallback failed", e2);
+      return [];
+    }
   }
 }
 
@@ -66,12 +89,9 @@ async function saveRiskToFirestore(risk) {
   const user = await getCurrentUser();
   if (!user) return;
   try {
-    const col = firebase.firestore()
-      .collection("risk_registers")
-      .doc(user.uid)
-      .collection("risks");
+    const col = risksCollection(user);
     if (risk.id) {
-      await col.doc(risk.id).set(risk, { merge: true });
+      await col.doc(String(risk.id)).set(risk, { merge: true });
     } else {
       const docRef = await col.add(risk);
       risk.id = docRef.id;
@@ -81,19 +101,96 @@ async function saveRiskToFirestore(risk) {
   }
 }
 
-// ----- Local Storage Fallback -----
-function loadRisksFromLocal() {
-  const json = localStorage.getItem("riskManagementRisks");
-  return json ? JSON.parse(json) : [];
+async function deleteRiskFromFirestore(id) {
+  const user = await getCurrentUser();
+  if (!user || !id) return;
+  try {
+    await risksCollection(user).doc(String(id)).delete();
+  } catch (e) {
+    console.error("Failed to delete risk from Firestore:", e);
+  }
 }
 
-function persistRisks() {
-  getCurrentUser().then(user => {
-    if (!user) {
-      localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+/**
+ * Bulk-replace Firestore risks so import / PM load / migrate stay in sync.
+ * Deletes docs not present in the new set, then upserts each risk.
+ */
+async function bulkWriteRisksToFirestore(risks) {
+  const user = await getCurrentUser();
+  if (!user) return;
+  try {
+    const col = risksCollection(user);
+    const existing = await col.get();
+    const keepIds = new Set(risks.map(r => String(r.id)).filter(Boolean));
+    const toDelete = [];
+    existing.forEach(doc => {
+      if (!keepIds.has(doc.id)) toDelete.push(doc.ref);
+    });
+
+    const CHUNK = 450;
+    for (let i = 0; i < toDelete.length; i += CHUNK) {
+      const batch = firebase.firestore().batch();
+      toDelete.slice(i, i + CHUNK).forEach(ref => batch.delete(ref));
+      await batch.commit();
     }
-    // Firestore persistence handled per‑risk in saveRiskToFirestore()
-  });
+
+    for (let i = 0; i < risks.length; i += CHUNK) {
+      const batch = firebase.firestore().batch();
+      const slice = risks.slice(i, i + CHUNK);
+      slice.forEach(risk => {
+        if (!risk.id) risk.id = "risk-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+        batch.set(col.doc(String(risk.id)), risk, { merge: true });
+      });
+      await batch.commit();
+    }
+  } catch (e) {
+    console.error("Failed to bulk-write risks to Firestore", e);
+  }
+}
+
+// ----- Local Storage Fallback -----
+function loadRisksFromLocal() {
+  try {
+    const json = localStorage.getItem("riskManagementRisks");
+    return json ? JSON.parse(json) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function clearLocalRisks() {
+  localStorage.removeItem("riskManagementRisks");
+}
+
+/**
+ * Persist current riskData to the appropriate backend.
+ * Logged out → localStorage. Logged in → full Firestore sync (not no-op).
+ */
+async function persistRisks() {
+  const user = await getCurrentUser();
+  if (!user) {
+    localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+    return;
+  }
+  await bulkWriteRisksToFirestore(riskData);
+}
+
+/** Replace in-memory register and persist (used by PM setInputs + import). */
+async function replaceRiskData(risks) {
+  riskData = Array.isArray(risks) ? risks.map(normalizeRisk) : [];
+  await persistRisks();
+  renderAll();
+}
+
+function normalizeRisk(r) {
+  if (!r || typeof r !== "object") return r;
+  const score = computeScore(r.severity, r.probability);
+  return {
+    ...r,
+    id: r.id || ("risk-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8)),
+    score,
+    level: determineLevel(score).level
+  };
 }
 
 // ----- Utility -----
@@ -104,9 +201,23 @@ function computeScore(severity, probability) {
 }
 
 function determineLevel(score) {
-  if (score >= 16) return { level: "CRITICAL", color: "#e11d48", cssClass: "badge-critical" };
-  if (score >= 9) return { level: "MEDIUM", color: "#f59e0b", cssClass: "badge-medium" };
+  if (score >= RISK_THRESHOLDS.critical) {
+    return { level: "CRITICAL", color: "#e11d48", cssClass: "badge-critical" };
+  }
+  if (score >= RISK_THRESHOLDS.high) {
+    return { level: "HIGH", color: "#ef4444", cssClass: "badge-high" };
+  }
+  if (score >= RISK_THRESHOLDS.medium) {
+    return { level: "MEDIUM", color: "#f59e0b", cssClass: "badge-medium" };
+  }
   return { level: "LOW", color: "#10b981", cssClass: "badge-low" };
+}
+
+function getCellLevel(score) {
+  if (score >= RISK_THRESHOLDS.critical) return "level-critical";
+  if (score >= RISK_THRESHOLDS.high) return "level-high";
+  if (score >= RISK_THRESHOLDS.medium) return "level-medium";
+  return "level-low";
 }
 
 function getStatusClass(status) {
@@ -201,7 +312,7 @@ function renderRiskList() {
       <td class="center"><span class="score-pill">${score}</span></td>
       <td class="center"><span class="badge ${lvl.cssClass}">${lvl.level}</span></td>
       <td><span class="status-badge ${getStatusClass(risk.status)}">${escapeHTML(risk.status)}</span></td>
-      <td>${risk.nextCheckpoint || '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td>${risk.nextCheckpoint ? escapeHTML(risk.nextCheckpoint) : '<span style="color:var(--text-muted)">—</span>'}</td>
       <td class="center">
         <button class="action-btn" data-action="edit" data-id="${risk.id}" title="Edit risk"><i data-lucide="pencil"></i></button>
         <button class="action-btn danger" data-action="delete" data-id="${risk.id}" title="Delete risk"><i data-lucide="trash-2"></i></button>
@@ -221,22 +332,18 @@ function renderRiskList() {
   });
 }
 
-function deleteRisk(id) {
-  const idx = riskData.findIndex(r => r.id === id);
+async function deleteRisk(id) {
+  const idx = riskData.findIndex(r => String(r.id) === String(id));
   if (idx === -1) return;
   const [removed] = riskData.splice(idx, 1);
-  // Remove from Firestore if logged in
-  const user = window.firebase && firebase.auth ? firebase.auth().currentUser : null;
-  if (user && removed && removed.id) {
-    firebase.firestore()
-      .collection("risk_registers")
-      .doc(user.uid)
-      .collection("risks")
-      .doc(removed.id)
-      .delete()
-      .catch(e => console.error("Failed to delete risk from Firestore:", e));
+  if (removed && removed.id) {
+    await deleteRiskFromFirestore(removed.id);
   }
-  persistRisks();
+  // Keep localStorage in sync when logged out
+  const user = await getCurrentUser();
+  if (!user) {
+    localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+  }
   renderAll();
 }
 
@@ -249,7 +356,7 @@ function renderStats() {
   if (!totalEl) return;
 
   const total = riskData.length;
-  const critical = riskData.filter(r => computeScore(r.severity, r.probability) >= 16).length;
+  const critical = riskData.filter(r => computeScore(r.severity, r.probability) >= RISK_THRESHOLDS.critical).length;
   const open = riskData.filter(r => r.status === "Open").length;
   const avg = total > 0
     ? (riskData.reduce((sum, r) => sum + computeScore(r.severity, r.probability), 0) / total).toFixed(1)
@@ -272,13 +379,6 @@ function renderHeatMap() {
     const key = `${r.severity}-${r.probability}`;
     counts[key] = (counts[key] || 0) + 1;
   });
-
-  function getCellLevel(score) {
-    if (score >= 20) return "level-critical";
-    if (score >= 12) return "level-high";
-    if (score >= 6) return "level-medium";
-    return "level-low";
-  }
 
   let html = '<div class="heatmap-container">';
 
@@ -541,8 +641,13 @@ async function saveRisk() {
     riskData.unshift(riskObj);
   }
 
-  await saveRiskToFirestore(riskObj);
-  persistRisks();
+  // Single-risk write when signed in; full local dump when signed out
+  const user = await getCurrentUser();
+  if (user) {
+    await saveRiskToFirestore(riskObj);
+  } else {
+    localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+  }
   renderAll();
   closeModal("risk-modal");
   editingRiskId = null;
@@ -631,25 +736,71 @@ function init() {
   // Initialize default view
   switchView('edit');
 
-  // Load data
-  getCurrentUser().then(user => {
+  // Load data (wait for auth; migrate local → cloud on sign-in)
+  loadInitialRiskData();
+  attachAuthListener();
+}
+
+async function loadInitialRiskData() {
+  // Shared URL payload already applied before init — keep it and persist
+  if (loadedFromShareLink && riskData.length > 0) {
+    await persistRisks();
+    renderAll();
+    return;
+  }
+  const user = await getCurrentUser();
+  if (user) {
+    await hydrateFromCloud(user);
+  } else {
+    riskData = loadRisksFromLocal();
+    ensureSampleRisk(false);
+    renderAll();
+  }
+}
+
+function attachAuthListener() {
+  if (authListenerAttached) return;
+  if (!window.fbHelper || !window.fbHelper.isConfigured()) return;
+  authListenerAttached = true;
+  window.fbHelper.onAuthStateChange(async (user) => {
+    // Avoid clobbering an in-progress share-link import on the first auth event
+    if (loadedFromShareLink) {
+      loadedFromShareLink = false;
+      if (user) await persistRisks();
+      return;
+    }
     if (user) {
-      loadRisksFromFirestore().then(data => {
-        riskData = data;
-        ensureSampleRisk();
-        renderAll();
-      });
+      await hydrateFromCloud(user);
     } else {
       riskData = loadRisksFromLocal();
-      ensureSampleRisk();
+      ensureSampleRisk(false);
       renderAll();
     }
   });
 }
 
-function ensureSampleRisk() {
+/**
+ * Load cloud risks; if empty and local has data, migrate local → Firestore once.
+ */
+async function hydrateFromCloud(user) {
+  let cloud = await loadRisksFromFirestore();
+  const local = loadRisksFromLocal();
+  // Prefer non-sample local data when cloud is empty (first sign-in migration)
+  const localReal = local.filter(r => r && r.id && !String(r.id).startsWith("dummy-"));
+  if (cloud.length === 0 && localReal.length > 0) {
+    riskData = localReal.map(normalizeRisk);
+    await bulkWriteRisksToFirestore(riskData);
+    clearLocalRisks();
+  } else {
+    riskData = cloud;
+    ensureSampleRisk(true); // in-memory only when signed in + empty
+  }
+  renderAll();
+}
+
+function ensureSampleRisk(skipPersist) {
   if (riskData.length === 0) {
-    const dummyRisk = {
+    const dummyRisk = normalizeRisk({
       id: 'dummy-' + Date.now(),
       description: 'Sample Risk – Edit or delete this entry',
       owner: 'Owner Name',
@@ -664,9 +815,12 @@ function ensureSampleRisk() {
       nextCheckpoint: '',
       dateCreated: new Date().toISOString(),
       dateResolved: null
-    };
+    });
     riskData.push(dummyRisk);
-    persistRisks();
+    // Never auto-write the sample risk to Firestore
+    if (!skipPersist) {
+      localStorage.setItem("riskManagementRisks", JSON.stringify(riskData));
+    }
   }
 }
 
@@ -687,18 +841,19 @@ function importJSON(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
       const data = JSON.parse(e.target.result);
       if (data && Array.isArray(data.risks)) {
-        riskData = data.risks;
-        persistRisks();
-        renderAll();
+        await replaceRiskData(data.risks);
+        if (window.showToast) window.showToast("Risk register imported.");
       } else {
         console.warn('Invalid JSON format for risk data');
+        alert("Invalid risk register file (expected { risks: [...] }).");
       }
     } catch (err) {
       console.error('Error parsing imported JSON', err);
+      alert("Failed to import risk register: " + err.message);
     }
   };
   reader.readAsText(file);
@@ -707,14 +862,44 @@ function importJSON(event) {
 }
 
 function shareLink() {
-  const link = window.location.href;
-  navigator.clipboard.writeText(link)
-    .then(() => {
-      alert('Link copied to clipboard');
-    })
-    .catch(err => {
-      console.error('Failed to copy link', err);
-    });
+  try {
+    const encode = window.encodeShareState || ((obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj)))));
+    const serialized = encode({ risks: riskData });
+    const url = new URL(window.location.href);
+    url.searchParams.set("design", serialized);
+    navigator.clipboard.writeText(url.toString())
+      .then(() => {
+        if (window.showToast) window.showToast("Share link copied to clipboard.");
+        else alert("Link copied to clipboard");
+      })
+      .catch(() => {
+        prompt("Copy this share link:", url.toString());
+      });
+  } catch (err) {
+    console.error("Failed to create share link", err);
+    alert("Failed to create share link: " + err.message);
+  }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+window.shareLink = shareLink;
+window.exportJSON = exportJSON;
+window.importJSON = importJSON;
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Apply shared URL state before first paint of the register
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const design = params.get("design");
+    if (design) {
+      const decode = window.decodeShareState || ((str) => JSON.parse(decodeURIComponent(escape(atob(str)))));
+      const decoded = decode(design);
+      if (decoded && Array.isArray(decoded.risks)) {
+        riskData = decoded.risks.map(normalizeRisk);
+        loadedFromShareLink = true;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load shared risk design:", err);
+  }
+  init();
+});

@@ -77,12 +77,47 @@ window.fbHelper = {
     const user = auth.currentUser;
     if (!user) throw new Error("No authenticated user found.");
     try {
-      const snapshot = await db.collection("projects").where("userId", "==", user.uid).get();
-      const batch = db.batch();
-      snapshot.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
+      // Firestore batches are limited to 500 operations.
+      const commitInChunks = async (refs) => {
+        const CHUNK = 450;
+        for (let i = 0; i < refs.length; i += CHUNK) {
+          const batch = db.batch();
+          refs.slice(i, i + CHUNK).forEach(ref => batch.delete(ref));
+          await batch.commit();
+        }
+      };
+
+      const refsToDelete = [];
+
+      // User projects
+      const projectsSnap = await db.collection("projects").where("userId", "==", user.uid).get();
+      projectsSnap.forEach(doc => refsToDelete.push(doc.ref));
+
+      // Favorites subcollection
+      const favsSnap = await db.collection("user_favorites").doc(user.uid).collection("tools").get();
+      favsSnap.forEach(doc => refsToDelete.push(doc.ref));
+      refsToDelete.push(db.collection("user_favorites").doc(user.uid));
+
+      // Risk register documents
+      const risksSnap = await db.collection("risk_registers").doc(user.uid).collection("risks").get();
+      risksSnap.forEach(doc => refsToDelete.push(doc.ref));
+      refsToDelete.push(db.collection("risk_registers").doc(user.uid));
+
+      // Bug reports and feature suggestions filed by this user
+      try {
+        const bugsSnap = await db.collection("bug_reports").where("userId", "==", user.uid).get();
+        bugsSnap.forEach(doc => refsToDelete.push(doc.ref));
+      } catch (e) {
+        console.warn("Could not list bug_reports for account deletion:", e);
+      }
+      try {
+        const featsSnap = await db.collection("feature_suggestions").where("userId", "==", user.uid).get();
+        featsSnap.forEach(doc => refsToDelete.push(doc.ref));
+      } catch (e) {
+        console.warn("Could not list feature_suggestions for account deletion:", e);
+      }
+
+      await commitInChunks(refsToDelete);
       await user.delete();
       return { error: null };
     } catch (error) {

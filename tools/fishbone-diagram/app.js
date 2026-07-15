@@ -262,7 +262,7 @@
             const dataParam = urlParams.get('data');
             if (dataParam) {
                 try {
-                    const decompressed = JSON.parse(atob(dataParam));
+                    const decompressed = (window.decodeShareState ? window.decodeShareState(dataParam) : JSON.parse(decodeURIComponent(escape(atob(dataParam)))));
                     if (decompressed.effect && decompressed.categories) {
                         state = decompressed;
                     }
@@ -1265,7 +1265,7 @@
 
         function shareLink() {
             try {
-                const compressed = btoa(JSON.stringify(state));
+                const compressed = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
                 const shareUrl = window.location.origin + window.location.pathname + "?data=" + compressed;
                 
                 navigator.clipboard.writeText(shareUrl).then(() => {

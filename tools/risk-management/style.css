@@ -267,6 +267,11 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.badge-high {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
 .badge-critical {
   background: rgba(225, 29, 72, 0.12);
   color: #e11d48;

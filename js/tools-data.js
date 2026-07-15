@@ -2,7 +2,7 @@
  * tools-data.js — Single source of truth for all tools in the registry.
  * Add, remove, or update tools here. registry.js reads this array.
  *
- * Statuses: "active" | "coming-soon"
+ * Statuses: "active" | "beta" | "coming-soon"
  */
 const TOOLS_DATA = [
   {
@@ -62,7 +62,8 @@ const TOOLS_DATA = [
     tags: ["electrical", "semiconductor", "power-electronics", "mosfet", "thermal", "efficiency"],
     icon: "mosfet",
     path: "./tools/mosfet-power-loss/index.html",
-    status: "active"
+    status: "active",
+    releaseDate: "2026-07-14T16:00:00Z"
   },
   {
     id: "plot-extractor",

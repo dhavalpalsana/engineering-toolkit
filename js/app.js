@@ -80,8 +80,8 @@ document.addEventListener("DOMContentLoaded", () => {
             <span class="tool-badge ${badgeClass}">${badgeText}</span>
           </div>
         </div>
-        <h3 class="tool-card-title">${tool.name}</h3>
-        <p class="tool-card-desc">${tool.description}</p>
+        <h3 class="tool-card-title">${escapeHtml(tool.name)}</h3>
+        <p class="tool-card-desc">${escapeHtml(tool.description)}</p>
         <div class="tool-card-footer">
           ${isAvailable 
             ? `<span class="launch-btn">Open Tool ${registryIcons.arrowRight}</span>` 
@@ -320,10 +320,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Stats Init
+  // Stats Init — count openable tools (active + beta), not GA-only
   const initStats = () => {
-    const activeCount = toolsRegistry.filter(t => t.status === "active").length;
-    activeCountEl.textContent = activeCount;
+    const availableCount = toolsRegistry.filter(
+      t => t.status === "active" || t.status === "beta"
+    ).length;
+    activeCountEl.textContent = availableCount;
     totalCountEl.textContent = toolsRegistry.length;
   };
 

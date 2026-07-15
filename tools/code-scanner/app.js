@@ -558,7 +558,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.shareLink = function() {
     try {
       const state = { history: scanHistory };
-      const serialized = btoa(JSON.stringify(state));
+      const serialized = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
       const url = new URL(window.location.href);
       url.searchParams.set("design", serialized);
       
@@ -594,7 +594,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let loadedFromUrl = false;
   if (designParam) {
     try {
-      const decoded = JSON.parse(atob(designParam));
+      const decoded = (window.decodeShareState ? window.decodeShareState(designParam) : JSON.parse(decodeURIComponent(escape(atob(designParam)))));
       window.projectManagerConfig.setInputs(decoded);
       loadedFromUrl = true;
     } catch (err) {

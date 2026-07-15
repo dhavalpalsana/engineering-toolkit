@@ -2,7 +2,32 @@
  * Global Project Manager for Engineering Toolkit
  * Handles unified Project Drawer on both homepage and tool subpages.
  */
+
+// UTF-8-safe share-state helpers (available before DOMContentLoaded).
+// Prefer these over raw btoa/atob so Unicode tool state does not throw InvalidCharacterError.
+window.encodeShareState = function encodeShareState(obj) {
+  const json = JSON.stringify(obj);
+  const bytes = new TextEncoder().encode(json);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+};
+window.decodeShareState = function decodeShareState(str) {
+  const binary = atob(str);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return JSON.parse(new TextDecoder().decode(bytes));
+};
+
 document.addEventListener("DOMContentLoaded", () => {
+  // Defer boot so tool app.js DOMContentLoaded handlers can register
+  // window.projectManagerConfig first. PM is typically loaded before app.js,
+  // so without this deferral many tools are mis-detected as the homepage
+  // (Save/Open never attach).
+  setTimeout(bootProjectManager, 0);
+});
+
+function bootProjectManager() {
   const config = window.projectManagerConfig;
   const isHomepage = !config;
   const fb = window.fbHelper;
@@ -533,33 +558,32 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const getToolName = (toolId) => {
-    switch (toolId) {
-      case "busbar-sizing": return "Busbar Capacity Calculator";
-      case "wire-gauge": return "Cable Solver (Wire Gauge)";
-      case "can-bus-designer": return "CAN Bus Harness Designer";
-      case "fishbone-diagram": return "Ishikawa Fishbone Creator";
-      default: return toolId;
-    }
+    const registry = window.toolsRegistry || window.TOOLS_DATA || [];
+    const match = Array.isArray(registry) ? registry.find(t => t.id === toolId) : null;
+    if (match && match.name) return match.name;
+    // Fallback friendly names when tools-data is not loaded on the page
+    const names = {
+      "busbar-sizing": "Busbar Capacity Calculator",
+      "wire-gauge": "Cable Solver (Wire Gauge)",
+      "can-bus-designer": "CAN Bus Harness Designer",
+      "fishbone-diagram": "Ishikawa Fishbone Creator",
+      "beam-calculator": "Structural Beam Solver",
+      "heatsink-simulator": "3D Heat Sink Simulator",
+      "drafting-board": "2D Engineering Drafting Board",
+      "mcc-feeder-designer": "MCC Feeder & Motor Starter Designer",
+      "mosfet-power-loss": "MOSFET Power Loss Calculator",
+      "plot-extractor": "Plot Data Extractor",
+      "code-scanner": "Barcode & 2D Code Scanner",
+      "timezone-converter": "Visual Timezone Converter",
+      "unit-converter": "Engineering Unit Converter",
+      "risk-management": "Risk Management Dashboard"
+    };
+    return names[toolId] || toolId;
   };
 
   const getToolPath = (toolId) => {
-    if (isHomepage) {
-      switch (toolId) {
-        case "busbar-sizing": return "tools/busbar-sizing/index.html";
-        case "wire-gauge": return "tools/wire-gauge/index.html";
-        case "can-bus-designer": return "tools/can-bus-designer/index.html";
-        case "fishbone-diagram": return "tools/fishbone-diagram/index.html";
-        default: return `tools/${toolId}/index.html`;
-      }
-    } else {
-      switch (toolId) {
-        case "busbar-sizing": return "../busbar-sizing/index.html";
-        case "wire-gauge": return "../wire-gauge/index.html";
-        case "can-bus-designer": return "../can-bus-designer/index.html";
-        case "fishbone-diagram": return "../fishbone-diagram/index.html";
-        default: return `../${toolId}/index.html`;
-      }
-    }
+    if (isHomepage) return `tools/${toolId}/index.html`;
+    return `../${toolId}/index.html`;
   };
 
   const relativeTime = (dateStr) => {
@@ -1385,4 +1409,4 @@ document.addEventListener("DOMContentLoaded", () => {
   checkDeployment();
   // Check once a day for open tabs
   setInterval(checkDeployment, ONE_DAY_MS);
-});
+}

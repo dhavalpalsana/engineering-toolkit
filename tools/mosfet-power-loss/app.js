@@ -91,14 +91,14 @@ function renderColumns() {
           <input type="number" id="inp-tf-${m.id}" value="${m.tf}" step="1" min="0" oninput="recalculateAll()">
         </div>
 
-        <div class="input-lbl">td(on) <span class="unit">[ns]</span> <p>Turn-on Delay Time</p></div>
+        <div class="input-lbl">td(on) <span class="unit">[ns]</span> <p>Turn-on Delay (datasheet; not used in loss model)</p></div>
         <div class="mosfet-field-grp">
-          <input type="number" id="inp-tdon-${m.id}" value="${m.tdon}" step="1" min="0" oninput="recalculateAll()">
+          <input type="number" id="inp-tdon-${m.id}" value="${m.tdon}" step="1" min="0" oninput="recalculateAll()" title="Stored for reference only — delay times do not contribute crossover loss in this model">
         </div>
 
-        <div class="input-lbl">td(off) <span class="unit">[ns]</span> <p>Turn-off Delay Time</p></div>
+        <div class="input-lbl">td(off) <span class="unit">[ns]</span> <p>Turn-off Delay (datasheet; not used in loss model)</p></div>
         <div class="mosfet-field-grp">
-          <input type="number" id="inp-tdoff-${m.id}" value="${m.tdoff}" step="1" min="0" oninput="recalculateAll()">
+          <input type="number" id="inp-tdoff-${m.id}" value="${m.tdoff}" step="1" min="0" oninput="recalculateAll()" title="Stored for reference only — delay times do not contribute crossover loss in this model">
         </div>
 
         <div class="input-lbl">Qrr <span class="unit">[nC]</span> <p>Reverse Recovery Charge</p></div>
@@ -505,7 +505,7 @@ window.projectManagerConfig = {
 window.shareLink = function() {
   try {
     const configData = getInputsConfig();
-    const serialized = btoa(JSON.stringify(configData));
+    const serialized = (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
     const url = new URL(window.location.href);
     url.searchParams.set('design', serialized);
     
@@ -559,7 +559,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const design = urlParams.get('design');
   if (design) {
     try {
-      const decoded = JSON.parse(atob(design));
+      const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
       setInputsConfig(decoded);
     } catch (err) {
       console.error("Failed to load design from URL:", err);

@@ -1267,7 +1267,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.shareLink = () => {
     const state = captureCurrentState();
     const stringified = JSON.stringify(state);
-    const encoded = btoa(stringified);
+    const encoded = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(stringified))));
     const shareUrl = `${window.location.origin}${window.location.pathname}?design=${encoded}`;
     
     const tempTextArea = document.createElement("textarea");
@@ -1343,7 +1343,7 @@ document.addEventListener("DOMContentLoaded", () => {
   
   if (designParam) {
     try {
-      const decoded = JSON.parse(atob(designParam));
+      const decoded = (window.decodeShareState ? window.decodeShareState(designParam) : JSON.parse(decodeURIComponent(escape(atob(designParam)))));
       loadStateObject(decoded);
       loadedFromUrl = true;
     } catch (err) {
