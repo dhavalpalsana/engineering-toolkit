@@ -6,9 +6,24 @@
  *  - Inject a dismissible Beta banner with one-click bug report
  *  - Ensure a standardized tool footer exists
  *  - Provide helpers to build a standardized header (opt-in)
+ *  - Queue bug/suggest clicks until project-manager modals are ready
  *
- * Load order (typical tool page):
- *   firebase → auth-ui → tools-data.js → tool-shell.js → project-manager.js → app.js
+ * ── New tool checklist ──────────────────────────────────────────────
+ * 1. Register in js/tools-data.js (id, name, status, icon, path).
+ * 2. In tools/<id>/index.html link ../../css/tool-shell.css (+ theme/header).
+ * 3. Script load order (end of body):
+ *      firebase-app/auth/firestore CDN
+ *      → ../../js/firebase.js
+ *      → ../../js/auth-ui.js
+ *      → ../../js/tools-data.js
+ *      → ../../js/registry.js   (optional; needed for hub icons on tool pages)
+ *      → ../../js/tool-shell.js
+ *      → ../../js/project-manager.js
+ *      → ../../js/analytics.js  (optional; privacy-safe counters)
+ *      → app.js
+ * 4. Before PM/app if needed: window.projectManagerConfig = { toolId: "<id>", ... }
+ *    or window.toolShellConfig = { toolId: "<id>" } (URL path also works).
+ * 5. Header should use .hdr-icon so logo sync matches the hub card.
  *
  * Optional config (set before this script runs, or anytime before DOMContentLoaded):
  *   window.toolShellConfig = {
@@ -35,6 +50,10 @@
       </div>
     </div>
   `;
+
+  /** Pending shell actions if PM modals are not registered yet. */
+  let pendingAction = null; // { type: 'bug'|'suggest', eventLike }
+  let pendingPollTimer = null;
 
   function getConfig() {
     return window.toolShellConfig || {};
@@ -64,6 +83,21 @@
 
   function hubPath() {
     return getConfig().hubPath || "../../index.html";
+  }
+
+  /** Context attached to bug reports (no project payload / PII beyond path). */
+  function getBugContext() {
+    const toolId = detectToolId() || "unknown";
+    return {
+      toolId,
+      path: (window.location && window.location.pathname) || "",
+      href: (window.location && window.location.href) || "",
+      userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || "",
+      screen: (typeof window !== "undefined" && window.screen)
+        ? `${window.screen.width}x${window.screen.height}`
+        : "",
+      ts: new Date().toISOString()
+    };
   }
 
   function betaDismissKey(toolId) {
@@ -128,6 +162,9 @@
     }
 
     footer.querySelectorAll("[data-shell-action]").forEach((el) => {
+      // Avoid double-binding on re-boot
+      if (el.dataset.shellBound === "1") return;
+      el.dataset.shellBound = "1";
       el.addEventListener("click", (e) => {
         e.preventDefault();
         const action = el.getAttribute("data-shell-action");
@@ -139,6 +176,8 @@
     // Normalize legacy inline onclick footers to the same handlers
     footer.querySelectorAll('a[onclick*="openBugReportModal"]').forEach((a) => {
       a.removeAttribute("onclick");
+      if (a.dataset.shellBound === "1") return;
+      a.dataset.shellBound = "1";
       a.addEventListener("click", (e) => {
         e.preventDefault();
         openBugReport(e);
@@ -146,6 +185,8 @@
     });
     footer.querySelectorAll('a[onclick*="openFeatureSuggestionModal"]').forEach((a) => {
       a.removeAttribute("onclick");
+      if (a.dataset.shellBound === "1") return;
+      a.dataset.shellBound = "1";
       a.addEventListener("click", (e) => {
         e.preventDefault();
         openSuggest(e);
@@ -153,21 +194,80 @@
     });
   }
 
+  function clearPendingPoll() {
+    if (pendingPollTimer) {
+      clearInterval(pendingPollTimer);
+      pendingPollTimer = null;
+    }
+  }
+
+  function flushPendingAction() {
+    if (!pendingAction) return false;
+    const { type } = pendingAction;
+    if (type === "bug" && typeof window.openBugReportModal === "function") {
+      const act = pendingAction;
+      pendingAction = null;
+      clearPendingPoll();
+      window.openBugReportModal(act.eventLike || null);
+      return true;
+    }
+    if (type === "suggest" && typeof window.openFeatureSuggestionModal === "function") {
+      const act = pendingAction;
+      pendingAction = null;
+      clearPendingPoll();
+      window.openFeatureSuggestionModal(act.eventLike || null);
+      return true;
+    }
+    return false;
+  }
+
+  function queueAction(type, e) {
+    pendingAction = { type, eventLike: e || null };
+    if (pendingPollTimer) return;
+    let tries = 0;
+    pendingPollTimer = setInterval(() => {
+      tries += 1;
+      if (flushPendingAction() || tries > 40) {
+        // ~4s at 100ms
+        if (tries > 40 && pendingAction) {
+          pendingAction = null;
+          clearPendingPoll();
+          if (window.showToast) {
+            window.showToast("Page is still loading — try Report Bug again in a moment.", false);
+          }
+        }
+      }
+    }, 100);
+  }
+
   function openBugReport(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    try {
+      if (window.ETAnalytics && typeof window.ETAnalytics.track === "function") {
+        window.ETAnalytics.track("bug_report_open");
+      }
+    } catch (_) { /* ignore */ }
+
     if (typeof window.openBugReportModal === "function") {
       window.openBugReportModal(e);
-    } else if (window.showToast) {
-      window.showToast("Sign in to report bugs (bug form loads with project manager).", false);
-    } else {
-      alert("Bug report is available after the page fully loads. Please try again in a moment.");
+      return;
+    }
+    // Queue until project-manager registers the modal
+    queueAction("bug", e);
+    if (window.showToast) {
+      window.showToast("Opening bug report…", true);
     }
   }
 
   function openSuggest(e) {
+    if (e && e.preventDefault) e.preventDefault();
     if (typeof window.openFeatureSuggestionModal === "function") {
       window.openFeatureSuggestionModal(e);
-    } else if (window.showToast) {
-      window.showToast("Feature suggestions load with the page chrome.", false);
+      return;
+    }
+    queueAction("suggest", e);
+    if (window.showToast) {
+      window.showToast("Opening suggestion form…", true);
     }
   }
 
@@ -248,15 +348,12 @@
     const host = document.querySelector("header .hdr-icon");
     if (!host) return;
 
-    // Use the exact same SVG markup as the main page tool cards
     host.innerHTML = icons[tool.icon];
 
-    // Normalize size so header styling matches (header.css targets .hdr-icon svg)
     host.querySelectorAll("svg").forEach((svg) => {
       svg.setAttribute("width", "22");
       svg.setAttribute("height", "22");
       svg.removeAttribute("class");
-      // Keep stroke currentColor for theme consistency
       if (!svg.getAttribute("fill")) svg.setAttribute("fill", "none");
       if (!svg.getAttribute("stroke")) svg.setAttribute("stroke", "currentColor");
     });
@@ -268,12 +365,14 @@
     syncHeaderIcon(tool);
     injectBetaBanner(tool);
     ensureFooter();
+    flushPendingAction();
 
-    // Expose resolved meta for tools/analytics
     window.ToolShell = window.ToolShell || {};
     window.ToolShell.toolId = toolId;
     window.ToolShell.toolMeta = tool;
     window.ToolShell.syncHeaderIcon = syncHeaderIcon;
+    window.ToolShell.getBugContext = getBugContext;
+    window.ToolShell.flushPendingAction = flushPendingAction;
   }
 
   window.ToolShell = {
@@ -281,9 +380,11 @@
     renderHeader,
     detectToolId,
     getToolMeta,
+    getBugContext,
     openBugReport,
     openSuggest,
-    syncHeaderIcon
+    syncHeaderIcon,
+    flushPendingAction
   };
 
   if (document.readyState === "loading") {

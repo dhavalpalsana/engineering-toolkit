@@ -89,6 +89,46 @@ const DATA_CUMULATIVE_LIMITS = {
   8000: 0.2
 };
 
+/** Station topology roles — splitter/junction is a station, not a device. */
+const STATION_TYPES = {
+  end: { label: 'End node', glyph: 'E' },
+  splice: { label: 'Splice / T', glyph: 'T' },
+  star: { label: 'Star', glyph: '★' },
+  terminator: { label: 'Terminator', glyph: '⟂' }
+};
+
+function inferStationType(station, index, total) {
+  if (station.type && STATION_TYPES[station.type]) return station.type;
+  const n = (station.devices || []).length;
+  const hasTerm = (station.devices || []).some(d => (d.termination || 0) > 0);
+  if (n >= 2) return 'star';
+  if (hasTerm && (index === 0 || index === total - 1)) return 'terminator';
+  if (index === 0 || index === total - 1) return 'end';
+  return 'splice';
+}
+
+function normalizeStationsInPlace() {
+  stations.forEach((st, i) => {
+    st.type = inferStationType(st, i, stations.length);
+  });
+}
+
+function maxStubLimitMeters() {
+  readConfigInputs();
+  if (networkConfig.enableCanFD) {
+    return DATA_STUB_LIMITS[networkConfig.dataBaudRate] ?? STANDARD_STUB_LIMITS[networkConfig.baudRate] ?? 0.3;
+  }
+  return STANDARD_STUB_LIMITS[networkConfig.baudRate] ?? 0.3;
+}
+
+function stubGuidanceText() {
+  const maxM = maxStubLimitMeters();
+  const br = networkConfig.enableCanFD
+    ? `CAN FD data ${networkConfig.dataBaudRate} kbps`
+    : `${networkConfig.baudRate} kbps`;
+  return `ISO 11898 guidance: max stub ≈ ${formatLength(maxM)} at ${br}. Keep stubs short; use backbone + short drops.`;
+}
+
 // Dragging State
 let dragInfo = {
   active: false,
@@ -460,14 +500,20 @@ function bindEvents() {
     const newStation = {
       id: 's_' + Date.now().toString(),
       name: `Station ${stations.length + 1}`,
+      type: stations.length === 0 ? 'terminator' : 'splice',
       distanceFromPrev: 5.0, // Default distance
       devices: [
-        { id: 'd_' + Date.now().toString(), name: `Device ${stations.length + 1}`, stubLength: 0.1, termination: 0 }
+        { id: 'd_' + Date.now().toString(), name: `Device ${stations.length + 1}`, stubLength: 0.1, termination: stations.length === 0 ? 120 : 0 }
       ]
     };
     stations.push(newStation);
+    try { if (window.ETAnalytics) window.ETAnalytics.trackEngaged('can-bus-designer'); } catch (_) {}
     render();
   });
+
+  document.getElementById('btn-topology-wizard')?.addEventListener('click', openTopologyWizard);
+  document.getElementById('btn-export-harness-svg')?.addEventListener('click', exportHarnessSvg);
+  document.getElementById('btn-export-pin-table')?.addEventListener('click', exportPinTableCsv);
 
   // Export & Import
   btnExport.addEventListener('click', exportStateJSON);
@@ -670,6 +716,7 @@ function applyPreset(presetKey) {
 
   // Deep clone stations
   stations = JSON.parse(JSON.stringify(preset.stations));
+  normalizeStationsInPlace();
 
   // Update inputs
   inputBaud.value = networkConfig.baudRate;
@@ -1098,14 +1145,25 @@ function updateBitTimingResults() {
   el.innerHTML = html;
 }
 
-// ── DBC snippet parser (BO_ / SG_ only) ──────────────────────
+// ── DBC snippet parser (BU_ / BO_ / SG_ / VAL_ subset) ────────
+let lastDbcImport = { nodes: [], messages: [] };
+
 function parseDbcSnippet() {
   const ta = document.getElementById('dbc-import-text');
   const out = document.getElementById('dbc-parse-results');
   if (!ta || !out) return;
   const text = ta.value || '';
   const messages = [];
+  const nodes = new Set();
   let current = null;
+
+  // BU_: Node1 Node2 ...
+  text.split(/\r?\n/).forEach(line => {
+    const bu = line.match(/^\s*BU_\s*:\s*(.*)$/);
+    if (bu && bu[1]) {
+      bu[1].trim().split(/\s+/).filter(Boolean).forEach(n => nodes.add(n));
+    }
+  });
 
   text.split(/\r?\n/).forEach(line => {
     const bo = line.match(/^\s*BO_\s+(\d+)\s+(\w+)\s*:\s*(\d+)\s+(\S+)/);
@@ -1153,7 +1211,140 @@ function parseDbcSnippet() {
     </div>`;
   }).join('');
 
-  if (window.showToast) window.showToast(`Parsed ${messages.length} DBC message(s).`);
+  lastDbcImport = { nodes: [...nodes], messages };
+  // Signal matrix: messages × nodes (Tx only for transmitters; Rx unknown without SG_ multiplexing)
+  const nodeList = [...nodes];
+  if (nodeList.length === 0) {
+    messages.forEach(m => { if (m.transmitter && m.transmitter !== 'Vector__XXX') nodeList.push(m.transmitter); });
+  }
+  const uniqueNodes = [...new Set(nodeList)];
+  let matrixHtml = '';
+  if (uniqueNodes.length && messages.length) {
+    matrixHtml = `<div style="margin-top:12px;overflow:auto;"><div style="font-weight:700;font-size:12px;margin-bottom:6px;">Signal matrix (Tx)</div>
+      <table style="border-collapse:collapse;font-size:11px;width:100%;">
+        <thead><tr><th style="text-align:left;padding:4px;border-bottom:1px solid var(--border-color)">Message</th>
+        ${uniqueNodes.map(n => `<th style="padding:4px;border-bottom:1px solid var(--border-color)">${n}</th>`).join('')}
+        </tr></thead><tbody>
+        ${messages.map(m => `<tr>
+          <td style="padding:4px;border-bottom:1px solid var(--border-color)">${m.name}</td>
+          ${uniqueNodes.map(n => `<td style="text-align:center;padding:4px;border-bottom:1px solid var(--border-color)">${m.transmitter === n ? 'Tx' : ''}</td>`).join('')}
+        </tr>`).join('')}
+        </tbody></table></div>`;
+  }
+  out.innerHTML = (out.innerHTML || '') + matrixHtml +
+    (uniqueNodes.length
+      ? `<div style="margin-top:8px;"><button type="button" class="btn btn-primary" id="btn-dbc-apply-nodes" style="font-size:11px;padding:4px 10px;">Suggest devices from BU_ (${uniqueNodes.length})</button></div>`
+      : '');
+  document.getElementById('btn-dbc-apply-nodes')?.addEventListener('click', () => {
+    if (!stations.length) {
+      stations.push({
+        id: 's_dbc',
+        name: 'DBC Nodes',
+        type: 'star',
+        distanceFromPrev: 0,
+        devices: []
+      });
+    }
+    const st = stations[stations.length - 1];
+    uniqueNodes.forEach(n => {
+      if (!(st.devices || []).some(d => d.name === n)) {
+        st.devices.push({ id: 'd_' + Math.random().toString(36).slice(2, 8), name: n, stubLength: 0.1, termination: 0 });
+      }
+    });
+    render();
+    if (window.showToast) window.showToast('Added DBC nodes as devices on last station');
+  });
+
+  if (window.showToast) window.showToast(`Parsed ${messages.length} DBC message(s)${uniqueNodes.length ? ', ' + uniqueNodes.length + ' node(s)' : ''}.`);
+}
+
+// ── Topology wizard + harness exports ────────────────────────
+function openTopologyWizard() {
+  const choice = prompt(
+    'New harness wizard:\n' +
+    '1 = Multi-drop daisy-chain (ECUs on backbone)\n' +
+    '2 = Backbone + short stubs (splice stations)\n' +
+    '3 = Empty\n\nEnter 1, 2, or 3:',
+    '1'
+  );
+  if (!choice) return;
+  if (choice === '3') {
+    stations = [];
+    render();
+    return;
+  }
+  if (choice === '2') {
+    stations = [
+      { id: 's1', name: 'End A', type: 'terminator', distanceFromPrev: 0, devices: [{ id: 'd1', name: 'ECU A', stubLength: 0.1, termination: 120 }] },
+      { id: 's2', name: 'Harness Splitter', type: 'splice', distanceFromPrev: 5, devices: [{ id: 'd2', name: 'Sensor', stubLength: 0.15, termination: 0 }] },
+      { id: 's3', name: 'Star Junction', type: 'star', distanceFromPrev: 4, devices: [
+        { id: 'd3', name: 'Module B', stubLength: 0.2, termination: 0 },
+        { id: 'd4', name: 'Module C', stubLength: 0.2, termination: 0 }
+      ]},
+      { id: 's4', name: 'End B', type: 'terminator', distanceFromPrev: 6, devices: [{ id: 'd5', name: 'ECU B', stubLength: 0.1, termination: 120 }] }
+    ];
+  } else {
+    stations = [
+      { id: 's1', name: 'Node 1', type: 'terminator', distanceFromPrev: 0, devices: [{ id: 'd1', name: 'ECU 1', stubLength: 0.05, termination: 120 }] },
+      { id: 's2', name: 'Node 2', type: 'end', distanceFromPrev: 3, devices: [{ id: 'd2', name: 'ECU 2', stubLength: 0.05, termination: 0 }] },
+      { id: 's3', name: 'Node 3', type: 'end', distanceFromPrev: 3, devices: [{ id: 'd3', name: 'ECU 3', stubLength: 0.05, termination: 0 }] },
+      { id: 's4', name: 'Node 4', type: 'terminator', distanceFromPrev: 3, devices: [{ id: 'd4', name: 'ECU 4', stubLength: 0.05, termination: 120 }] }
+    ];
+  }
+  normalizeStationsInPlace();
+  try { if (window.ETAnalytics) window.ETAnalytics.trackEngaged('can-bus-designer'); } catch (_) {}
+  render();
+  if (window.showToast) window.showToast('Wizard topology applied — adjust spacing and stubs as needed');
+}
+
+function exportHarnessSvg() {
+  if (!harnessSvg) return;
+  const clone = harnessSvg.cloneNode(true);
+  // Inline a white background for print
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bg.setAttribute('width', '100%');
+  bg.setAttribute('height', '100%');
+  bg.setAttribute('fill', '#ffffff');
+  clone.insertBefore(bg, clone.firstChild);
+  const xml = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'can-harness-topology.svg';
+  a.click();
+  URL.revokeObjectURL(url);
+  if (window.showToast) window.showToast('Harness SVG downloaded');
+}
+
+function exportPinTableCsv() {
+  const rows = [['Station', 'Type', 'Device', 'Stub_m', 'Termination_ohm', 'Position_m']];
+  let pos = 0;
+  stations.forEach((st, i) => {
+    pos += st.distanceFromPrev || 0;
+    const type = inferStationType(st, i, stations.length);
+    (st.devices || []).forEach(dev => {
+      rows.push([
+        st.name,
+        type,
+        dev.name,
+        (dev.stubLength || 0).toFixed(3),
+        String(dev.termination || 0),
+        pos.toFixed(3)
+      ]);
+    });
+    if (!(st.devices || []).length) {
+      rows.push([st.name, type, '', '', '', pos.toFixed(3)]);
+    }
+  });
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'can-harness-pin-table.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── Harness BOM CSV ──────────────────────────────────────────
@@ -1261,6 +1452,13 @@ function renderStationCards() {
     card.className = 'station-card';
     card.dataset.id = station.id;
 
+    const stType = inferStationType(station, index, stations.length);
+    station.type = stType;
+    const typeOptions = Object.entries(STATION_TYPES).map(([k, v]) =>
+      `<option value="${k}" ${stType === k ? 'selected' : ''}>${v.glyph} ${v.label}</option>`
+    ).join('');
+    const stubMax = maxStubLimitMeters();
+
     card.innerHTML = `
       <div class="station-header">
         <div class="station-title-group" style="cursor: grab;">
@@ -1274,8 +1472,16 @@ function renderStationCards() {
           <i data-lucide="x" style="width: 14px; height: 14px;"></i>
         </button>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:0 10px 8px;flex-wrap:wrap;">
+        <label style="font-size:11px;color:var(--text-muted);">Station type</label>
+        <select class="device-input" data-action="edit-station-type" title="Harness location type. Splitter = Splice or Star. Devices are ECUs only." style="max-width:160px;">
+          ${typeOptions}
+        </select>
+        <span style="font-size:10px;color:var(--text-muted);">Splitter → Splice/Star, not a device</span>
+      </div>
       
       <div class="station-devices-container">
+        <div style="font-size:10px;color:var(--text-muted);padding:0 4px 6px;" title="${stubGuidanceText()}">${stubGuidanceText()}</div>
         <!-- Render Devices list inside this station -->
         <div id="device-list-${station.id}" style="display: flex; flex-direction: column; gap: 8px;">
           <!-- Populated inside loop -->
@@ -1285,6 +1491,11 @@ function renderStationCards() {
         </button>
       </div>
     `;
+
+    card.querySelector('[data-action="edit-station-type"]')?.addEventListener('change', (e) => {
+      station.type = e.target.value;
+      render();
+    });
 
     // Drag-and-drop for Stations (only active when dragging the grab handle)
     const titleGroup = card.querySelector('.station-title-group');
@@ -1345,8 +1556,9 @@ function renderStationCards() {
           <input type="text" class="device-input" value="${device.name}" data-action="edit-device-name" title="Device name">
         </div>
         <div style="display: flex; align-items: center; gap: 4px;">
-          <input type="number" class="device-input" value="${fromMeters(device.stubLength).toFixed(currentUnit === 'm' ? 2 : currentUnit === 'mm' ? 0 : 1)}" data-action="edit-device-stub" min="0" step="any" title="Physical stub length from splice in ${currentUnit}">
+          <input type="number" class="device-input" value="${fromMeters(device.stubLength).toFixed(currentUnit === 'm' ? 2 : currentUnit === 'mm' ? 0 : 1)}" data-action="edit-device-stub" min="0" step="any" title="Stub from station/splice in ${currentUnit}. Max recommended ≈ ${formatLength(stubMax)}">
           <span style="font-size: 11px; color: var(--text-muted);">${currentUnit}</span>
+          <span style="font-size:9px;color:${device.stubLength > stubMax ? 'var(--error)' : 'var(--text-muted)'};" title="${stubGuidanceText()}">max ${formatLength(stubMax)}</span>
         </div>
         <div>
           <select class="device-input" data-action="edit-device-term" title="Device termination">
@@ -2207,6 +2419,20 @@ function drawTopologySVG(diagnostics) {
       render();
     });
     zoomContainer.appendChild(addGroup);
+
+    // Type glyph (E / T / ★ / ⟂)
+    const stType = inferStationType(station, index, stations.length);
+    station.type = stType;
+    const typeGlyph = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    typeGlyph.setAttribute('x', x);
+    typeGlyph.setAttribute('y', canH_Y - 26);
+    typeGlyph.setAttribute('text-anchor', 'middle');
+    typeGlyph.setAttribute('fill', 'var(--accent)');
+    typeGlyph.setAttribute('font-size', '10px');
+    typeGlyph.setAttribute('font-weight', '800');
+    typeGlyph.textContent = (STATION_TYPES[stType] || STATION_TYPES.splice).glyph;
+    typeGlyph.setAttribute('title', (STATION_TYPES[stType] || {}).label || stType);
+    zoomContainer.appendChild(typeGlyph);
 
     // Label station above the trunk line (Double-click to rename)
     const labelStationName = document.createElementNS('http://www.w3.org/2000/svg', 'text');

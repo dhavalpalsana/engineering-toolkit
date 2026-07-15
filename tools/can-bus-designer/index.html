@@ -41,6 +41,7 @@
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
   <script src="../../js/project-manager.js"></script>
+  <script src="../../js/analytics.js"></script>
 </head>
 <body>
 
@@ -180,12 +181,24 @@
 
           <!-- Station Configuration Card -->
           <div class="section-card" style="background: none; border: none; padding: 0;">
-            <div class="section-title" style="margin-bottom: 12px;">
+            <div class="section-title" style="margin-bottom: 12px; flex-wrap: wrap; gap: 6px;">
               <span>Harness Stations (Spaced Segments)</span>
+              <button id="btn-topology-wizard" class="btn" style="padding: 4px 10px; font-size: 11px;" title="Guided multi-drop or backbone+stubs setup">
+                Wizard
+              </button>
+              <button id="btn-export-harness-svg" class="btn" style="padding: 4px 10px; font-size: 11px;" title="Download topology SVG">
+                SVG
+              </button>
+              <button id="btn-export-pin-table" class="btn" style="padding: 4px 10px; font-size: 11px;" title="Export station/device pin table CSV">
+                Pin CSV
+              </button>
               <button id="btn-add-station" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
                 <i data-lucide="plus" style="width: 12px; height: 12px;"></i> Add Station
               </button>
             </div>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;line-height:1.4;">
+              Tip: a <strong>harness splitter</strong> is a <strong>Station</strong> (type Splice or Star). Only ECUs are Devices (stubs off that station).
+            </p>
             <div id="station-list-container" style="display: flex; flex-direction: column; gap: 12px;">
               <!-- Dynamically populated with station cards -->
             </div>

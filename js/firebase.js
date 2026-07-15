@@ -172,16 +172,44 @@ window.fbHelper = {
     }
   },
 
-  saveProject: async (toolId, name, config, projectId = null) => {
+  /**
+   * Save project. Optional 5th arg meta: { tags, folderId, lastOpenedAt }
+   * Additive fields only — older clients ignore them.
+   */
+  saveProject: async (toolId, name, config, projectId = null, meta = null) => {
+    const now = new Date().toISOString();
+    const tags = meta && Array.isArray(meta.tags)
+      ? meta.tags.map(t => String(t).trim().toLowerCase()).filter(Boolean).slice(0, 12)
+      : undefined;
+    const folderId = meta && Object.prototype.hasOwnProperty.call(meta, "folderId")
+      ? (meta.folderId || null)
+      : undefined;
+    const lastOpenedAt = meta && meta.lastOpenedAt ? meta.lastOpenedAt : undefined;
+
+    const applyMeta = (proj) => {
+      if (tags !== undefined) proj.tags = tags;
+      if (folderId !== undefined) proj.folderId = folderId;
+      if (lastOpenedAt !== undefined) proj.lastOpenedAt = lastOpenedAt;
+      return proj;
+    };
+
     if (!isConfigured) {
       const local = JSON.parse(localStorage.getItem(`local_projects_${toolId}`) || "[]");
       const existingIdx = projectId ? local.findIndex(p => p.id === projectId) : local.findIndex(p => p.name === name);
-      const newProj = {
+      let newProj = {
         id: existingIdx >= 0 ? local[existingIdx].id : Math.random().toString(36).substr(2, 9),
         name,
         config,
-        updatedAt: new Date().toISOString()
+        toolId,
+        updatedAt: now,
+        tags: existingIdx >= 0 ? (local[existingIdx].tags || []) : [],
+        folderId: existingIdx >= 0 ? (local[existingIdx].folderId || null) : null,
+        lastOpenedAt: existingIdx >= 0 ? (local[existingIdx].lastOpenedAt || null) : null
       };
+      if (existingIdx >= 0) {
+        newProj = { ...local[existingIdx], ...newProj, config, name, updatedAt: now };
+      }
+      applyMeta(newProj);
       if (existingIdx >= 0) {
         local[existingIdx] = newProj;
       } else {
@@ -196,12 +224,20 @@ window.fbHelper = {
       if (!user) {
         const local = JSON.parse(localStorage.getItem(`local_projects_${toolId}`) || "[]");
         const existingIdx = projectId ? local.findIndex(p => p.id === projectId) : local.findIndex(p => p.name === name);
-        const newProj = {
+        let newProj = {
           id: existingIdx >= 0 ? local[existingIdx].id : Math.random().toString(36).substr(2, 9),
           name,
           config,
-          updatedAt: new Date().toISOString()
+          toolId,
+          updatedAt: now,
+          tags: existingIdx >= 0 ? (local[existingIdx].tags || []) : [],
+          folderId: existingIdx >= 0 ? (local[existingIdx].folderId || null) : null,
+          lastOpenedAt: existingIdx >= 0 ? (local[existingIdx].lastOpenedAt || null) : null
         };
+        if (existingIdx >= 0) {
+          newProj = { ...local[existingIdx], ...newProj, config, name, updatedAt: now };
+        }
+        applyMeta(newProj);
         if (existingIdx >= 0) {
           local[existingIdx] = newProj;
         } else {
@@ -211,16 +247,20 @@ window.fbHelper = {
         return { id: newProj.id, error: null };
       }
 
-      const projData = {
+      const projData = applyMeta({
         userId: user.uid,
         toolId,
         name,
         config,
-        updatedAt: new Date().toISOString()
-      };
+        updatedAt: now
+      });
 
       if (projectId) {
-        await db.collection("projects").doc(projectId).update({ name, config, updatedAt: projData.updatedAt });
+        const patch = { name, config, updatedAt: now };
+        if (tags !== undefined) patch.tags = tags;
+        if (folderId !== undefined) patch.folderId = folderId;
+        if (lastOpenedAt !== undefined) patch.lastOpenedAt = lastOpenedAt;
+        await db.collection("projects").doc(projectId).update(patch);
         return { id: projectId, error: null };
       }
 
@@ -233,14 +273,117 @@ window.fbHelper = {
 
       if (!snapshot.empty) {
         const docId = snapshot.docs[0].id;
-        await db.collection("projects").doc(docId).update({ name, config, updatedAt: projData.updatedAt });
+        const patch = { name, config, updatedAt: now };
+        if (tags !== undefined) patch.tags = tags;
+        if (folderId !== undefined) patch.folderId = folderId;
+        if (lastOpenedAt !== undefined) patch.lastOpenedAt = lastOpenedAt;
+        await db.collection("projects").doc(docId).update(patch);
         return { id: docId, error: null };
       } else {
+        if (!projData.tags) projData.tags = [];
+        if (projData.folderId === undefined) projData.folderId = null;
         const docRef = await db.collection("projects").add(projData);
         return { id: docRef.id, error: null };
       }
     } catch (e) {
       return { id: null, error: e };
+    }
+  },
+
+  /** Touch lastOpenedAt without rewriting config. */
+  touchProjectOpened: async (projectId, toolId = null) => {
+    const now = new Date().toISOString();
+    if (!projectId) return { error: null };
+    if (!isConfigured || !auth.currentUser) {
+      if (!toolId) return { error: null };
+      const local = JSON.parse(localStorage.getItem(`local_projects_${toolId}`) || "[]");
+      const idx = local.findIndex(p => p.id === projectId);
+      if (idx >= 0) {
+        local[idx].lastOpenedAt = now;
+        localStorage.setItem(`local_projects_${toolId}`, JSON.stringify(local));
+      }
+      return { error: null };
+    }
+    try {
+      await db.collection("projects").doc(projectId).update({ lastOpenedAt: now });
+      return { error: null };
+    } catch (e) {
+      return { error: e };
+    }
+  },
+
+  /** Duplicate project as a new doc with " (copy)" name. */
+  duplicateProject: async (project) => {
+    if (!project) return { id: null, error: new Error("No project") };
+    const baseName = (project.name || "Project").replace(/\s*\(copy\)\s*$/i, "").trim();
+    const name = `${baseName} (copy)`;
+    return window.fbHelper.saveProject(
+      project.toolId,
+      name,
+      project.config,
+      null,
+      { tags: project.tags || [], folderId: project.folderId || null }
+    );
+  },
+
+  getUserFolders: async () => {
+    const key = "et_user_folders";
+    if (!isConfigured || !auth.currentUser) {
+      return { data: JSON.parse(localStorage.getItem(key) || "[]"), error: null };
+    }
+    try {
+      const snap = await db.collection("user_folders").doc(auth.currentUser.uid).collection("folders").get();
+      const data = [];
+      snap.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
+      data.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.name || "").localeCompare(b.name || ""));
+      return { data, error: null };
+    } catch (e) {
+      return { data: [], error: e };
+    }
+  },
+
+  saveUserFolder: async (name, folderId = null) => {
+    const key = "et_user_folders";
+    const clean = String(name || "").trim().slice(0, 48);
+    if (!clean) return { id: null, error: new Error("Name required") };
+    if (!isConfigured || !auth.currentUser) {
+      const list = JSON.parse(localStorage.getItem(key) || "[]");
+      if (folderId) {
+        const i = list.findIndex(f => f.id === folderId);
+        if (i >= 0) list[i].name = clean;
+      } else {
+        list.push({ id: "f_" + Math.random().toString(36).slice(2, 9), name: clean, order: list.length });
+      }
+      localStorage.setItem(key, JSON.stringify(list));
+      return { id: folderId || list[list.length - 1].id, error: null };
+    }
+    try {
+      const col = db.collection("user_folders").doc(auth.currentUser.uid).collection("folders");
+      if (folderId) {
+        await col.doc(folderId).update({ name: clean });
+        return { id: folderId, error: null };
+      }
+      const docRef = await col.add({ name: clean, order: Date.now(), createdAt: new Date().toISOString() });
+      return { id: docRef.id, error: null };
+    } catch (e) {
+      return { id: null, error: e };
+    }
+  },
+
+  deleteUserFolder: async (folderId) => {
+    const key = "et_user_folders";
+    if (!folderId) return { error: null };
+    if (!isConfigured || !auth.currentUser) {
+      let list = JSON.parse(localStorage.getItem(key) || "[]");
+      list = list.filter(f => f.id !== folderId);
+      localStorage.setItem(key, JSON.stringify(list));
+      return { error: null };
+    }
+    try {
+      await db.collection("user_folders").doc(auth.currentUser.uid).collection("folders").doc(folderId).delete();
+      return { error: null };
+    } catch (e) {
+      return { error: e };
     }
   },
 
