@@ -44,9 +44,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // CAD Tools Mode — default Select (Phase A)
   let editorMode = "select"; // "select", "draw", "circle", "rect", "poly", "fillet", "trim", "dimension", "measure", "pan", "insert_block"
   window.editorMode = "select";
-  let customDimensions = [];  // [{ v1, v2, d }]
-  let selectedVertexA = -1;  // For smart dimensioning
+  // Dimensions: linear { kind:'linear', v1, v2, d, offset }
+  // radial { kind:'radius'|'diameter', circleIndex, d, angle, textDist }
+  let customDimensions = [];
+  let selectedVertexA = -1;  // For smart dimensioning (two-point)
   let selectedVertexB = -1;
+  // Interactive dimension placement draft (CAD-style place step)
+  // { phase:'place', kind, v1?, v2?, circleIndex?, offset?, angle?, textDist?, d }
+  let dimDraft = null;
+  let dimDragIndex = -1; // dragging existing dim offset in select mode
   let measureStartPos = null; // Ruler start coordinate
   let measureEndPos = null;   // Ruler end coordinate
   let isMeasuring = false;
@@ -789,24 +795,38 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // 5. Index Dimensions
+    // 5. Index Dimensions (hit near text / leader / extension line)
     customDimensions.forEach((dim, idx) => {
-      const p1 = sketchVertices[dim.v1];
-      const p2 = sketchVertices[dim.v2];
-      if (!p1 || !p2) return;
-
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const mx = (p1.x + p2.x) / 2;
-      const my = (p1.y + p2.y) / 2;
-      const theta = Math.atan2(dy, dx);
-      const normalAngle = theta - Math.PI / 2;
-      const offsetDist = 28 + (idx * 16);
-      const midx = mx + offsetDist * Math.cos(normalAngle);
-      const midy = my + offsetDist * Math.sin(normalAngle);
-
+      const nd = normalizeDim(dim, idx);
+      const loc = getDimensionLabelPoint(nd, idx);
+      if (!loc) return;
+      // Generous pad so CAD-style click-to-select on the dimension is reliable
+      let minX = loc.x - 30, minY = loc.y - 16, maxX = loc.x + 30, maxY = loc.y + 16;
+      if (nd && nd.kind === "linear") {
+        const p1 = sketchVertices[nd.v1], p2 = sketchVertices[nd.v2];
+        if (p1 && p2) {
+          const off = nd.offset != null ? nd.offset : 28;
+          const dx = p2.x - p1.x, dy = p2.y - p1.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len, ny = dx / len;
+          const o1x = p1.x + off * nx, o1y = p1.y + off * ny;
+          const o2x = p2.x + off * nx, o2y = p2.y + off * ny;
+          minX = Math.min(minX, o1x, o2x, p1.x, p2.x) - 8;
+          minY = Math.min(minY, o1y, o2y, p1.y, p2.y) - 8;
+          maxX = Math.max(maxX, o1x, o2x, p1.x, p2.x) + 8;
+          maxY = Math.max(maxY, o1y, o2y, p1.y, p2.y) + 8;
+        }
+      } else if (nd && (nd.kind === "radius" || nd.kind === "diameter")) {
+        const c = sketchCircles[nd.circleIndex];
+        if (c) {
+          minX = Math.min(minX, c.cx - c.r, loc.x) - 8;
+          minY = Math.min(minY, c.cy - c.r, loc.y) - 8;
+          maxX = Math.max(maxX, c.cx + c.r, loc.x) + 8;
+          maxY = Math.max(maxY, c.cy + c.r, loc.y) + 8;
+        }
+      }
       entityItems.push({
-        minX: midx - 22, minY: midy - 8, maxX: midx + 22, maxY: midy + 8,
+        minX, minY, maxX, maxY,
         type: "dimension", index: idx
       });
     });
@@ -901,8 +921,162 @@ document.addEventListener("DOMContentLoaded", () => {
     if (snapItems.length > 0) snapSpatialIndex.load(snapItems);
   }
 
+  function normalizeDim(dim, idx) {
+    if (!dim) return null;
+    if (!dim.kind) {
+      // Legacy linear dims
+      return { ...dim, kind: "linear", offset: dim.offset != null ? dim.offset : (28 + (idx || 0) * 16) };
+    }
+    return dim;
+  }
+
+  function isLinearDim(dim) {
+    const nd = normalizeDim(dim);
+    return !!(nd && nd.kind === "linear");
+  }
+
+  function isRadialDim(dim) {
+    const nd = normalizeDim(dim);
+    return !!(nd && (nd.kind === "radius" || nd.kind === "diameter"));
+  }
+
+  /** Keep dimensions whose geometry still exists after vertex edits. */
+  function pruneInvalidDimensions() {
+    customDimensions = customDimensions.filter(dim => {
+      const nd = normalizeDim(dim);
+      if (!nd) return false;
+      if (nd.kind === "linear") {
+        return nd.v1 != null && nd.v2 != null
+          && nd.v1 < sketchVertices.length && nd.v2 < sketchVertices.length
+          && sketchVertices[nd.v1] && sketchVertices[nd.v2];
+      }
+      if (nd.kind === "radius" || nd.kind === "diameter") {
+        return nd.circleIndex != null
+          && nd.circleIndex < sketchCircles.length
+          && !!sketchCircles[nd.circleIndex];
+      }
+      return false;
+    });
+  }
+
+  function getDimensionLabelPoint(dim, idx) {
+    dim = normalizeDim(dim, idx);
+    if (!dim) return null;
+    if (dim.kind === "linear") {
+      const p1 = sketchVertices[dim.v1];
+      const p2 = sketchVertices[dim.v2];
+      if (!p1 || !p2) return null;
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const theta = Math.atan2(dy, dx);
+      const n = theta - Math.PI / 2;
+      const off = dim.offset != null ? dim.offset : 28;
+      return { x: mx + off * Math.cos(n), y: my + off * Math.sin(n) };
+    }
+    if (dim.kind === "radius" || dim.kind === "diameter") {
+      const c = sketchCircles[dim.circleIndex];
+      if (!c) return null;
+      const ang = dim.angle != null ? dim.angle : -Math.PI / 4;
+      const dist = dim.textDist != null ? dim.textDist : (dim.kind === "diameter" ? c.r * 1.4 : c.r * 1.6);
+      return { x: c.cx + dist * Math.cos(ang), y: c.cy + dist * Math.sin(ang) };
+    }
+    return null;
+  }
+
+  function linearOffsetFromMouse(p1, p2, mouse) {
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy) || 1;
+    // signed distance from midpoint line along normal
+    const nx = -dy / len, ny = dx / len;
+    const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+    return (mouse.x - mx) * nx + (mouse.y - my) * ny;
+  }
+
+  function startLinearDimPlace(v1, v2) {
+    const p1 = sketchVertices[v1], p2 = sketchVertices[v2];
+    if (!p1 || !p2) return;
+    const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    dimDraft = {
+      phase: "place",
+      kind: "linear",
+      v1, v2,
+      d,
+      offset: mousePos ? linearOffsetFromMouse(p1, p2, mousePos) : 28
+    };
+    updateToolPromptUI();
+  }
+
+  function startRadialDimPlace(circleIndex, kind) {
+    const c = sketchCircles[circleIndex];
+    if (!c) return;
+    const ang = mousePos ? Math.atan2(mousePos.y - c.cy, mousePos.x - c.cx) : -Math.PI / 4;
+    const textDist = mousePos ? Math.hypot(mousePos.x - c.cx, mousePos.y - c.cy) : c.r * 1.5;
+    dimDraft = {
+      phase: "place",
+      kind: kind || "diameter",
+      circleIndex,
+      d: kind === "radius" ? c.r : c.r * 2,
+      angle: ang,
+      textDist: Math.max(textDist, c.r * 1.15)
+    };
+    updateToolPromptUI();
+  }
+
+  function commitDimDraft() {
+    if (!dimDraft || dimDraft.phase !== "place") return;
+    pushUndo("dimension");
+    if (dimDraft.kind === "linear") {
+      customDimensions.push({
+        kind: "linear",
+        v1: dimDraft.v1,
+        v2: dimDraft.v2,
+        d: dimDraft.d,
+        offset: dimDraft.offset
+      });
+    } else {
+      customDimensions.push({
+        kind: dimDraft.kind,
+        circleIndex: dimDraft.circleIndex,
+        d: dimDraft.d,
+        angle: dimDraft.angle,
+        textDist: dimDraft.textDist
+      });
+    }
+    dimDraft = null;
+    selectedVertexA = -1;
+    selectedVertexB = -1;
+    rebuildSpatialIndexes();
+    drawSketchCanvas();
+    updateLiveProperties();
+    updateToolPromptUI();
+    if (window.showToast) window.showToast("Dimension placed — drag in Select to reposition");
+  }
+
+  function updateDimDraftFromMouse(pos) {
+    if (!dimDraft || dimDraft.phase !== "place") return;
+    if (dimDraft.kind === "linear") {
+      const p1 = sketchVertices[dimDraft.v1];
+      const p2 = sketchVertices[dimDraft.v2];
+      if (p1 && p2) dimDraft.offset = linearOffsetFromMouse(p1, p2, pos);
+    } else {
+      const c = sketchCircles[dimDraft.circleIndex];
+      if (c) {
+        dimDraft.angle = Math.atan2(pos.y - c.cy, pos.x - c.cx);
+        dimDraft.textDist = Math.max(Math.hypot(pos.x - c.cx, pos.y - c.cy), c.r * 1.05);
+        dimDraft.d = dimDraft.kind === "radius" ? c.r : c.r * 2;
+      }
+    }
+  }
+
   // --- Selection Query (Hit Test) ---
-  function findEntityAt(pos, excludeVertices = false) {
+  // options: { excludeVertices, excludeDimensions, preferGeometry }
+  function findEntityAt(pos, excludeVertices = false, options = {}) {
+    const opts = typeof excludeVertices === "object" ? excludeVertices : { excludeVertices, ...options };
+    const noVerts = !!opts.excludeVertices;
+    const noDims = !!opts.excludeDimensions;
+    const preferGeom = !!opts.preferGeometry;
+
     const queryBox = {
       minX: pos.x - 8, minY: pos.y - 8, maxX: pos.x + 8, maxY: pos.y + 8
     };
@@ -910,11 +1084,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const candidates = entitySpatialIndex.search(queryBox);
     let bestEntity = null;
     let minDist = 8;
+    let bestDim = null;
+    let minDimDist = 8;
 
     candidates.forEach(cand => {
       let dist = Infinity;
       if (cand.type === "vertex") {
-        if (excludeVertices) return;
+        if (noVerts) return;
         dist = Math.hypot(pos.x - cand.x, pos.y - cand.y);
       }
       else if (cand.type === "line") {
@@ -929,7 +1105,20 @@ document.addEventListener("DOMContentLoaded", () => {
         dist = Math.hypot(pos.x - cand.ins.x, pos.y - cand.ins.y);
       }
       else if (cand.type === "dimension") {
-        dist = 0; // high priority click inside text label box
+        if (noDims) return;
+        // Prefer label center; still pick if inside expanded bbox
+        const loc = getDimensionLabelPoint(customDimensions[cand.index], cand.index);
+        dist = loc ? Math.hypot(pos.x - loc.x, pos.y - loc.y) : 4;
+        if (dist < minDimDist) {
+          minDimDist = dist;
+          bestDim = { type: cand.type, index: cand.index };
+        }
+        // When not preferring geometry, dimensions compete with geometry
+        if (!preferGeom && dist < minDist) {
+          minDist = dist;
+          bestEntity = { type: cand.type, index: cand.index };
+        }
+        return;
       }
 
       if (dist < minDist) {
@@ -938,6 +1127,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    // Select mode: if nothing geometric is close, fall back to dimension
+    if (!bestEntity && bestDim) return bestDim;
+    if (preferGeom && bestEntity) return bestEntity;
+    if (preferGeom && bestDim) return bestDim;
     return bestEntity;
   }
 
@@ -1096,7 +1289,42 @@ document.addEventListener("DOMContentLoaded", () => {
       case "trim":
         return { toolLabel: "TRIM", status: "Select segment to trim", banner: "Trim: click a segment between intersections.", cursor: "Select segment" };
       case "dimension":
-        return { toolLabel: "DIM", status: "Select entity or two vertices", banner: "Smart Dim: click line/circle or two points.", cursor: "Select geometry" };
+        if (dimDraft && dimDraft.phase === "place") {
+          return {
+            toolLabel: dimDraft.kind === "linear" ? "DIM" : dimDraft.kind === "radius" ? "RADIUS" : "DIAMETER",
+            status: "Move to place · click to confirm · Esc cancel",
+            banner: "Place dimension — drag mouse to position, click to lock.",
+            cursor: "Place dimension"
+          };
+        }
+        if (selectedVertexA !== -1) {
+          return {
+            toolLabel: "DIM",
+            status: "Click second point",
+            banner: "Smart Dim: click second vertex/endpoint.",
+            cursor: "Second point"
+          };
+        }
+        return {
+          toolLabel: "DIM",
+          status: "Click line, circle, or first point",
+          banner: "Smart Dim: line → linear · circle → Ø (Shift = R) · two points → linear. Then place.",
+          cursor: "Select geometry"
+        };
+      case "dim-diameter":
+        return {
+          toolLabel: "Ø",
+          status: dimDraft ? "Place diameter · click to confirm" : "Click a circle",
+          banner: "Diameter: select circle, then place the dimension.",
+          cursor: dimDraft ? "Place Ø" : "Select circle"
+        };
+      case "dim-radius":
+        return {
+          toolLabel: "R",
+          status: dimDraft ? "Place radius · click to confirm" : "Click a circle",
+          banner: "Radius: select circle, then place the dimension.",
+          cursor: dimDraft ? "Place R" : "Select circle"
+        };
       case "measure":
         return {
           toolLabel: "MEASURE",
@@ -1242,6 +1470,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
     mousePos = finalSnapped;
     updateDeltaDisplay();
+
+    // Dimension placement preview
+    if (dimDraft && dimDraft.phase === "place") {
+      updateDimDraftFromMouse(finalSnapped);
+    }
+
+    // Drag existing dimension offset
+    if (editorMode === "select" && dimDragIndex >= 0 && customDimensions[dimDragIndex]) {
+      const dim = normalizeDim(customDimensions[dimDragIndex], dimDragIndex);
+      if (dim.kind === "linear") {
+        const p1 = sketchVertices[dim.v1], p2 = sketchVertices[dim.v2];
+        if (p1 && p2) {
+          customDimensions[dimDragIndex] = {
+            ...dim,
+            offset: linearOffsetFromMouse(p1, p2, finalSnapped)
+          };
+        }
+      } else if (dim.kind === "radius" || dim.kind === "diameter") {
+        const c = sketchCircles[dim.circleIndex];
+        if (c) {
+          customDimensions[dimDragIndex] = {
+            ...dim,
+            angle: Math.atan2(finalSnapped.y - c.cy, finalSnapped.x - c.cx),
+            textDist: Math.max(Math.hypot(finalSnapped.x - c.cx, finalSnapped.y - c.cy), c.r * 1.05),
+            d: dim.kind === "radius" ? c.r : c.r * 2
+          };
+        }
+      }
+      rebuildSpatialIndexes();
+    }
+
     updateToolPromptUI();
 
     // Handle grip / vertex dragging
@@ -1256,7 +1515,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (c) { c.cx = finalSnapped.x; c.cy = finalSnapped.y; }
       } else if (activeGrip.kind === "circle-radius") {
         const c = sketchCircles[activeGrip.index];
-        if (c) c.r = Math.max(0.5, Math.hypot(finalSnapped.x - c.cx, finalSnapped.y - c.cy));
+        if (c) {
+          c.r = Math.max(0.5, Math.hypot(finalSnapped.x - c.cx, finalSnapped.y - c.cy));
+          // Keep radial dimensions in sync with live radius
+          customDimensions.forEach(dim => {
+            if ((dim.kind === "radius" || dim.kind === "diameter") && dim.circleIndex === activeGrip.index) {
+              dim.d = dim.kind === "radius" ? c.r : c.r * 2;
+            }
+          });
+        }
       } else if (activeGrip.kind === "insertion") {
         const ins = sketchInsertions[activeGrip.index];
         if (ins) { ins.x = finalSnapped.x; ins.y = finalSnapped.y; }
@@ -1283,6 +1550,8 @@ document.addEventListener("DOMContentLoaded", () => {
     drawSketchCanvas(
       editorMode === "draw" || editorMode === "circle" || editorMode === "rect" ||
       editorMode === "poly" || editorMode === "insert_block" ||
+      editorMode === "dimension" || editorMode === "dim-diameter" || editorMode === "dim-radius" ||
+      dimDraft != null || dimDragIndex >= 0 ||
       ["move", "copy", "rotate", "mirror", "offset"].includes(editorMode)
     );
   }
@@ -1395,10 +1664,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
     
-    // Custom dimensions
+    // Custom linear dimensions reference vertices
     customDimensions.forEach(dim => {
-      usedIndices.add(dim.v1);
-      usedIndices.add(dim.v2);
+      const nd = normalizeDim(dim);
+      if (nd && nd.kind === "linear") {
+        usedIndices.add(nd.v1);
+        usedIndices.add(nd.v2);
+      }
     });
     
     // Convert to sorted array
@@ -1417,14 +1689,21 @@ document.addEventListener("DOMContentLoaded", () => {
       prof.startIndex = indexMap.get(prof.startIndex);
     });
     
-    // Update custom dimensions
+    // Update custom dimensions (remap linear; keep radial as-is)
     customDimensions = customDimensions.filter(dim => {
-      if (indexMap.has(dim.v1) && indexMap.has(dim.v2)) {
-        dim.v1 = indexMap.get(dim.v1);
-        dim.v2 = indexMap.get(dim.v2);
-        return true;
+      const nd = normalizeDim(dim);
+      if (!nd) return false;
+      if (nd.kind === "linear") {
+        if (indexMap.has(nd.v1) && indexMap.has(nd.v2)) {
+          dim.kind = "linear";
+          dim.v1 = indexMap.get(nd.v1);
+          dim.v2 = indexMap.get(nd.v2);
+          return true;
+        }
+        return false;
       }
-      return false;
+      // Radial dims are independent of vertex remapping
+      return nd.kind === "radius" || nd.kind === "diameter";
     });
     
     // Update parametric constraints
@@ -1611,7 +1890,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const lastProf = sketchProfiles.pop();
       activeProfileStartIndex = lastProf.startIndex;
     }
-    customDimensions = customDimensions.filter(d => d.v1 < sketchVertices.length && d.v2 < sketchVertices.length);
+    pruneInvalidDimensions();
     rebuildSpatialIndexes();
     drawSketchCanvas();
     updateLiveProperties();
@@ -1655,6 +1934,7 @@ document.addEventListener("DOMContentLoaded", () => {
         drawCursorLine,
         mousePos,
         customDimensions,
+        dimDraft,
         measureStartPos,
         measureEndPos,
         isMeasuring,
@@ -1675,6 +1955,13 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
   }
+
+  window.fitView = () => {
+    // Single reframe control: extents if geometry exists, else fit sheet
+    const hasGeom = sketchVertices.length > 0 || sketchCircles.length > 0 || sketchInsertions.length > 0;
+    if (hasGeom) zoomExtents();
+    else resetViewport();
+  };
 
   // --- Smart Dimension & Fillet Modifiers ---
   function applyFillet(vertexIdx, radius) {
@@ -1885,7 +2172,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // ── SELECT MODE (grips + pick) ──
+      // ── SELECT MODE (grips + pick + dim drag) ──
       if (editorMode === "select") {
         const grip = findGripAt(pos);
         if (grip && grip.kind !== "mid") {
@@ -1896,14 +2183,25 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
         const hit = findEntityAt(pos, false);
+        if (hit && hit.type === "dimension") {
+          selectedEntity = hit;
+          dimDragIndex = hit.index;
+          pushUndo("move dimension");
+          showEntityInspector();
+          updateToolPromptUI();
+          drawSketchCanvas();
+          return;
+        }
         if (hit && hit.type === "vertex") {
           selectedVertexIndex = hit.index;
           selectedEntity = hit;
           activeGrip = { kind: "vertex", index: hit.index };
+          dimDragIndex = -1;
         } else {
           selectedVertexIndex = -1;
           selectedEntity = hit;
           activeGrip = null;
+          dimDragIndex = -1;
         }
         showEntityInspector();
         updateToolPromptUI();
@@ -2216,41 +2514,80 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // ── SMART DIMENSION / SELECTION ──
-      if (editorMode === "dimension") {
-        if (clicked) {
-          if (clicked.type === "vertex") {
-            if (selectedVertexA === -1) {
-              selectedVertexA = clicked.index;
-              document.getElementById("sketcher-instruction").textContent = "Smart Dim: Click second vertex corner.";
-            } else {
-              selectedVertexB = clicked.index;
-              if (selectedVertexA !== selectedVertexB) {
-                const exists = customDimensions.some(d => 
-                  (d.v1 === selectedVertexA && d.v2 === selectedVertexB) ||
-                  (d.v1 === selectedVertexB && d.v2 === selectedVertexA)
-                );
-                if (!exists) {
-                  const p1 = sketchVertices[selectedVertexA];
-                  const p2 = sketchVertices[selectedVertexB];
-                  const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-                  customDimensions.push({ v1: selectedVertexA, v2: selectedVertexB, d: Math.round(len) });
+      // ── SMART DIMENSION (professional place workflow) ──
+      if (editorMode === "dimension" || editorMode === "dim-diameter" || editorMode === "dim-radius") {
+        // Place step: second click commits position
+        if (dimDraft && dimDraft.phase === "place") {
+          updateDimDraftFromMouse(pos);
+          commitDimDraft();
+          return;
+        }
+
+        const snapPt = hoveredSnapTarget || pos;
+        // Prefer geometry so existing dimensions don't block picking lines/circles
+        const hit = clicked || findEntityAt(pos, { preferGeometry: true, excludeDimensions: true });
+
+        // Explicit radial tools
+        if (editorMode === "dim-diameter" || editorMode === "dim-radius") {
+          if (hit && hit.type === "circle") {
+            startRadialDimPlace(hit.index, editorMode === "dim-radius" ? "radius" : "diameter");
+            drawSketchCanvas();
+          } else if (window.showToast) {
+            window.showToast("Click a circle for radial dimension", false);
+          }
+          return;
+        }
+
+        // Smart Dim: line → linear; circle → diameter (Shift = radius); vertex → two-point
+        if (hit && hit.type === "circle") {
+          startRadialDimPlace(hit.index, e.shiftKey ? "radius" : "diameter");
+          drawSketchCanvas();
+          return;
+        }
+        if (hit && hit.type === "line") {
+          const ends = (() => {
+            const idx = hit.index;
+            let i2 = idx + 1;
+            for (const prof of sketchProfiles) {
+              const limit = prof.isClosed ? prof.count : prof.count - 1;
+              for (let i = 0; i < limit; i++) {
+                if (prof.startIndex + i === idx) {
+                  i2 = prof.startIndex + (i + 1) % prof.count;
                 }
               }
-              selectedVertexA = -1;
-              selectedVertexB = -1;
-              document.getElementById("sketcher-instruction").textContent = "Smart Dim: Click node, line, or circle.";
             }
-            selectedEntity = clicked;
-          } else {
-            selectedEntity = clicked;
+            return [idx, i2];
+          })();
+          if (sketchVertices[ends[0]] && sketchVertices[ends[1]]) {
+            startLinearDimPlace(ends[0], ends[1]);
+            drawSketchCanvas();
           }
-        } else {
-          selectedEntity = null;
+          return;
         }
-        rebuildSpatialIndexes();
-        showEntityInspector();
-        drawSketchCanvas();
+        if (hit && hit.type === "vertex") {
+          if (selectedVertexA === -1) {
+            selectedVertexA = hit.index;
+            updateToolPromptUI();
+          } else if (selectedVertexA !== hit.index) {
+            startLinearDimPlace(selectedVertexA, hit.index);
+            selectedVertexA = -1;
+            drawSketchCanvas();
+          }
+          return;
+        }
+        // Click empty: try snap endpoint as vertex pick
+        if (hoveredSnapTarget && hoveredSnapTarget.type === "endpoint" && hoveredSnapTarget.index != null) {
+          if (selectedVertexA === -1) {
+            selectedVertexA = hoveredSnapTarget.index;
+            updateToolPromptUI();
+          } else if (selectedVertexA !== hoveredSnapTarget.index) {
+            startLinearDimPlace(selectedVertexA, hoveredSnapTarget.index);
+            selectedVertexA = -1;
+            drawSketchCanvas();
+          }
+          return;
+        }
+        if (window.showToast) window.showToast("Click a line, circle, or two points", false);
         return;
       }
 
@@ -2443,7 +2780,7 @@ document.addEventListener("DOMContentLoaded", () => {
     canvasEl.addEventListener("mouseup", (e) => {
       if (editorMode === "select") {
         activeGrip = null;
-        // keep selectedVertexIndex only while dragging; clear drag handle
+        dimDragIndex = -1;
       } else {
         selectedVertexIndex = -1;
       }
@@ -2594,6 +2931,10 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedEntity = null;
     selectedVertexIndex = -1;
     activeGrip = null;
+    dimDraft = null;
+    dimDragIndex = -1;
+    selectedVertexA = -1;
+    selectedVertexB = -1;
     activeCircleCenter = null;
     activeRectStart = null;
     activePolyCenter = null;
@@ -2622,10 +2963,21 @@ document.addEventListener("DOMContentLoaded", () => {
   function deleteSelectedEntity() {
     if (!selectedEntity) return;
     pushUndo("delete");
+    const idx = selectedEntity.index;
     if (selectedEntity.type === "circle") {
-      sketchCircles.splice(selectedEntity.index, 1);
+      sketchCircles.splice(idx, 1);
+      customDimensions = customDimensions.filter(dim => {
+        const nd = normalizeDim(dim);
+        if (!nd) return false;
+        if (nd.kind === "radius" || nd.kind === "diameter") {
+          if (nd.circleIndex === idx) return false;
+          if (nd.circleIndex > idx) dim.circleIndex = nd.circleIndex - 1;
+          return true;
+        }
+        return true;
+      });
     } else if (selectedEntity.type === "insertion") {
-      sketchInsertions.splice(selectedEntity.index, 1);
+      sketchInsertions.splice(idx, 1);
     } else if (selectedEntity.type === "vertex") {
       // Leave complex vertex delete to avoid breaking profiles — soft clear selection only
       if (window.showToast) window.showToast("Delete full segments with Trim, or Clear Board.", false);
@@ -2634,7 +2986,7 @@ document.addEventListener("DOMContentLoaded", () => {
       drawSketchCanvas();
       return;
     } else if (selectedEntity.type === "dimension") {
-      customDimensions.splice(selectedEntity.index, 1);
+      customDimensions.splice(idx, 1);
     } else if (selectedEntity.type === "line") {
       // Delete line segment by converting profile — mark endpoints only soft message
       if (window.showToast) window.showToast("Use Trim to remove segments from polylines.", false);
@@ -2871,15 +3223,39 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }
     else if (selectedEntity.type === "dimension") {
-      const dim = customDimensions[idx];
+      const dim = normalizeDim(customDimensions[idx], idx);
       if (!dim) return;
+      const isLin = dim.kind === "linear";
+      const isRad = dim.kind === "radius" || dim.kind === "diameter";
+      const title = isLin
+        ? "Linear Dimension"
+        : (dim.kind === "diameter" ? "Diameter Dimension" : "Radius Dimension");
+      const valueLabel = isLin ? "Distance (mm)" : (dim.kind === "diameter" ? "Diameter (mm)" : "Radius (mm)");
+      const placeHint = isLin
+        ? "Drag the dimension on canvas to reposition offset."
+        : "Drag the dimension on canvas to move leader angle / distance.";
       container.innerHTML = `
         <div class="inspector-fields">
-          <div class="inspector-title">Smart Dimension</div>
+          <div class="inspector-title">${title}</div>
           <div class="inspector-row">
-            <label>Value (mm)</label>
-            <input type="number" value="${dim.d}" onchange="updateSelectedEntityParam('dimensionValue', this.value)">
+            <label>${valueLabel}</label>
+            <input type="number" step="0.1" value="${Number(dim.d).toFixed(2)}" onchange="updateSelectedEntityParam('dimensionValue', this.value)">
           </div>
+          ${isLin ? `
+          <div class="inspector-row">
+            <label>Offset (mm)</label>
+            <input type="number" step="0.5" value="${Number(dim.offset != null ? dim.offset : 28).toFixed(1)}" onchange="updateSelectedEntityParam('dimOffset', this.value)">
+          </div>` : ""}
+          ${isRad ? `
+          <div class="inspector-row">
+            <label>Leader angle (°)</label>
+            <input type="number" step="1" value="${((dim.angle != null ? dim.angle : -Math.PI / 4) * 180 / Math.PI).toFixed(1)}" onchange="updateSelectedEntityParam('dimAngle', this.value)">
+          </div>
+          <div class="inspector-row">
+            <label>Text distance</label>
+            <input type="number" step="0.5" value="${Number(dim.textDist != null ? dim.textDist : 0).toFixed(1)}" onchange="updateSelectedEntityParam('dimTextDist', this.value)">
+          </div>` : ""}
+          <p style="font-size:10px;color:var(--text-muted);margin:6px 0 4px;line-height:1.35;">${placeHint}</p>
           <button class="inspector-delete-btn" onclick="deleteSelectedEntity()">
             Delete Dimension
           </button>
@@ -2956,21 +3332,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // Add to custom dimension constraints
           const nextIdx = (idx + 1) % sketchVertices.length;
-          let dim = customDimensions.find(d => (d.v1 === idx && d.v2 === nextIdx) || (d.v1 === nextIdx && d.v2 === idx));
+          let dim = customDimensions.find(d => isLinearDim(d) && ((d.v1 === idx && d.v2 === nextIdx) || (d.v1 === nextIdx && d.v2 === idx)));
           if (dim) dim.d = newLen;
-          else customDimensions.push({ v1: idx, v2: nextIdx, d: newLen });
+          else customDimensions.push({ kind: "linear", v1: idx, v2: nextIdx, d: newLen, offset: 28 });
           
           runConstraintSolver(idx);
         }
       }
     }
     else if (selectedEntity.type === "dimension") {
+      const dim = customDimensions[idx];
+      if (!dim) return;
+      const nd = normalizeDim(dim, idx);
       if (param === "dimensionValue") {
-        const dim = customDimensions[idx];
-        if (dim) {
-          dim.d = parseFloat(val);
+        const newVal = parseFloat(val);
+        if (isNaN(newVal) || newVal <= 0) return;
+        dim.d = newVal;
+        if (nd.kind === "linear" && dim.v1 != null) {
           runConstraintSolver(dim.v1);
+        } else if (nd.kind === "radius" || nd.kind === "diameter") {
+          const c = sketchCircles[dim.circleIndex];
+          if (c) {
+            c.r = nd.kind === "diameter" ? newVal / 2 : newVal;
+            dim.d = nd.kind === "diameter" ? c.r * 2 : c.r;
+          }
         }
+      } else if (param === "dimOffset" && nd.kind === "linear") {
+        dim.kind = "linear";
+        dim.offset = parseFloat(val);
+      } else if (param === "dimAngle" && (nd.kind === "radius" || nd.kind === "diameter")) {
+        dim.angle = parseFloat(val) * Math.PI / 180;
+      } else if (param === "dimTextDist" && (nd.kind === "radius" || nd.kind === "diameter")) {
+        dim.textDist = Math.max(0.1, parseFloat(val));
       }
     }
     else if (selectedEntity.type === "insertion") {
@@ -2986,34 +3379,8 @@ document.addEventListener("DOMContentLoaded", () => {
     showEntityInspector();
   };
 
-  // --- Delete Selected ---
-  window.deleteSelectedEntity = () => {
-    if (!selectedEntity) return;
-    const idx = selectedEntity.index;
-
-    if (selectedEntity.type === "circle") {
-      sketchCircles.splice(idx, 1);
-    }
-    else if (selectedEntity.type === "vertex" || selectedEntity.type === "line") {
-      sketchVertices.splice(idx, 1);
-      // If polyline gets too short, unclose shape
-      if (sketchVertices.length < 3) isSketchClosed = false;
-      // Filter out invalid dimensions
-      customDimensions = customDimensions.filter(d => d.v1 < sketchVertices.length && d.v2 < sketchVertices.length);
-    }
-    else if (selectedEntity.type === "dimension") {
-      customDimensions.splice(idx, 1);
-    }
-    else if (selectedEntity.type === "insertion") {
-      sketchInsertions.splice(idx, 1);
-    }
-
-    selectedEntity = null;
-    rebuildSpatialIndexes();
-    drawSketchCanvas();
-    updateLiveProperties();
-    showEntityInspector();
-  };
+  // --- Delete Selected (inspector onclick + Delete key) ---
+  window.deleteSelectedEntity = deleteSelectedEntity;
 
   // --- Inspector view sizers ---
   window.openSizer = (moduleName) => {
@@ -3165,7 +3532,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function ribbonTabForMode(mode) {
     if (["select", "draw", "circle", "rect", "poly"].includes(mode)) return "draw";
     if (["fillet", "trim", "extend", "offset", "move", "copy", "rotate", "mirror"].includes(mode)) return "modify";
-    if (["dimension", "measure", "pan"].includes(mode)) return "annotate";
+    if (["dimension", "dim-diameter", "dim-radius", "measure"].includes(mode)) return "annotate";
     if (mode === "insert_block") return "insert";
     return null;
   }
@@ -3207,6 +3574,8 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedVertexB = -1;
     isMeasuring = false;
     activeGrip = null;
+    dimDraft = null;
+    dimDragIndex = -1;
     if (mode !== "select") selectedVertexIndex = -1;
     if (mode === "draw") lastAnchorPos = null;
     if (["move", "copy", "rotate", "mirror"].includes(mode)) {
@@ -3640,8 +4009,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const freeVerts = sketchVertices.length;
     const freeCircles = sketchCircles.length;
     let dof = freeVerts * 2 + freeCircles * 3;
-    // subtract dim constraints
-    dof -= customDimensions.length;
+    // subtract linear dim constraints (radial dims are annotations unless value-driven)
+    dof -= customDimensions.filter(d => isLinearDim(d)).length;
     parametricConstraints.forEach(pc => {
       if (pc.type === "horizontal" || pc.type === "vertical") dof -= 1;
       else if (pc.type === "distance" || pc.type === "perpendicular" || pc.type === "parallel" || pc.type === "tangent") dof -= 1;
@@ -3832,7 +4201,10 @@ document.addEventListener("DOMContentLoaded", () => {
     { id: "rect", label: "Rectangle", keys: "R", run: () => setEditorMode("rect") },
     { id: "poly", label: "Polygon", keys: "P", run: () => setEditorMode("poly") },
     { id: "dim", label: "Smart Dimension", keys: "D", run: () => setEditorMode("dimension") },
+    { id: "dim-dia", label: "Diameter dimension", keys: "", run: () => setEditorMode("dim-diameter") },
+    { id: "dim-rad", label: "Radius dimension", keys: "", run: () => setEditorMode("dim-radius") },
     { id: "measure", label: "Measure", keys: "M", run: () => setEditorMode("measure") },
+    { id: "fit", label: "Fit view", keys: "", run: () => fitView() },
     { id: "fillet", label: "Fillet", keys: "F", run: () => setEditorMode("fillet") },
     { id: "trim", label: "Trim", keys: "T", run: () => setEditorMode("trim") },
     { id: "extend", label: "Extend", keys: "X", run: () => setEditorMode("extend") },
@@ -3973,13 +4345,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let solverConstraints = [];
     
-    // Custom dimensions -> distance constraints
+    // Custom linear dimensions -> distance constraints
     customDimensions.forEach(dim => {
-      const p1 = sketchVertices[dim.v1];
-      const p2 = sketchVertices[dim.v2];
+      const nd = normalizeDim(dim);
+      if (!nd || nd.kind !== "linear") return;
+      const p1 = sketchVertices[nd.v1];
+      const p2 = sketchVertices[nd.v2];
       if (p1 && p2) {
-        const dVal = dim.d !== undefined ? dim.d : Math.hypot(p2.x - p1.x, p2.y - p1.y);
-        solverConstraints.push(new window.Constraint("distance", [2 * dim.v1, 2 * dim.v1 + 1, 2 * dim.v2, 2 * dim.v2 + 1], { d: dVal }));
+        const dVal = nd.d !== undefined ? nd.d : Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        solverConstraints.push(new window.Constraint("distance", [2 * nd.v1, 2 * nd.v1 + 1, 2 * nd.v2, 2 * nd.v2 + 1], { d: dVal }));
       }
     });
 

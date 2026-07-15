@@ -572,150 +572,163 @@ class ExplicitCadRenderer {
     }
   }
 
-  // Draw dimension annotations and leader lines
+  // Draw dimension annotations and leader lines (linear + radial + draft preview)
   drawDimensions(ctx, state, dark = false) {
     const style = state.dimStyle || { decimals: 1, textHeight: 10.5, arrowSize: 3, offset: 28, color: "#0d9488" };
     const decimals = style.decimals != null ? style.decimals : 1;
     const textH = style.textHeight != null ? style.textHeight : 10.5;
-    const baseOffset = style.offset != null ? style.offset : 28;
     const dimColor = style.color || "#0d9488";
 
-    state.customDimensions.forEach((dim, idx) => {
+    const drawLinear = (dim, idx, isPreview) => {
       const p1 = state.vertices[dim.v1];
       const p2 = state.vertices[dim.v2];
       if (!p1 || !p2) return;
-      
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
       const len = Math.hypot(dx, dy);
       if (len < 0.1) return;
-
-      const mx = (p1.x + p2.x) / 2;
-      const my = (p1.y + p2.y) / 2;
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
       const theta = Math.atan2(dy, dx);
-      const normalAngle = theta - Math.PI / 2;
-      
-      const offsetDist = baseOffset + (idx * 16); // mm offset
-      const o1x = p1.x + offsetDist * Math.cos(normalAngle);
-      const o1y = p1.y + offsetDist * Math.sin(normalAngle);
-      const o2x = p2.x + offsetDist * Math.cos(normalAngle);
-      const o2y = p2.y + offsetDist * Math.sin(normalAngle);
-      const midx = mx + offsetDist * Math.cos(normalAngle);
-      const midy = my + offsetDist * Math.sin(normalAngle);
-
-      const isSelected = state.selectedEntity && state.selectedEntity.type === "dimension" && state.selectedEntity.index === idx;
-      const color = isSelected ? "#f97316" : dimColor;
+      const n = theta - Math.PI / 2;
+      const off = dim.offset != null ? dim.offset : 28;
+      const o1x = p1.x + off * Math.cos(n), o1y = p1.y + off * Math.sin(n);
+      const o2x = p2.x + off * Math.cos(n), o2y = p2.y + off * Math.sin(n);
+      const midx = mx + off * Math.cos(n), midy = my + off * Math.sin(n);
+      const isSelected = !isPreview && state.selectedEntity && state.selectedEntity.type === "dimension" && state.selectedEntity.index === idx;
+      const color = isPreview ? "#38bdf8" : (isSelected ? "#f97316" : dimColor);
 
       ctx.save();
+      ctx.globalAlpha = isPreview ? 0.85 : 1;
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.0 / this.zoomLevel;
+      ctx.setLineDash(isPreview ? [3 / this.zoomLevel, 3 / this.zoomLevel] : []);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y); ctx.lineTo(o1x, o1y);
+      ctx.moveTo(p2.x, p2.y); ctx.lineTo(o2x, o2y);
+      ctx.moveTo(o1x, o1y); ctx.lineTo(o2x, o2y);
+      ctx.stroke();
       ctx.setLineDash([]);
-
-      // Extension lines
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(o1x, o1y);
-      ctx.moveTo(p2.x, p2.y);
-      ctx.lineTo(o2x, o2y);
-      ctx.stroke();
-
-      // Dimension line
-      ctx.beginPath();
-      ctx.moveTo(o1x, o1y);
-      ctx.lineTo(o2x, o2y);
-      ctx.stroke();
-
-      // Filled arrowheads at both ends (size from style)
       this.drawArrowhead(ctx, o1x, o1y, o2x, o2y, style.arrowSize);
       this.drawArrowhead(ctx, o2x, o2y, o1x, o1y, style.arrowSize);
 
-      // Dimension label
       const val = dim.d !== undefined ? dim.d : len;
       const labelText = `${Number(val).toFixed(decimals)} mm`;
-      ctx.font = `bold ${textH / this.zoomLevel}px var(--font-sans)`;
-      
-      const textWidth = ctx.measureText(labelText).width;
-      const padX = 4.0 / this.zoomLevel;
-      const boxW = textWidth + 2 * padX;
-      const boxH = (textH + 4) / this.zoomLevel;
-
-      ctx.fillStyle = dark ? "#1e293b" : "#ffffff";
-      ctx.strokeStyle = isSelected ? "#f97316" : "rgba(148, 163, 184, 0.45)";
-      ctx.lineWidth = 0.5 / this.zoomLevel;
-      ctx.fillRect(midx - boxW / 2, midy - boxH / 2, boxW, boxH);
-      ctx.strokeRect(midx - boxW / 2, midy - boxH / 2, boxW, boxH);
-
-      // Text label centered
-      ctx.fillStyle = isSelected ? "#f97316" : (dark ? "#e2e8f0" : "#0f172a");
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(labelText, midx, midy);
-
+      this.drawDimLabel(ctx, midx, midy, labelText, textH, color, dark, isSelected || isPreview);
       ctx.restore();
+    };
+
+    const drawRadial = (dim, idx, isPreview) => {
+      const c = state.circles[dim.circleIndex];
+      if (!c) return;
+      const ang = dim.angle != null ? dim.angle : -Math.PI / 4;
+      const isDia = dim.kind === "diameter";
+      const textDist = dim.textDist != null ? dim.textDist : c.r * (isDia ? 1.4 : 1.6);
+      const edgeX = c.cx + c.r * Math.cos(ang);
+      const edgeY = c.cy + c.r * Math.sin(ang);
+      const textX = c.cx + textDist * Math.cos(ang);
+      const textY = c.cy + textDist * Math.sin(ang);
+      const isSelected = !isPreview && state.selectedEntity && state.selectedEntity.type === "dimension" && state.selectedEntity.index === idx;
+      const color = isPreview ? "#38bdf8" : (isSelected ? "#f97316" : dimColor);
+
+      ctx.save();
+      ctx.globalAlpha = isPreview ? 0.85 : 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.0 / this.zoomLevel;
+      ctx.setLineDash(isPreview ? [3 / this.zoomLevel, 3 / this.zoomLevel] : []);
+
+      if (isDia) {
+        // Diameter through center
+        const e2x = c.cx - c.r * Math.cos(ang);
+        const e2y = c.cy - c.r * Math.sin(ang);
+        ctx.beginPath();
+        ctx.moveTo(e2x, e2y);
+        ctx.lineTo(edgeX, edgeY);
+        ctx.stroke();
+        this.drawArrowhead(ctx, c.cx, c.cy, edgeX, edgeY, style.arrowSize);
+        this.drawArrowhead(ctx, c.cx, c.cy, e2x, e2y, style.arrowSize);
+        // leader to text if outside
+        if (textDist > c.r * 1.05) {
+          ctx.beginPath();
+          ctx.moveTo(edgeX, edgeY);
+          ctx.lineTo(textX, textY);
+          ctx.stroke();
+        }
+      } else {
+        // Radius from center to edge + leader
+        ctx.beginPath();
+        ctx.moveTo(c.cx, c.cy);
+        ctx.lineTo(edgeX, edgeY);
+        if (textDist > c.r) {
+          ctx.lineTo(textX, textY);
+        }
+        ctx.stroke();
+        this.drawArrowhead(ctx, c.cx, c.cy, edgeX, edgeY, style.arrowSize);
+      }
+      ctx.setLineDash([]);
+
+      const val = dim.d !== undefined ? dim.d : (isDia ? c.r * 2 : c.r);
+      const prefix = isDia ? "Ø" : "R";
+      const labelText = `${prefix}${Number(val).toFixed(decimals)}`;
+      this.drawDimLabel(ctx, textX, textY, labelText, textH, color, dark, isSelected || isPreview);
+      ctx.restore();
+    };
+
+    (state.customDimensions || []).forEach((dim, idx) => {
+      const kind = dim.kind || "linear";
+      if (kind === "linear") drawLinear(dim, idx, false);
+      else if (kind === "radius" || kind === "diameter") drawRadial(dim, idx, false);
     });
+
+    // Live placement draft
+    if (state.dimDraft && state.dimDraft.phase === "place") {
+      const d = state.dimDraft;
+      if (d.kind === "linear") drawLinear(d, -1, true);
+      else drawRadial(d, -1, true);
+    }
 
     // Leader annotations for tap fits/clearances
     state.circles.forEach((c) => {
       if (c.standardHole) {
         const thread = window.MetricThreads ? window.MetricThreads[c.standardHole] : null;
         const pitch = thread ? thread.pitch : "0.8";
-
         const angle = -Math.PI / 4;
         const sx = c.cx + c.r * Math.cos(angle);
         const sy = c.cy + c.r * Math.sin(angle);
         const ex = sx + 14 / this.zoomLevel;
         const ey = sy - 14 / this.zoomLevel;
-        const shX = ex + 20 / this.zoomLevel;
-
         ctx.save();
-        ctx.strokeStyle = "#475569";
+        ctx.strokeStyle = dark ? "#94a3b8" : "#475569";
         ctx.lineWidth = 0.8 / this.zoomLevel;
-        ctx.setLineDash([]);
-        
         ctx.beginPath();
         ctx.moveTo(sx, sy);
         ctx.lineTo(ex, ey);
-        ctx.lineTo(shX, ey);
+        ctx.lineTo(ex + 20 / this.zoomLevel, ey);
         ctx.stroke();
-
         this.drawArrowhead(ctx, ex, ey, sx, sy);
-
-        ctx.fillStyle = "#0f172a";
+        ctx.fillStyle = dark ? "#e2e8f0" : "#0f172a";
         ctx.font = `bold ${8 / this.zoomLevel}px var(--font-sans)`;
         ctx.textAlign = "left";
         ctx.textBaseline = "bottom";
         ctx.fillText(`${c.standardHole}x${pitch} TAP`, ex + 2 / this.zoomLevel, ey - 1 / this.zoomLevel);
         ctx.restore();
       }
-      else if (c.holeTolerance) {
-        const angle = Math.PI / 4;
-        const sx = c.cx + c.r * Math.cos(angle);
-        const sy = c.cy + c.r * Math.sin(angle);
-        const ex = sx + 14 / this.zoomLevel;
-        const ey = sy + 14 / this.zoomLevel;
-        const shX = ex + 20 / this.zoomLevel;
-
-        ctx.save();
-        ctx.strokeStyle = "#475569";
-        ctx.lineWidth = 0.8 / this.zoomLevel;
-        ctx.setLineDash([]);
-        
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(ex, ey);
-        ctx.lineTo(shX, ey);
-        ctx.stroke();
-
-        this.drawArrowhead(ctx, ex, ey, sx, sy);
-
-        ctx.fillStyle = "#0f172a";
-        ctx.font = `bold ${8 / this.zoomLevel}px var(--font-sans)`;
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-        ctx.fillText(`Ø${(c.r * 2).toFixed(1)} ${c.holeTolerance}`, ex + 2 / this.zoomLevel, ey + 2 / this.zoomLevel);
-        ctx.restore();
-      }
     });
+  }
+
+  drawDimLabel(ctx, x, y, labelText, textH, color, dark, highlight) {
+    ctx.font = `bold ${textH / this.zoomLevel}px var(--font-sans)`;
+    const textWidth = ctx.measureText(labelText).width;
+    const padX = 4.0 / this.zoomLevel;
+    const boxW = textWidth + 2 * padX;
+    const boxH = (textH + 4) / this.zoomLevel;
+    ctx.fillStyle = dark ? "#1e293b" : "#ffffff";
+    ctx.strokeStyle = highlight ? color : "rgba(148, 163, 184, 0.45)";
+    ctx.lineWidth = 0.5 / this.zoomLevel;
+    ctx.fillRect(x - boxW / 2, y - boxH / 2, boxW, boxH);
+    ctx.strokeRect(x - boxW / 2, y - boxH / 2, boxW, boxH);
+    ctx.fillStyle = highlight ? color : (dark ? "#e2e8f0" : "#0f172a");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(labelText, x, y);
   }
 
   drawConstraintIcons(ctx, icons, dark = false) {

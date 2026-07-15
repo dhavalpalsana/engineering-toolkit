@@ -157,10 +157,21 @@
         <!-- Annotation & Utility Tab Panel -->
         <div id="panel-annotate" class="ribbon-panel">
           <div class="panel-group">
-            <div class="group-title">Dimensions</div>
+            <div class="group-title">Smart Dimension</div>
             <div class="group-buttons">
-              <button id="tool-dimension-btn" class="tool-btn" title="Smart Dimension (D)" onclick="setEditorMode('dimension')">
+              <button id="tool-dimension-btn" class="tool-btn" title="Smart Dimension (D) — line, two points, Ø / R on circle" onclick="setEditorMode('dimension')">
                 <i data-lucide="scaling"></i> Smart Dim
+              </button>
+            </div>
+          </div>
+          <div class="panel-group">
+            <div class="group-title">Radial</div>
+            <div class="group-buttons">
+              <button id="tool-dim-diameter-btn" class="tool-btn" title="Diameter dimension on circle" onclick="setEditorMode('dim-diameter')">
+                <i data-lucide="circle-dot"></i> Diameter
+              </button>
+              <button id="tool-dim-radius-btn" class="tool-btn" title="Radius dimension on circle" onclick="setEditorMode('dim-radius')">
+                <i data-lucide="circle"></i> Radius
               </button>
             </div>
           </div>
@@ -169,14 +180,6 @@
             <div class="group-buttons">
               <button id="tool-measure-btn" class="tool-btn" title="Measure Distance (M)" onclick="setEditorMode('measure')">
                 <i data-lucide="ruler"></i> Measure
-              </button>
-            </div>
-          </div>
-          <div class="panel-group">
-            <div class="group-title">View</div>
-            <div class="group-buttons">
-              <button id="tool-pan-btn" class="tool-btn" title="Pan Mode (H / Space+drag)" onclick="setEditorMode('pan')">
-                <i data-lucide="hand"></i> Pan
               </button>
             </div>
           </div>
@@ -336,7 +339,7 @@
         <!-- Floating cursor prompt (follows pointer) -->
         <div id="cursor-prompt" class="cursor-prompt" aria-hidden="true"></div>
 
-        <!-- Viewport Zoom / Reset Controls -->
+        <!-- Viewport Zoom / Pan Controls -->
         <div class="cad-viewport-controls">
           <button class="viewport-btn" id="vp-zoom-in" title="Zoom In" onclick="zoomViewport(1.2)">
             <i data-lucide="zoom-in"></i>
@@ -344,13 +347,10 @@
           <button class="viewport-btn" id="vp-zoom-out" title="Zoom Out" onclick="zoomViewport(1/1.2)">
             <i data-lucide="zoom-out"></i>
           </button>
-          <button class="viewport-btn" id="vp-pan-float" title="Pan Viewport (Space / middle-drag)" onclick="setEditorMode('pan')">
+          <button class="viewport-btn" id="vp-pan-float" title="Pan (or Space+drag / middle-drag)" onclick="setEditorMode('pan')">
             <i data-lucide="hand"></i>
           </button>
-          <button class="viewport-btn" id="vp-extents" title="Zoom Extents (fit geometry)" onclick="zoomExtents()">
-            <i data-lucide="scan"></i>
-          </button>
-          <button class="viewport-btn" id="vp-reset" title="Fit Sheet" onclick="resetViewport()">
+          <button class="viewport-btn" id="vp-fit" title="Fit view (geometry, or sheet if empty)" onclick="fitView()">
             <i data-lucide="maximize"></i>
           </button>
         </div>
