@@ -41,15 +41,29 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedVertexIndex = -1;
   let mousePos = { x: 0, y: 0 };
   
-  // CAD Tools Mode
-  let editorMode = "draw"; // "draw", "circle", "rect", "poly", "fillet", "dimension", "measure", "pan", "insert_block"
-  window.editorMode = "draw";
+  // CAD Tools Mode — default Select (Phase A)
+  let editorMode = "select"; // "select", "draw", "circle", "rect", "poly", "fillet", "trim", "dimension", "measure", "pan", "insert_block"
+  window.editorMode = "select";
   let customDimensions = [];  // [{ v1, v2, d }]
   let selectedVertexA = -1;  // For smart dimensioning
   let selectedVertexB = -1;
   let measureStartPos = null; // Ruler start coordinate
   let measureEndPos = null;   // Ruler end coordinate
   let isMeasuring = false;
+  let lastAnchorPos = null; // last committed point for Δ readout
+  let clientCursorPos = { x: 0, y: 0 }; // screen coords for floating prompt
+  let spacePanHeld = false;
+
+  // Object snap type filters (OSNAP panel)
+  window.snapFilters = {
+    endpoint: true,
+    midpoint: true,
+    center: true,
+    intersection: true,
+    tangent: true,
+    perpendicular: true
+  };
+  window.crosshairEnabled = true;
 
   // Shapes drawing states
   let activeCircleCenter = null;
@@ -416,7 +430,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Snap Query ---
   function findSnapTarget(pos) {
-    if (!window.snapEnabled || ["trim", "fillet"].includes(editorMode)) return null;
+    if (!window.snapEnabled || ["trim", "fillet", "select", "pan"].includes(editorMode)) return null;
 
     const queryBox = {
       minX: pos.x - 14, minY: pos.y - 14, maxX: pos.x + 14, maxY: pos.y + 14
@@ -425,16 +439,171 @@ document.addEventListener("DOMContentLoaded", () => {
     const candidates = snapSpatialIndex.search(queryBox);
     let bestTarget = null;
     let minDist = 14;
+    const filters = window.snapFilters || {};
 
     candidates.forEach(cand => {
+      const t = cand.type || "endpoint";
+      if (filters[t] === false) return;
       const dist = Math.hypot(pos.x - cand.x, pos.y - cand.y);
-      if (dist < minDist) {
+      // Prefer endpoints slightly over mid/others when equidistant
+      const bias = t === "endpoint" ? -0.5 : 0;
+      if (dist + bias < minDist) {
         minDist = dist;
         bestTarget = cand;
       }
     });
 
     return bestTarget;
+  }
+
+  function updateToolPromptUI() {
+    const prompts = getToolPromptState();
+    const instr = document.getElementById("sketcher-instruction");
+    const statusText = document.getElementById("cad-status-text");
+    const toolName = document.getElementById("status-tool-name");
+    const cursorPrompt = document.getElementById("cursor-prompt");
+    const layerEl = document.getElementById("status-layer");
+
+    if (toolName) toolName.textContent = prompts.toolLabel;
+    if (statusText) statusText.textContent = prompts.status;
+    if (instr) instr.textContent = prompts.banner;
+    if (layerEl) layerEl.textContent = "Layer: FOREGROUND";
+
+    if (cursorPrompt) {
+      if (prompts.cursor && editorMode !== "select" && editorMode !== "pan") {
+        cursorPrompt.textContent = prompts.cursor;
+        cursorPrompt.classList.add("visible");
+        positionCursorPrompt();
+      } else {
+        cursorPrompt.classList.remove("visible");
+      }
+    }
+
+    // Canvas cursor class
+    const box = document.querySelector(".cad-canvas-container");
+    if (box) {
+      box.classList.toggle("mode-pan", editorMode === "pan" || spacePanHeld);
+      box.classList.toggle("mode-select", editorMode === "select");
+    }
+
+    updateZoomPctDisplay();
+  }
+
+  function getToolPromptState() {
+    const activeStart = activeProfileStartIndex;
+    const activeCount = sketchVertices.length - activeStart;
+    const snapLabel = hoveredSnapTarget ? ` · ${String(hoveredSnapTarget.type).toUpperCase()}` : "";
+
+    switch (editorMode) {
+      case "select":
+        return {
+          toolLabel: "SELECT",
+          status: selectedEntity
+            ? `Selected ${selectedEntity.type} · Del to delete · Esc clears`
+            : "Click an entity to select · L Line · C Circle · R Rect",
+          banner: "Select mode — click geometry to inspect. Esc cancels any tool.",
+          cursor: ""
+        };
+      case "draw":
+        if (activeCount === 0) {
+          return {
+            toolLabel: "LINE",
+            status: `Specify first point${snapLabel}`,
+            banner: "Line: specify first point (click or snap). Esc → Select.",
+            cursor: "Specify first point"
+          };
+        }
+        return {
+          toolLabel: "LINE",
+          status: `Specify next point${snapLabel} · Enter/Esc finishes`,
+          banner: `Line: next point (${activeCount} vertices) · close near start · Esc finish`,
+          cursor: "Specify next point"
+        };
+      case "circle":
+        return {
+          toolLabel: "CIRCLE",
+          status: activeCircleCenter ? `Specify radius${snapLabel}` : `Specify center${snapLabel}`,
+          banner: activeCircleCenter
+            ? "Circle: drag to set radius, click to place."
+            : "Circle: click center point.",
+          cursor: activeCircleCenter ? "Specify radius" : "Specify center"
+        };
+      case "rect":
+        return {
+          toolLabel: "RECT",
+          status: activeRectStart ? `Specify opposite corner${snapLabel}` : `Specify first corner${snapLabel}`,
+          banner: activeRectStart
+            ? "Rectangle: opposite corner (Shift = square)."
+            : "Rectangle: click first corner.",
+          cursor: activeRectStart ? "Opposite corner" : "First corner"
+        };
+      case "poly":
+        return {
+          toolLabel: "POLY",
+          status: activePolyCenter ? `Specify radius (${polySides} sides)` : "Specify center",
+          banner: `Polygon (${polySides} sides): center then radius.`,
+          cursor: activePolyCenter ? "Specify radius" : "Specify center"
+        };
+      case "fillet":
+        return { toolLabel: "FILLET", status: "Select corner vertex to fillet", banner: "Fillet: click a corner node.", cursor: "Select corner" };
+      case "trim":
+        return { toolLabel: "TRIM", status: "Select segment to trim", banner: "Trim: click a segment between intersections.", cursor: "Select segment" };
+      case "dimension":
+        return { toolLabel: "DIM", status: "Select entity or two vertices", banner: "Smart Dim: click line/circle or two points.", cursor: "Select geometry" };
+      case "measure":
+        return {
+          toolLabel: "MEASURE",
+          status: isMeasuring ? "Specify second point" : "Specify first point",
+          banner: "Measure: two points for distance.",
+          cursor: isMeasuring ? "Second point" : "First point"
+        };
+      case "pan":
+        return { toolLabel: "PAN", status: "Drag to pan · scroll to zoom", banner: "Pan: drag canvas. Esc → Select.", cursor: "" };
+      case "insert_block":
+        return {
+          toolLabel: "INSERT",
+          status: `Place ${activeBlockToInsert || "block"}${snapLabel}`,
+          banner: `Insert: click to place ${activeBlockToInsert || "block"}.`,
+          cursor: "Place block"
+        };
+      default:
+        return { toolLabel: String(editorMode).toUpperCase(), status: "Ready", banner: "", cursor: "" };
+    }
+  }
+
+  function positionCursorPrompt() {
+    const prompt = document.getElementById("cursor-prompt");
+    const container = document.querySelector(".cad-canvas-container");
+    if (!prompt || !container || !prompt.classList.contains("visible")) return;
+    const rect = container.getBoundingClientRect();
+    let x = clientCursorPos.x - rect.left;
+    let y = clientCursorPos.y - rect.top;
+    // Keep inside viewport
+    x = Math.min(Math.max(8, x), rect.width - 120);
+    y = Math.min(Math.max(8, y), rect.height - 28);
+    prompt.style.left = x + "px";
+    prompt.style.top = y + "px";
+  }
+
+  function updateZoomPctDisplay() {
+    const el = document.getElementById("status-zoom-pct");
+    if (!el || !webglRenderer) return;
+    // Approximate % relative to fit-sheet zoom if available
+    const pct = Math.round((webglRenderer.zoomLevel || 1) * 100);
+    el.textContent = `${pct}%`;
+  }
+
+  function updateDeltaDisplay() {
+    const el = document.getElementById("coords-delta");
+    if (!el) return;
+    if (!lastAnchorPos || !mousePos) {
+      el.textContent = "Δ —";
+      return;
+    }
+    const dx = mousePos.x - lastAnchorPos.x;
+    const dy = mousePos.y - lastAnchorPos.y;
+    const dist = Math.hypot(dx, dy);
+    el.textContent = `Δ ${dist.toFixed(2)}  (${dx.toFixed(1)}, ${dy.toFixed(1)})`;
   }
 
   // --- Dynamic mouse position updates with Snapping and Constraints ---
@@ -477,12 +646,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Update Coordinate HUD Display
-    document.getElementById("coords-display").textContent = `X: ${finalSnapped.x.toFixed(0)} | Y: ${finalSnapped.y.toFixed(0)} mm`;
+    const coordsEl = document.getElementById("coords-display");
+    if (coordsEl) {
+      coordsEl.textContent = `X: ${finalSnapped.x.toFixed(2)}  Y: ${finalSnapped.y.toFixed(2)} mm`;
+    }
 
     mousePos = finalSnapped;
+    updateDeltaDisplay();
+    updateToolPromptUI();
 
-    // Handle active vertex dragging
-    if (editorMode === "draw" && selectedVertexIndex !== -1) {
+    // Handle active vertex dragging (select or draw)
+    if ((editorMode === "draw" || editorMode === "select") && selectedVertexIndex !== -1) {
       if (layers["FOREGROUND"].frozen) return;
       sketchVertices[selectedVertexIndex] = finalSnapped;
       runConstraintSolver(selectedVertexIndex);
@@ -490,7 +664,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateLiveProperties();
     }
 
-    drawSketchCanvas(editorMode === "draw");
+    drawSketchCanvas(editorMode === "draw" || editorMode === "circle" || editorMode === "rect" || editorMode === "poly");
   }
 
   // --- Cleanup Unused Vertices in the database ---
@@ -625,7 +799,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Viewport Settings Toggles ---
   window.toggleSnap = () => {
     window.snapEnabled = !window.snapEnabled;
-    document.getElementById("snap-toggle").classList.toggle("active", window.snapEnabled);
+    document.getElementById("snap-toggle")?.classList.toggle("active", window.snapEnabled);
     rebuildSpatialIndexes();
     if (lastRawWorldPos) {
       updateMousePosition(lastRawWorldPos);
@@ -634,9 +808,31 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  window.toggleSnapFilterPanel = () => {
+    const panel = document.getElementById("snap-filter-panel");
+    if (!panel) return;
+    panel.classList.toggle("hidden");
+  };
+
+  window.toggleCrosshair = () => {
+    window.crosshairEnabled = !window.crosshairEnabled;
+    document.getElementById("crosshair-toggle")?.classList.toggle("active", window.crosshairEnabled);
+    drawSketchCanvas();
+  };
+
+  // Wire snap filter checkboxes
+  document.querySelectorAll("#snap-filter-panel input[data-snap-type]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const t = cb.getAttribute("data-snap-type");
+      if (t && window.snapFilters) window.snapFilters[t] = cb.checked;
+      if (lastRawWorldPos) updateMousePosition(lastRawWorldPos);
+      else drawSketchCanvas();
+    });
+  });
+
   window.toggleOrtho = () => {
     window.orthoLockEnabled = !window.orthoLockEnabled;
-    document.getElementById("ortho-toggle").classList.toggle("active", window.orthoLockEnabled);
+    document.getElementById("ortho-toggle")?.classList.toggle("active", window.orthoLockEnabled);
     if (lastRawWorldPos) {
       updateMousePosition(lastRawWorldPos);
     } else {
@@ -746,7 +942,8 @@ document.addEventListener("DOMContentLoaded", () => {
         activeCircleCenter,
         activeRectStart,
         activePolyCenter,
-        orthoLockEnabled: window.orthoLockEnabled || shiftPressed
+        orthoLockEnabled: window.orthoLockEnabled || shiftPressed,
+        crosshairEnabled: window.crosshairEnabled !== false
       });
     }
   }
@@ -944,8 +1141,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Interaction / State Machine Mouse Listeners ---
   function initSketcherEvents() {
     canvasEl.addEventListener("mousedown", (e) => {
-      // Pan handling: middle/right click or active Pan mode
-      const isPanMode = editorMode === "pan" || e.shiftKey;
+      // Pan handling: middle/right click, Space, or active Pan mode
+      const isPanMode = editorMode === "pan" || e.shiftKey || spacePanHeld;
       if (e.button === 1 || e.button === 2 || (e.button === 0 && isPanMode)) {
         return; // Panning handled inside ExplicitCadRenderer
       }
@@ -958,6 +1155,22 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // ── SELECT MODE ──
+      if (editorMode === "select") {
+        const hit = findEntityAt(pos, false);
+        if (hit && hit.type === "vertex") {
+          selectedVertexIndex = hit.index;
+          selectedEntity = hit;
+        } else {
+          selectedVertexIndex = -1;
+          selectedEntity = hit;
+        }
+        showEntityInspector();
+        updateToolPromptUI();
+        drawSketchCanvas();
+        return;
+      }
+
       // ── BLOCK INSERTION ──
       if (editorMode === "insert_block" && activeBlockToInsert) {
         const snapPt = hoveredSnapTarget ? hoveredSnapTarget : snapToGrid(pos.x, pos.y);
@@ -967,7 +1180,7 @@ document.addEventListener("DOMContentLoaded", () => {
           scaleX: 1, scaleY: 1, rotation: 0
         });
         activeBlockToInsert = null;
-        setEditorMode("draw");
+        setEditorMode("select");
         
         rebuildSpatialIndexes();
         drawSketchCanvas();
@@ -1413,57 +1626,141 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         sketchVertices.push(snapPt);
+        lastAnchorPos = { x: snapPt.x, y: snapPt.y };
         rebuildSpatialIndexes();
         drawSketchCanvas();
         updateLiveProperties();
+        updateToolPromptUI();
       }
     });
 
     canvasEl.addEventListener("mousemove", (e) => {
+      clientCursorPos = { x: e.clientX, y: e.clientY };
       const pos = webglRenderer.getMouseWorldPos(e.clientX, e.clientY);
       updateMousePosition(pos);
+      positionCursorPrompt();
     });
 
     canvasEl.addEventListener("mouseup", (e) => {
-      selectedVertexIndex = -1;
+      if (editorMode !== "select") selectedVertexIndex = -1;
     });
 
-    // Escape cancels actions or ends current drawing
+    // Escape → cancel in-progress command and return to Select
     window.addEventListener("keydown", (e) => {
+      // Don't steal keys from inputs
+      const tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      // Space = temporary pan
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        spacePanHeld = true;
+        window.editorMode = "pan"; // renderer checks this for pan drag
+        updateToolPromptUI();
+        return;
+      }
+
+      // Tool shortcuts
+      const key = e.key.toLowerCase();
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (key === "v") { setEditorMode("select"); return; }
+        if (key === "l") { setEditorMode("draw"); return; }
+        if (key === "c") { setEditorMode("circle"); return; }
+        if (key === "r") { setEditorMode("rect"); return; }
+        if (key === "p") { setEditorMode("poly"); return; }
+        if (key === "d") { setEditorMode("dimension"); return; }
+        if (key === "m") { setEditorMode("measure"); return; }
+        if (key === "f") { setEditorMode("fillet"); return; }
+        if (key === "t") { setEditorMode("trim"); return; }
+        if (key === "h") { setEditorMode("pan"); return; }
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedEntity && editorMode === "select") {
+          e.preventDefault();
+          deleteSelectedEntity();
+        }
+        return;
+      }
+
       if (e.key === "Escape") {
-        if (editorMode === "draw") {
-          const activeStart = activeProfileStartIndex;
-          const activeCount = sketchVertices.length - activeStart;
-          if (activeCount >= 2) {
-            sketchProfiles.push({
-              startIndex: activeStart,
-              count: activeCount,
-              isClosed: false
-            });
-          } else {
-            sketchVertices.splice(activeStart);
-          }
-          activeProfileStartIndex = sketchVertices.length;
-        }
-
-        selectedEntity = null;
-        activeCircleCenter = null;
-        activeRectStart = null;
-        activePolyCenter = null;
-        isMeasuring = false;
-        
-        rebuildSpatialIndexes();
-        showEntityInspector();
-        updateLiveProperties();
-
-        if (lastRawWorldPos) {
-          updateMousePosition(lastRawWorldPos);
-        } else {
-          drawSketchCanvas();
-        }
+        cancelCurrentCommand(true);
       }
     });
 
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "Space") {
+        spacePanHeld = false;
+        window.editorMode = editorMode; // restore real mode for renderer
+        updateToolPromptUI();
+      }
+    });
+
+  }
+
+  function cancelCurrentCommand(returnToSelect) {
+    if (editorMode === "draw") {
+      const activeStart = activeProfileStartIndex;
+      const activeCount = sketchVertices.length - activeStart;
+      if (activeCount >= 2) {
+        sketchProfiles.push({
+          startIndex: activeStart,
+          count: activeCount,
+          isClosed: false
+        });
+      } else {
+        sketchVertices.splice(activeStart);
+      }
+      activeProfileStartIndex = sketchVertices.length;
+    }
+
+    selectedEntity = null;
+    selectedVertexIndex = -1;
+    activeCircleCenter = null;
+    activeRectStart = null;
+    activePolyCenter = null;
+    activeBlockToInsert = null;
+    isMeasuring = false;
+    measureStartPos = null;
+    measureEndPos = null;
+    lastAnchorPos = null;
+
+    rebuildSpatialIndexes();
+    showEntityInspector();
+    updateLiveProperties();
+
+    if (returnToSelect) {
+      setEditorMode("select");
+    } else if (lastRawWorldPos) {
+      updateMousePosition(lastRawWorldPos);
+    } else {
+      drawSketchCanvas();
+      updateToolPromptUI();
+    }
+  }
+
+  function deleteSelectedEntity() {
+    if (!selectedEntity) return;
+    if (selectedEntity.type === "circle") {
+      sketchCircles.splice(selectedEntity.index, 1);
+    } else if (selectedEntity.type === "insertion") {
+      sketchInsertions.splice(selectedEntity.index, 1);
+    } else if (selectedEntity.type === "vertex") {
+      // Leave complex vertex delete to avoid breaking profiles — soft clear selection only
+      if (window.showToast) window.showToast("Delete full segments with Trim, or Clear Board.", false);
+      selectedEntity = null;
+      rebuildSpatialIndexes();
+      drawSketchCanvas();
+      return;
+    } else if (selectedEntity.type === "dimension") {
+      customDimensions.splice(selectedEntity.index, 1);
+    }
+    selectedEntity = null;
+    rebuildSpatialIndexes();
+    showEntityInspector();
+    updateLiveProperties();
+    drawSketchCanvas();
+    updateToolPromptUI();
   }
 
   // --- Inspector View Controller ---
@@ -2000,45 +2297,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const activeBtn = document.getElementById(`tool-${mode}-btn`);
     if (activeBtn) activeBtn.classList.add("active");
 
-    // instruction bubble updates
-    const instr = document.getElementById("sketcher-instruction");
-    const statusText = document.getElementById("cad-status-text");
-    if (!instr || !statusText) return;
-
-    if (mode === "draw") {
-      instr.textContent = "Line Tool: Click coordinate or snap handle to draw contiguous line segments.";
-      statusText.textContent = "Status: Drafting Polyline Outline";
-    } else if (mode === "circle") {
-      instr.textContent = "Circle Tool: Click to place center, drag diagonal and release to specify radius.";
-      statusText.textContent = "Status: Circle/Hole Creator";
-    } else if (mode === "rect") {
-      instr.textContent = "Rectangle Tool: Click starting corner, drag diagonally, and release to draw.";
-      statusText.textContent = "Status: Rectangle Creator";
-    } else if (mode === "poly") {
-      instr.textContent = `Polygon Tool (${polySides} sides): Click center, drag outward, and release to draw.`;
-      statusText.textContent = `Status: Polygon Creator`;
-    } else if (mode === "fillet") {
-      instr.textContent = "Fillet Tool: Click connecting node handle corner to round it.";
-      statusText.textContent = "Status: Fillet Modifier";
-    } else if (mode === "trim") {
-      instr.textContent = "Trim Tool: Click on intersecting line segments to cut/trim them.";
-      statusText.textContent = "Status: Trimming Geometry";
-    } else if (mode === "dimension") {
-      instr.textContent = "Smart Dim: Click line, circle, or select two vertices to dimension.";
-      statusText.textContent = "Status: Dimensioning";
-    } else if (mode === "measure") {
-      instr.textContent = "Measure Tool: Click start point, hover, and click end point to resolve distance.";
-      statusText.textContent = "Status: Ruler Measuring";
-    } else if (mode === "pan") {
-      instr.textContent = "Pan Viewport: Left-click and drag on canvas. Right/middle-click also pans.";
-      statusText.textContent = "Status: Panning Viewport";
-    }
-
     selectedVertexA = -1;
     selectedVertexB = -1;
     isMeasuring = false;
-    
+    if (mode !== "select") selectedVertexIndex = -1;
+    if (mode === "draw") lastAnchorPos = null;
+
+    updateToolPromptUI();
     drawSketchCanvas();
+    try { if (window.lucide) lucide.createIcons(); } catch (_) { /* ignore */ }
   };
 
   // Block Library inserts
@@ -2502,13 +2769,42 @@ document.addEventListener("DOMContentLoaded", () => {
   window.zoomViewport = (factor) => {
     if (webglRenderer) {
       webglRenderer.zoom(factor);
+      updateZoomPctDisplay();
     }
   };
 
   window.resetViewport = () => {
     if (webglRenderer) {
       webglRenderer.resetView(sheetWidth, sheetHeight);
+      updateZoomPctDisplay();
+      drawSketchCanvas();
     }
+  };
+
+  window.zoomExtents = () => {
+    if (!webglRenderer) return;
+    // Fit all geometry (vertices + circles + sheet fallback)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const expand = (x, y, pad = 0) => {
+      minX = Math.min(minX, x - pad);
+      minY = Math.min(minY, y - pad);
+      maxX = Math.max(maxX, x + pad);
+      maxY = Math.max(maxY, y + pad);
+    };
+    sketchVertices.forEach(v => expand(v.x, v.y));
+    sketchCircles.forEach(c => expand(c.cx, c.cy, c.r));
+    sketchInsertions.forEach(ins => expand(ins.x, ins.y, 15));
+
+    if (!isFinite(minX) || maxX - minX < 1e-6) {
+      webglRenderer.resetView(sheetWidth, sheetHeight);
+    } else {
+      const margin = 0.12;
+      const w = Math.max(10, maxX - minX);
+      const h = Math.max(10, maxY - minY);
+      webglRenderer.fitWorldRect(minX - w * margin, minY - h * margin, w * (1 + 2 * margin), h * (1 + 2 * margin));
+    }
+    updateZoomPctDisplay();
+    drawSketchCanvas();
   };
 
   // --- Initialize CAD on Boot ---
@@ -2516,10 +2812,12 @@ document.addEventListener("DOMContentLoaded", () => {
     webglRenderer = new ExplicitCadRenderer(canvasEl);
     webglRenderer.onViewChange = () => {
       drawSketchCanvas();
+      updateZoomPctDisplay();
     };
     window.addEventListener("resize", () => {
       webglRenderer.resize();
       drawSketchCanvas();
+      updateZoomPctDisplay();
     });
     
     // Fit drawing sheet
@@ -2532,4 +2830,6 @@ document.addEventListener("DOMContentLoaded", () => {
   drawSketchCanvas();
   initSketcherEvents();
   updateLiveProperties();
+  setEditorMode("select");
+  updateZoomPctDisplay();
 });

@@ -69,9 +69,9 @@ class ExplicitCadRenderer {
     let startPan = { x: 0, y: 0 };
 
     this.canvas.addEventListener("mousedown", (e) => {
-      // Pan handling: middle-click, right-click, Shift+Left-click, or Pan mode active
+      // Pan: middle-click, right-click, Shift+Left, Space+Left, or Pan mode
       const isPanMode = window.editorMode === "pan" || e.shiftKey;
-      if (e.button === 1 || e.button === 2 || isPanMode) {
+      if (e.button === 1 || e.button === 2 || (e.button === 0 && isPanMode)) {
         isPanning = true;
         startMouse.x = e.clientX;
         startMouse.y = e.clientY;
@@ -134,6 +134,20 @@ class ExplicitCadRenderer {
     this.render();
   }
 
+  /** Fit an arbitrary world-space rectangle into the viewport */
+  fitWorldRect(x, y, w, h) {
+    const margin = 48;
+    const scaleX = (this.width - 2 * margin) / Math.max(w, 1e-6);
+    const scaleY = (this.height - 2 * margin) / Math.max(h, 1e-6);
+    this.zoomLevel = Math.max(0.02, Math.min(150, Math.min(scaleX, scaleY)));
+    const viewW = w * this.zoomLevel;
+    const viewH = h * this.zoomLevel;
+    this.panOffset.x = (this.width - viewW) / 2 - x * this.zoomLevel;
+    this.panOffset.y = (this.height - viewH) / 2 - y * this.zoomLevel;
+    this.render();
+    if (this.onViewChange) this.onViewChange();
+  }
+
   updateDrawing(state) {
     this.currentState = state;
     this.render();
@@ -185,11 +199,36 @@ class ExplicitCadRenderer {
     // 7. Draw Active Shape Drawing Guides (Circle, Rect, Poly previews)
     this.drawActiveToolPreviews(ctx, state);
 
-    // 8. Draw Object Snap Targets
+    // 8. Full-viewport crosshair (screen-space thickness)
+    if (state.crosshairEnabled && state.mousePos && !["select", "pan"].includes(state.editorMode)) {
+      this.drawCrosshair(ctx, state.mousePos);
+    }
+
+    // 9. Draw Object Snap Targets
     if (state.hoveredSnapTarget) {
       this.drawSnapIndicator(ctx, state.hoveredSnapTarget);
     }
 
+    ctx.restore();
+  }
+
+  drawCrosshair(ctx, pos) {
+    // Extent covers far beyond sheet in world units
+    const left = -this.panOffset.x / this.zoomLevel;
+    const right = (this.width - this.panOffset.x) / this.zoomLevel;
+    const top = -this.panOffset.y / this.zoomLevel;
+    const bottom = (this.height - this.panOffset.y) / this.zoomLevel;
+
+    ctx.save();
+    ctx.setLineDash([4 / this.zoomLevel, 4 / this.zoomLevel]);
+    ctx.strokeStyle = "rgba(13, 148, 136, 0.55)";
+    ctx.lineWidth = 1 / this.zoomLevel;
+    ctx.beginPath();
+    ctx.moveTo(left, pos.y);
+    ctx.lineTo(right, pos.y);
+    ctx.moveTo(pos.x, top);
+    ctx.lineTo(pos.x, bottom);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -724,21 +763,29 @@ class ExplicitCadRenderer {
     ctx.restore();
   }
 
-  // Draw object snap target indicators (green squares, yellow triangles, blue circles etc.)
+  // Draw object snap target indicators (AutoCAD-style glyphs)
   drawSnapIndicator(ctx, snap) {
     ctx.save();
     ctx.setLineDash([]);
-    ctx.lineWidth = 2.0 / this.zoomLevel;
+    ctx.lineWidth = 2.2 / this.zoomLevel;
 
-    // Standard CAD Snap indicator styling
-    ctx.strokeStyle = snap.type === "endpoint" ? "#22c55e" : 
-                      snap.type === "midpoint" ? "#eab308" : 
-                      snap.type === "center" ? "#2563eb" : 
-                      snap.type === "intersection" ? "#ef4444" : "#ec4899";
+    // High-contrast CAD snap colors
+    const colors = {
+      endpoint: "#16a34a",
+      midpoint: "#ca8a04",
+      center: "#2563eb",
+      intersection: "#dc2626",
+      tangent: "#db2777",
+      perpendicular: "#0891b2"
+    };
+    ctx.strokeStyle = colors[snap.type] || "#ec4899";
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
 
-    const size = 4.5 / this.zoomLevel;
+    // Slightly larger glyphs for readability (screen-ish size)
+    const size = Math.max(5.5 / this.zoomLevel, 5.5 / this.zoomLevel);
 
     if (snap.type === "endpoint") {
+      ctx.fillRect(snap.x - size, snap.y - size, size * 2, size * 2);
       ctx.strokeRect(snap.x - size, snap.y - size, size * 2, size * 2);
     }
     else if (snap.type === "midpoint") {
@@ -747,11 +794,20 @@ class ExplicitCadRenderer {
       ctx.lineTo(snap.x + size, snap.y + size);
       ctx.lineTo(snap.x - size, snap.y + size);
       ctx.closePath();
+      ctx.fill();
       ctx.stroke();
     }
     else if (snap.type === "center") {
       ctx.beginPath();
       ctx.arc(snap.x, snap.y, size, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+      // cross tick
+      ctx.beginPath();
+      ctx.moveTo(snap.x - size * 0.5, snap.y);
+      ctx.lineTo(snap.x + size * 0.5, snap.y);
+      ctx.moveTo(snap.x, snap.y - size * 0.5);
+      ctx.lineTo(snap.x, snap.y + size * 0.5);
       ctx.stroke();
     }
     else if (snap.type === "intersection") {
@@ -761,15 +817,27 @@ class ExplicitCadRenderer {
       ctx.moveTo(snap.x + size, snap.y - size);
       ctx.lineTo(snap.x - size, snap.y + size);
       ctx.stroke();
+      // outer box
+      ctx.strokeRect(snap.x - size * 0.85, snap.y - size * 0.85, size * 1.7, size * 1.7);
+    }
+    else if (snap.type === "perpendicular") {
+      // corner square glyph
+      ctx.beginPath();
+      ctx.moveTo(snap.x - size, snap.y + size);
+      ctx.lineTo(snap.x - size, snap.y - size);
+      ctx.lineTo(snap.x + size, snap.y - size);
+      ctx.stroke();
+      ctx.strokeRect(snap.x - size * 0.35, snap.y - size * 0.35, size * 0.7, size * 0.7);
     }
     else {
-      // Draw diamond for tangent and others
+      // Diamond for tangent / other
       ctx.beginPath();
       ctx.moveTo(snap.x, snap.y - size);
       ctx.lineTo(snap.x + size, snap.y);
       ctx.lineTo(snap.x, snap.y + size);
       ctx.lineTo(snap.x - size, snap.y);
       ctx.closePath();
+      ctx.fill();
       ctx.stroke();
     }
     ctx.restore();
