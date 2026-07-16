@@ -1009,10 +1009,15 @@ function distanceFromRoot(stationId) {
 }
 
 /**
- * Layout positions for active-bus stations (mm world coords for SVG mapper).
- * x = distance from root along parent chain; y = branch lane offset.
+ * Screen-space layout for stations (px-like units).
+ * - Enforces a minimum horizontal gap so short trunk segments don't stack boxes.
+ * - Each Y-branch gets its own vertical lane tall enough for device fans.
  */
 function computeBranchLayout(busId) {
+  const MIN_EDGE_PX = 170;   // min screen length of a trunk segment
+  const PX_PER_M = 28;       // soft physical scale (capped by MIN_EDGE_PX)
+  const LANE_PX = 190;       // vertical room per branch lane (devices sit below trunk)
+
   const list = stationsOnBus(busId);
   const pos = new Map();
   if (!list.length) return pos;
@@ -1024,22 +1029,84 @@ function computeBranchLayout(busId) {
     children.get(p).push(s);
   });
 
-  let laneCounter = 0;
-  function walk(st, lane) {
-    const x = distanceFromRoot(st.id);
-    pos.set(st.id, { x, y: lane * 45, station: st });
-    const kids = children.get(st.id) || [];
-    if (kids.length <= 1) {
-      kids.forEach(k => walk(k, lane));
-    } else {
-      kids.forEach((k, i) => {
-        const childLane = i === 0 ? lane : ++laneCounter;
-        walk(k, childLane);
-      });
-    }
+  // Extra horizontal pad when a station has many ECU boxes under it
+  function stationDevicePad(st) {
+    const n = (st.devices || []).length;
+    if (n <= 1) return 0;
+    // half-width of device row beyond a single box
+    const pitch = 96;
+    return Math.max(0, ((Math.min(n, 5) - 1) * pitch) / 2 - 40);
   }
-  (children.get('__root__') || []).forEach((root, i) => walk(root, i === 0 ? 0 : ++laneCounter));
+
+  /**
+   * Place subtree of st. parentX = screen x of parent junction (null for roots).
+   * preferredLane = lane index to try for the primary child chain.
+   * Returns { minLane, maxLane } used by this subtree.
+   */
+  function walk(st, parentX, preferredLane) {
+    const edgeM = st.parentId
+      ? Math.max(0, Number(st.distanceFromParent != null ? st.distanceFromParent : st.distanceFromPrev) || 0)
+      : 0;
+    const edgePx = st.parentId ? Math.max(MIN_EDGE_PX, edgeM * PX_PER_M) : 0;
+    // Push apart if parent or child fans many devices
+    const parent = st.parentId ? list.find(s => s.id === st.parentId) : null;
+    const fanPad = (parent ? stationDevicePad(parent) : 0) + stationDevicePad(st);
+    const x = (parentX == null ? 0 : parentX) + edgePx + fanPad * 0.35;
+    const lane = preferredLane;
+    pos.set(st.id, { x, y: lane * LANE_PX, station: st, lane });
+
+    const kids = children.get(st.id) || [];
+    if (!kids.length) return { minLane: lane, maxLane: lane };
+
+    let minL = lane;
+    let maxL = lane;
+    let nextLane = lane;
+    kids.forEach((k, i) => {
+      // First child continues on same lane (main spine); further kids open new lanes
+      const childLane = i === 0 ? lane : (maxL + 1);
+      const sub = walk(k, x, childLane);
+      minL = Math.min(minL, sub.minLane);
+      maxL = Math.max(maxL, sub.maxLane);
+      nextLane = maxL + 1;
+    });
+    // Re-center parent lane between children? keep parent on first child's lane for stable spine
+    return { minLane: minL, maxLane: maxL };
+  }
+
+  let nextRootLane = 0;
+  (children.get('__root__') || []).forEach((root) => {
+    const sub = walk(root, null, nextRootLane);
+    nextRootLane = sub.maxLane + 1;
+  });
+
   return pos;
+}
+
+/** Place ECU boxes under a station without overlapping each other. */
+function layoutDevicesUnderStation(devCount, stationX, spliceY) {
+  const boxW = 80;
+  const boxH = 44;
+  const gapX = 16;
+  const gapY = 18;
+  const pitchX = boxW + gapX;
+  const pitchY = boxH + gapY;
+  // Cap columns so a single station doesn't span the whole canvas
+  const maxPerRow = Math.min(5, Math.max(1, devCount));
+  const positions = [];
+  for (let i = 0; i < devCount; i++) {
+    const row = Math.floor(i / maxPerRow);
+    const col = i % maxPerRow;
+    const inRow = Math.min(maxPerRow, devCount - row * maxPerRow);
+    const rowWidth = inRow * pitchX - gapX;
+    const startX = stationX - rowWidth / 2 + boxW / 2;
+    positions.push({
+      x: startX + col * pitchX,
+      y: spliceY + 48 + row * pitchY,
+      boxW,
+      boxH
+    });
+  }
+  return positions;
 }
 
 function getPhysicalPositionFromX(localX) {
@@ -2781,43 +2848,48 @@ function drawTopologySVG(diagnostics) {
 
   const width = canvasContainer.clientWidth || 800;
   const height = canvasContainer.clientHeight || 280;
-  harnessSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
   // Reapply view zoom transform
   applyViewTransform();
 
-  const paddingLeft = 60;
-  const paddingRight = 60;
+  const paddingLeft = 70;
+  const paddingTop = 50;
   const layout = computeBranchLayout(activeBusId);
-  let maxPos = 0;
-  let minLaneY = 0;
-  let maxLaneY = 0;
+  let maxLayoutX = 0;
+  let minLayoutY = 0;
+  let maxLayoutY = 0;
   layout.forEach(p => {
-    maxPos = Math.max(maxPos, p.x);
-    minLaneY = Math.min(minLaneY, p.y);
-    maxLaneY = Math.max(maxLaneY, p.y);
+    maxLayoutX = Math.max(maxLayoutX, p.x);
+    minLayoutY = Math.min(minLayoutY, p.y);
+    maxLayoutY = Math.max(maxLayoutY, p.y);
   });
-  const trunkLen = maxPos || electricalLengthM(activeBusId);
+  // Reserve vertical space under the lowest lane for multi-row device fans
+  let maxDevices = 1;
+  busStations.forEach(s => { maxDevices = Math.max(maxDevices, (s.devices || []).length); });
+  const deviceRows = Math.max(1, Math.ceil(maxDevices / 5));
+  const deviceFanH = 48 + deviceRows * 62;
+  const contentW = maxLayoutX + paddingLeft + 160;
+  const contentH = (maxLayoutY - minLayoutY) + paddingTop + 90 + deviceFanH + 40;
+  // Expand viewBox so dense graphs aren't clipped (user can pan/zoom)
+  const vbW = Math.max(width, contentW);
+  const vbH = Math.max(height, contentH);
+  harnessSvg.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
 
-  // Map physical distance → screen X
-  const usableW = Math.max(200, width - paddingLeft - paddingRight);
-  const scaleX = trunkLen > 0 ? usableW / trunkLen : 1;
-  dragInfo.scale = scaleX;
-  dragInfo.trunkLen = trunkLen;
+  dragInfo.scale = 1;
+  dragInfo.trunkLen = electricalLengthM(activeBusId);
   dragInfo.paddingLeft = paddingLeft;
-  dragInfo.screenX = [paddingLeft, paddingLeft + usableW];
+  dragInfo.screenX = [paddingLeft, paddingLeft + maxLayoutX];
 
-  function getX(cumPos) {
-    if (busStations.length === 1) return paddingLeft + usableW / 2;
-    return paddingLeft + (Number(cumPos) || 0) * scaleX;
-  }
   function getStationXY(st) {
     const p = layout.get(st.id) || { x: 0, y: 0 };
-    return { x: getX(p.x), y: p.y - minLaneY };
+    return {
+      x: paddingLeft + (Number(p.x) || 0),
+      y: (Number(p.y) || 0) - minLayoutY
+    };
   }
 
-  const canH_Y = 70;
-  const canL_Y = 95;
+  const canH_Y = paddingTop;
+  const canL_Y = paddingTop + 25;
   const laneBase = (canH_Y + canL_Y) / 2;
 
   // Draw trunk edges as dual bus lines (supports Y-splits)
@@ -2852,18 +2924,12 @@ function drawTopologySVG(diagnostics) {
     zoomContainer.appendChild(distText);
   });
 
-  // Fallback single dual-line if no edges (one station)
-  const startX = getX(0);
-  const endX = getX(maxPos);
-  if (!edges.length && busStations.length === 1) {
-    // no trunk segments
-  }
-
+  const startX = paddingLeft;
   // Bus labels
-  drawLabelSVG('CAN H', startX - 45, canH_Y + 4, '#10b981', 'right', '10px');
-  drawLabelSVG('CAN L', startX - 45, canL_Y + 4, '#3b82f6', 'right', '10px');
+  drawLabelSVG('CAN H', startX - 50, canH_Y + 4, '#10b981', 'right', '10px');
+  drawLabelSVG('CAN L', startX - 50, canL_Y + 4, '#3b82f6', 'right', '10px');
   const busMeta = buses.find(b => b.id === activeBusId);
-  drawLabelSVG(busMeta ? busMeta.name : 'Bus', startX - 45, canH_Y - 14, 'var(--text-muted)', 'right', '9px');
+  drawLabelSVG(busMeta ? busMeta.name : 'Bus', startX - 50, canH_Y - 14, 'var(--text-muted)', 'right', '9px');
 
   // 3. Draw Stations and Star junctions (active bus tree layout)
   busStations.forEach((station) => {
@@ -3021,31 +3087,20 @@ function drawTopologySVG(diagnostics) {
 
     // 4. Draw Device Boxes (Star branches)
     const devCount = station.devices.length;
-    const maxIndividualStub = networkConfig.enableCanFD
-      ? (DATA_STUB_LIMITS[networkConfig.dataBaudRate] || 0.1)
-      : (STANDARD_STUB_LIMITS[networkConfig.baudRate] || 0.3);
-    
+    const maxIndividualStub = maxStubLimitMeters();
+    const deviceLayouts = layoutDevicesUnderStation(devCount, x, spliceY);
+
     station.devices.forEach((device, devIndex) => {
       const deviceStatus = diagnostics.deviceStatuses[device.id] || 'pass';
       let themeColor = 'var(--success)';
       if (deviceStatus === 'warn') themeColor = 'var(--warning)';
       else if (deviceStatus === 'fail') themeColor = 'var(--error)';
 
-      // Calculate spatial branching angles or offsets
-      let targetX = x;
-      let targetY = spliceY + 45;
-
-      if (devCount === 1) {
-        // Standard single drop straight down
-        targetX = x;
-        targetY = spliceY + 45 + Math.min(device.stubLength * 20, 60);
-      } else {
-        // Star layout branching (spread horizontally)
-        const spreadW = 85;
-        const totalSpread = (devCount - 1) * spreadW;
-        targetX = x - (totalSpread / 2) + (devIndex * spreadW);
-        targetY = spliceY + 45 + Math.min(device.stubLength * 15, 60);
-      }
+      const slot = deviceLayouts[devIndex] || { x, y: spliceY + 48, boxW: 80, boxH: 44 };
+      const targetX = slot.x;
+      const targetY = slot.y;
+      const boxW = slot.boxW || 80;
+      const boxH = slot.boxH || 44;
 
       // Draw drop branch lines from splice dot to device box
       const deviceBranchLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -3057,9 +3112,6 @@ function drawTopologySVG(diagnostics) {
       deviceBranchLine.setAttribute('stroke-width', '1.5');
       zoomContainer.appendChild(deviceBranchLine);
 
-      // Device box size
-      const boxW = 80;
-      const boxH = 44;
       const boxX = targetX - boxW / 2;
       const boxY = targetY;
 
