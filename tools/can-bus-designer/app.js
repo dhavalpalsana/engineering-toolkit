@@ -116,7 +116,126 @@ function ensureStationDefaults(st) {
   if (st.distanceFromParent == null) st.distanceFromParent = 0;
   // Keep legacy field in sync for older UI paths
   st.distanceFromPrev = st.distanceFromParent;
+  // Manual canvas nudge (px in layout space); lines stay connected via layout
+  if (!st.layoutOffset || typeof st.layoutOffset !== 'object') {
+    st.layoutOffset = { dx: 0, dy: 0 };
+  } else {
+    st.layoutOffset.dx = Number(st.layoutOffset.dx) || 0;
+    st.layoutOffset.dy = Number(st.layoutOffset.dy) || 0;
+  }
+  st.devices.forEach(d => {
+    if (!d.layoutOffset || typeof d.layoutOffset !== 'object') {
+      d.layoutOffset = { dx: 0, dy: 0 };
+    } else {
+      d.layoutOffset.dx = Number(d.layoutOffset.dx) || 0;
+      d.layoutOffset.dy = Number(d.layoutOffset.dy) || 0;
+    }
+  });
   return st;
+}
+
+/** Map browser client coords → coordinates inside #zoom-container (accounts for pan/zoom). */
+function clientToZoomLocal(clientX, clientY) {
+  if (!harnessSvg || !zoomContainer) return { x: 0, y: 0 };
+  try {
+    const pt = harnessSvg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = zoomContainer.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const local = pt.matrixTransform(ctm.inverse());
+    return { x: local.x, y: local.y };
+  } catch (_) {
+    return { x: 0, y: 0 };
+  }
+}
+
+function startBoxDrag(kind, stationId, deviceId, e) {
+  if (e.button != null && e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  hideCanvasAddMenu();
+
+  const st = stations.find(s => s.id === stationId);
+  if (!st) return;
+  ensureStationDefaults(st);
+
+  let startOffset = { dx: 0, dy: 0 };
+  if (kind === 'station') {
+    startOffset = { ...st.layoutOffset };
+  } else if (kind === 'device') {
+    const dev = (st.devices || []).find(d => d.id === deviceId);
+    if (!dev) return;
+    if (!dev.layoutOffset) dev.layoutOffset = { dx: 0, dy: 0 };
+    startOffset = { ...dev.layoutOffset };
+  }
+
+  boxDrag = {
+    active: true,
+    kind,
+    stationId,
+    deviceId: deviceId || null,
+    startLocal: clientToZoomLocal(e.clientX, e.clientY),
+    startOffset,
+    moved: false
+  };
+
+  viewState.panning = false;
+  harnessSvg.style.cursor = 'grabbing';
+  window.addEventListener('mousemove', onBoxDragMove);
+  window.addEventListener('mouseup', onBoxDragEnd);
+}
+
+function onBoxDragMove(e) {
+  if (!boxDrag.active) return;
+  const cur = clientToZoomLocal(e.clientX, e.clientY);
+  const ddx = cur.x - boxDrag.startLocal.x;
+  const ddy = cur.y - boxDrag.startLocal.y;
+  if (Math.hypot(ddx, ddy) > 3) boxDrag.moved = true;
+
+  const st = stations.find(s => s.id === boxDrag.stationId);
+  if (!st) return;
+  ensureStationDefaults(st);
+
+  const nx = boxDrag.startOffset.dx + ddx;
+  const ny = boxDrag.startOffset.dy + ddy;
+
+  if (boxDrag.kind === 'station') {
+    st.layoutOffset = { dx: nx, dy: ny };
+  } else if (boxDrag.kind === 'device') {
+    const dev = (st.devices || []).find(d => d.id === boxDrag.deviceId);
+    if (dev) dev.layoutOffset = { dx: nx, dy: ny };
+  }
+
+  // Re-draw topology only (faster than full UI rebuild)
+  const diagnostics = runDiagnostics();
+  drawTopologySVG(diagnostics);
+  harnessSvg.style.cursor = 'grabbing';
+}
+
+function onBoxDragEnd(e) {
+  if (!boxDrag.active) return;
+  const wasMoved = boxDrag.moved;
+  const sid = boxDrag.stationId;
+  const did = boxDrag.deviceId;
+  const kind = boxDrag.kind;
+
+  boxDrag.active = false;
+  window.removeEventListener('mousemove', onBoxDragMove);
+  window.removeEventListener('mouseup', onBoxDragEnd);
+  harnessSvg.style.cursor = 'default';
+
+  // Keep moved=true briefly so the subsequent click event does not re-fire focus
+  if (wasMoved) {
+    setTimeout(() => { boxDrag.moved = false; }, 50);
+  } else {
+    boxDrag.moved = false;
+    if (kind === 'station') focusListItem({ stationId: sid });
+    else if (kind === 'device') focusListItem({ stationId: sid, deviceId: did });
+  }
+
+  // Full render to sync list highlights / stats
+  render();
 }
 
 function ensureBuses() {
@@ -306,7 +425,7 @@ function stubGuidanceText() {
   return `${pack.shortName || pack.name}: max stub ≈ ${formatLength(maxM)} at ${br}.`;
 }
 
-// Dragging State
+// Dragging State (legacy spacing drag + box free-move)
 let dragInfo = {
   active: false,
   stationId: null,
@@ -318,6 +437,17 @@ let dragInfo = {
   maxPos: 0,
   trunkLen: 0,
   paddingLeft: 60
+};
+
+/** Free-move of station/device boxes on canvas (keeps lines connected via re-render). */
+let boxDrag = {
+  active: false,
+  kind: null, // 'station' | 'device'
+  stationId: null,
+  deviceId: null,
+  startLocal: null, // {x,y} in zoom-container coords
+  startOffset: null, // {dx,dy}
+  moved: false
 };
 
 // Zoom and Pan View State
@@ -856,8 +986,10 @@ function initCanvasInteractions() {
     applyViewTransform();
   });
 
-  // Pan Mouse Events (dragging on grid)
+  // Pan Mouse Events (dragging on empty grid only — not while moving boxes)
   harnessSvg.addEventListener('mousedown', (e) => {
+    if (boxDrag.active) return;
+    if (e.target.closest && e.target.closest('.draggable-box, .svg-interactive-btn')) return;
     if (e.target.classList.contains('svg-background-grid') || e.target === harnessSvg) {
       viewState.panning = true;
       viewState.startX = e.clientX;
@@ -869,6 +1001,7 @@ function initCanvasInteractions() {
   });
 
   window.addEventListener('mousemove', (e) => {
+    if (boxDrag.active) return;
     if (viewState.panning) {
       const dx = e.clientX - viewState.startX;
       const dy = e.clientY - viewState.startY;
@@ -2882,9 +3015,10 @@ function drawTopologySVG(diagnostics) {
 
   function getStationXY(st) {
     const p = layout.get(st.id) || { x: 0, y: 0 };
+    const off = (st && st.layoutOffset) || { dx: 0, dy: 0 };
     return {
-      x: paddingLeft + (Number(p.x) || 0),
-      y: (Number(p.y) || 0) - minLayoutY
+      x: paddingLeft + (Number(p.x) || 0) + (Number(off.dx) || 0),
+      y: (Number(p.y) || 0) - minLayoutY + (Number(off.dy) || 0)
     };
   }
 
@@ -2962,15 +3096,18 @@ function drawTopologySVG(diagnostics) {
     tapL.setAttribute('fill', '#3b82f6');
     zoomContainer.appendChild(tapL);
 
-    // Station handle (drag disabled for branched spacing — edit length in the list)
+    // Station handle — drag to reposition (trunk lines stay connected)
     const dragHandle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     dragHandle.setAttribute('cx', x);
     dragHandle.setAttribute('cy', (canH_Y_local + canL_Y_local)/2);
-    dragHandle.setAttribute('r', '7');
+    dragHandle.setAttribute('r', '8');
     dragHandle.setAttribute('fill', !station.parentId ? 'var(--text-muted)' : 'var(--accent)');
     dragHandle.setAttribute('stroke', 'var(--bg-secondary)');
     dragHandle.setAttribute('stroke-width', '1.5');
-    dragHandle.setAttribute('title', station.name);
+    dragHandle.setAttribute('class', 'draggable-box');
+    dragHandle.setAttribute('title', 'Drag to move station · click to show in list');
+    dragHandle.style.cursor = 'grab';
+    dragHandle.addEventListener('mousedown', (e) => startBoxDrag('station', station.id, null, e));
     zoomContainer.appendChild(dragHandle);
 
     // Draw Splice point (Junction box / drop connection)
@@ -3032,19 +3169,20 @@ function drawTopologySVG(diagnostics) {
     });
     zoomContainer.appendChild(addGroup);
 
-    // Click station geometry → center in list
+    // Click station geometry → center in list (handle uses drag; click-without-move focuses)
     const focusStation = (e) => {
       e.stopPropagation();
+      if (boxDrag.active || boxDrag.moved) return;
       focusListItem({ stationId: station.id });
     };
-    dragHandle.style.cursor = 'pointer';
-    dragHandle.addEventListener('click', focusStation);
     spliceDot.style.cursor = 'pointer';
     spliceDot.addEventListener('click', focusStation);
     tapH.style.cursor = 'pointer';
     tapL.style.cursor = 'pointer';
     tapH.addEventListener('click', focusStation);
     tapL.addEventListener('click', focusStation);
+    // Allow dragging from splice area too
+    spliceDot.addEventListener('mousedown', (e) => startBoxDrag('station', station.id, null, e));
 
     // Termination badge on diagram (if station has bus terminator)
     ensureStationDefaults(station);
@@ -3097,8 +3235,9 @@ function drawTopologySVG(diagnostics) {
       else if (deviceStatus === 'fail') themeColor = 'var(--error)';
 
       const slot = deviceLayouts[devIndex] || { x, y: spliceY + 48, boxW: 80, boxH: 44 };
-      const targetX = slot.x;
-      const targetY = slot.y;
+      const dOff = (device.layoutOffset) || { dx: 0, dy: 0 };
+      const targetX = slot.x + (Number(dOff.dx) || 0);
+      const targetY = slot.y + (Number(dOff.dy) || 0);
       const boxW = slot.boxW || 80;
       const boxH = slot.boxH || 44;
 
@@ -3125,14 +3264,18 @@ function drawTopologySVG(diagnostics) {
       nodeBox.setAttribute('fill', 'var(--bg-secondary)');
       nodeBox.setAttribute('stroke', themeColor);
       nodeBox.setAttribute('stroke-width', '2');
-      nodeBox.setAttribute('style', 'cursor: pointer; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));');
+      nodeBox.setAttribute('style', 'cursor: grab; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));');
+      nodeBox.setAttribute('class', 'draggable-box');
+      nodeBox.setAttribute('title', 'Drag to move · click to show in list');
       
-      // Click device → center station + device row in the list
+      // Click device → center in list; drag to reposition (stub line stays attached)
       const focusDevice = (e) => {
         e.stopPropagation();
+        if (boxDrag.active || boxDrag.moved) return;
         focusListItem({ stationId: station.id, deviceId: device.id });
       };
       nodeBox.addEventListener('click', focusDevice);
+      nodeBox.addEventListener('mousedown', (e) => startBoxDrag('device', station.id, device.id, e));
       zoomContainer.appendChild(nodeBox);
 
       // Terminations inside device boxes
