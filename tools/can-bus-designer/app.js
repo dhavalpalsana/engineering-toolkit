@@ -3026,7 +3026,8 @@ function drawTopologySVG(diagnostics) {
   const canL_Y = paddingTop + 25;
   const laneBase = (canH_Y + canL_Y) / 2;
 
-  // Draw trunk edges as dual bus lines (supports Y-splits)
+  // Draw trunk edges as dual CAN H / CAN L lines that follow station centers
+  // (including diagonal Y-branch links — not forced horizontal).
   const edges = trunkEdges(activeBusId);
   edges.forEach(e => {
     const a = busStations.find(s => s.id === e.from);
@@ -3034,24 +3035,38 @@ function drawTopologySVG(diagnostics) {
     if (!a || !b) return;
     const pa = getStationXY(a);
     const pb = getStationXY(b);
-    const yOff = (pa.y + pb.y) / 2;
-    [['#10b981', -6], ['#3b82f6', 6]].forEach(([color, dy]) => {
+    // Match the H/L tap dots drawn on each station
+    const aH = { x: pa.x, y: canH_Y + pa.y };
+    const aL = { x: pa.x, y: canL_Y + pa.y };
+    const bH = { x: pb.x, y: canH_Y + pb.y };
+    const bL = { x: pb.x, y: canL_Y + pb.y };
+
+    const drawSeg = (p1, p2, color) => {
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', pa.x);
-      line.setAttribute('y1', laneBase + yOff + dy);
-      line.setAttribute('x2', pb.x);
-      line.setAttribute('y2', laneBase + yOff + dy);
+      line.setAttribute('x1', p1.x);
+      line.setAttribute('y1', p1.y);
+      line.setAttribute('x2', p2.x);
+      line.setAttribute('y2', p2.y);
       line.setAttribute('stroke', color);
       line.setAttribute('stroke-width', '3.5');
       line.setAttribute('stroke-linecap', 'round');
       zoomContainer.appendChild(line);
-    });
-    // Length label
+    };
+    drawSeg(aH, bH, '#10b981'); // CAN H
+    drawSeg(aL, bL, '#3b82f6'); // CAN L
+
+    // Length label along the segment, offset slightly "above" the path
     const midX = (pa.x + pb.x) / 2;
-    const midY = laneBase + yOff - 14;
+    const midY = (aH.y + aL.y + bH.y + bL.y) / 4;
+    const dx = pb.x - pa.x;
+    const dy = (bH.y + bL.y) / 2 - (aH.y + aL.y) / 2;
+    const len = Math.hypot(dx, dy) || 1;
+    // perpendicular unit vector for label offset
+    const ox = (-dy / len) * 12;
+    const oy = (dx / len) * 12;
     const distText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    distText.setAttribute('x', midX);
-    distText.setAttribute('y', midY);
+    distText.setAttribute('x', midX + ox);
+    distText.setAttribute('y', midY + oy);
     distText.setAttribute('text-anchor', 'middle');
     distText.setAttribute('class', 'svg-dimension-text');
     distText.textContent = formatLength(e.length);
