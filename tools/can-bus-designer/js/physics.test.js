@@ -112,4 +112,43 @@ describe('trunkLengthFromStations', () => {
   });
 });
 
+describe('branched topology', () => {
+  it('longest path uses Y-branch diameter', () => {
+    const stations = [
+      { id: 'a', parentId: null, distanceFromParent: 0 },
+      { id: 'j', parentId: 'a', distanceFromParent: 5 },
+      { id: 'b', parentId: 'j', distanceFromParent: 6 },
+      { id: 'c', parentId: 'j', distanceFromParent: 3 }
+    ];
+    const edges = P.trunkEdgesFromStations(stations);
+    // A—5—J—6—B = 11 (longest path endpoints A–B)
+    assert.equal(P.longestPathLengthM(['a', 'j', 'b', 'c'], edges), 11);
+  });
+  it('leaves are degree-1 nodes', () => {
+    const stations = [
+      { id: 'a', parentId: null },
+      { id: 'j', parentId: 'a', distanceFromParent: 1 },
+      { id: 'b', parentId: 'j', distanceFromParent: 1 },
+      { id: 'c', parentId: 'j', distanceFromParent: 1 }
+    ];
+    const edges = P.trunkEdgesFromStations(stations);
+    const leaves = P.leafStationIds(['a', 'j', 'b', 'c'], edges).sort();
+    assert.deepEqual(leaves, ['a', 'b', 'c']);
+  });
+});
+
+describe('standards packs', () => {
+  it('exposes ISO, J1939, CiA packs', () => {
+    assert.ok(P.getStandardsPack('iso11898-2'));
+    assert.ok(P.getStandardsPack('j1939'));
+    assert.ok(P.getStandardsPack('cia'));
+  });
+  it('J1939 allows longer stubs at 250 kbps than ISO', () => {
+    assert.ok(
+      P.maxStubLimitM(250, { packId: 'j1939' }) >
+      P.maxStubLimitM(250, { packId: 'iso11898-2' })
+    );
+  });
+});
+
 console.log('CAN physics unit tests defined.');

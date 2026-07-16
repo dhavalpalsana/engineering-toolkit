@@ -118,6 +118,15 @@
               </select>
             </div>
             <div class="form-group full-width" style="margin-top: 10px;">
+              <label for="select-standards-pack">Standards pack</label>
+              <select id="select-standards-pack" class="input-field" title="Ruleset for must-have checks and design guidelines">
+                <option value="iso11898-2" selected>ISO 11898-2 (high-speed CAN)</option>
+                <option value="j1939">SAE J1939 (physical guidance)</option>
+                <option value="cia">CiA recommendations</option>
+              </select>
+              <p id="standards-pack-desc" style="font-size:11px;color:var(--text-muted);margin:6px 0 0;line-height:1.35;"></p>
+            </div>
+            <div class="form-group full-width" style="margin-top: 10px;">
               <label for="select-unit">Length Unit</label>
               <select id="select-unit" class="input-field">
                 <option value="m" selected>Meters (m)</option>
@@ -126,6 +135,14 @@
                 <option value="in">Inches (in)</option>
                 <option value="ft">Feet (ft)</option>
               </select>
+            </div>
+            <div class="form-group full-width" style="margin-top: 10px;">
+              <label for="select-active-bus">Active bus / network</label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <select id="select-active-bus" class="input-field" style="flex:1;"></select>
+                <button type="button" id="btn-add-bus" class="btn" style="padding:6px 10px;font-size:11px;white-space:nowrap;" title="Add a second CAN network (e.g. behind a gateway)">+ Bus</button>
+              </div>
+              <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;line-height:1.35;">Each bus is electrically separate (use for gateways). Branch trunk with “+ Branch” on a station.</p>
             </div>
           </div>
 
@@ -182,7 +199,7 @@
           <!-- Station Configuration Card -->
           <div class="section-card" style="background: none; border: none; padding: 0;">
             <div class="section-title" style="margin-bottom: 12px; flex-wrap: wrap; gap: 6px;">
-              <span>Harness Stations (Spaced Segments)</span>
+              <span>Stations &amp; trunk topology</span>
               <button id="btn-topology-wizard" class="btn" style="padding: 4px 10px; font-size: 11px;" title="Guided multi-drop or backbone+stubs setup">
                 Wizard
               </button>
@@ -197,7 +214,7 @@
               </button>
             </div>
             <p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;line-height:1.4;">
-              Stations are junctions on the trunk. Add devices as ECU stubs; set <strong>Termination</strong> (120&nbsp;Ω) on the end stations.
+              Stations are trunk junctions. <strong>+ Branch</strong> creates a Y-split. Devices are ECU stubs. Put <strong>120&nbsp;Ω</strong> termination on the two electrical ends of each bus.
             </p>
             <div id="station-list-container" style="display: flex; flex-direction: column; gap: 12px;">
               <!-- Dynamically populated with station cards -->
@@ -390,21 +407,35 @@
         </div>
       </div>
 
-      <!-- Diagnostics & Visualizations (below canvas) -->
+      <!-- Diagnostics (compact single stack under canvas) -->
       <div class="diagnostics-panel">
-        
-        <!-- Top Alert Notification Banner (full width of diagnostics row) -->
         <div id="compliance-banner" class="banner banner-success diagnostics-banner">
           <i data-lucide="check-circle" id="banner-icon"></i>
           <span id="banner-text">All harness parameters meet ISO 11898 physical layer constraints.</span>
         </div>
 
-        <div class="diagnostics-grid">
-          <!-- Signal Integrity Risk Card -->
-          <div class="stats-card diagnostics-risk-card">
-            <div>
-              <div class="stat-label" style="margin-top: 0; display: flex; align-items: center; justify-content: space-between;">
-                <span>SIGNAL REFLECTION RISK</span>
+        <div class="diagnostics-summary">
+          <!-- Key numbers + risk in one strip -->
+          <div class="diagnostics-metrics-strip">
+            <div class="diag-metric">
+              <div class="stat-value" id="val-resistance">60 Ω</div>
+              <div class="stat-label">Bus impedance</div>
+            </div>
+            <div class="diag-metric">
+              <div class="stat-value" id="val-trunk-len">35.0 m</div>
+              <div class="stat-label">Trunk length</div>
+            </div>
+            <div class="diag-metric">
+              <div class="stat-value" id="val-prop-time">350 ns</div>
+              <div class="stat-label">Round-trip prop</div>
+            </div>
+            <div class="diag-metric">
+              <div class="stat-value" id="val-time-budget">800 ns</div>
+              <div class="stat-label">Sample budget</div>
+            </div>
+            <div class="diag-metric diag-risk">
+              <div class="diag-risk-row">
+                <span class="stat-label" style="margin:0;">Reflection risk</span>
                 <span id="risk-badge" class="risk-level-badge risk-low">LOW</span>
               </div>
               <div class="risk-gauge-container">
@@ -412,55 +443,31 @@
                   <div class="risk-gauge-fill" id="risk-gauge-fill"></div>
                 </div>
               </div>
-              
-              <!-- Waveform & Eye Diagram Preview -->
-              <div class="waveform-container">
-                <span class="waveform-title" id="waveform-title-text">Estimated Ringing / Reflections</span>
-                <div class="scope-toggle-container">
-                  <button id="scope-btn-scope" class="scope-toggle-btn active" title="Show continuous transient signal trace">Scope</button>
-                  <button id="scope-btn-eye" class="scope-toggle-btn" title="Show folded transitions eye diagram">Eye Diagram</button>
-                </div>
-                <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
-              </div>
-            </div>
-            <div class="stat-footer" style="margin-top: 8px;">
-              Qualitative signal analysis at receiving ends. Ringing increases with stub lengths.
             </div>
           </div>
 
-          <!-- Equivalent Resistance & Timing Card (Status) -->
-          <div class="stats-card diagnostics-metrics-card">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-              <div>
-                <div class="stat-value" id="val-resistance">60 Ω</div>
-                <div class="stat-label">BUS IMPEDANCE (Req)</div>
-              </div>
-              <div>
-                <div class="stat-value" id="val-trunk-len">35.0 m</div>
-                <div class="stat-label">TOTAL BUS LENGTH</div>
-              </div>
-              <div>
-                <div class="stat-value" id="val-prop-time">350 ns</div>
-                <div class="stat-label">ROUND-TRIP PROP TIME</div>
-              </div>
-              <div>
-                <div class="stat-value" id="val-time-budget">800 ns</div>
-                <div class="stat-label">BIT TIME BUDGET</div>
-              </div>
+          <!-- Checklist: compact grid of status chips -->
+          <div class="diagnostics-checks">
+            <div class="diagnostics-section-label">
+              <i data-lucide="shield-alert" style="width:14px;height:14px;color:var(--accent);"></i>
+              Compliance checks
             </div>
-            <div class="stat-footer" style="margin-top: 12px;">
-              Target impedance: 60 Ω. Round-trip prop time must not exceed sample point time budget.
-            </div>
-          </div>
-
-          <!-- Compliance Diagnostics Checklist -->
-          <div class="checklist-card diagnostics-checklist-card">
-            <span class="panel-title" style="margin-bottom: 12px;">
-              <i data-lucide="shield-alert" style="color: var(--accent);"></i>
-              ISO 11898 / Physics Compliance Checklist
-            </span>
-            <div class="checklist" id="checklist-body">
+            <div class="checklist checklist-compact" id="checklist-body">
               <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Waveform: full width, secondary -->
+          <div class="diagnostics-scope">
+            <div class="diagnostics-scope-header">
+              <span class="waveform-title" id="waveform-title-text">Estimated ringing / reflections</span>
+              <div class="scope-toggle-container">
+                <button type="button" id="scope-btn-scope" class="scope-toggle-btn active" title="Show continuous transient signal trace">Scope</button>
+                <button type="button" id="scope-btn-eye" class="scope-toggle-btn" title="Show folded transitions eye diagram">Eye Diagram</button>
+              </div>
+            </div>
+            <div class="waveform-container">
+              <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
             </div>
           </div>
         </div>

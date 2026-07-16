@@ -1,5 +1,11 @@
 // State Management
 let stations = [];
+/** @type {{ id: string, name: string }[]} */
+let buses = [{ id: 'bus-1', name: 'CAN Network' }];
+let activeBusId = 'bus-1';
+/** Standards pack id: iso11898-2 | j1939 | cia */
+let standardsPackId = 'iso11898-2';
+
 let networkConfig = {
   baudRate: 250, // kbps
   samplePoint: 80, // %
@@ -90,24 +96,80 @@ const DATA_CUMULATIVE_LIMITS = {
 };
 
 /**
- * Stations are junctions on the backbone (splitters/taps).
- * Optional station.termination (Ω) models a terminator at that location.
- * Devices are ECUs hanging off the station via stubLength.
+ * Stations = junctions on a trunk graph (tree per bus).
+ * - parentId + distanceFromParent: trunk edge to parent (null parent = root of a chain/bus)
+ * - Multiple children of one parent = Y-split / branched trunk
+ * - busId: which CAN network (gateway = separate bus)
+ * - termination (Ω) at the junction
+ * - devices[]: ECUs on stubs off the junction
  */
 function ensureStationDefaults(st) {
   if (!st || typeof st !== 'object') return st;
   if (st.termination == null || st.termination === '') st.termination = 0;
   else st.termination = Number(st.termination) || 0;
-  // Drop legacy type field if present (no longer used in UI)
   if ('type' in st) delete st.type;
   if (!Array.isArray(st.devices)) st.devices = [];
+  if (!st.busId) st.busId = activeBusId || 'bus-1';
+  if (st.distanceFromParent == null && st.distanceFromPrev != null) {
+    st.distanceFromParent = Number(st.distanceFromPrev) || 0;
+  }
+  if (st.distanceFromParent == null) st.distanceFromParent = 0;
+  // Keep legacy field in sync for older UI paths
+  st.distanceFromPrev = st.distanceFromParent;
   return st;
 }
 
+function ensureBuses() {
+  if (!Array.isArray(buses) || buses.length === 0) {
+    buses = [{ id: 'bus-1', name: 'CAN Network' }];
+  }
+  if (!buses.some(b => b.id === activeBusId)) {
+    activeBusId = buses[0].id;
+  }
+}
+
+/** Migrate legacy linear lists → tree (parent chain) when parentId missing. */
+function migrateLinearParentsInPlace() {
+  ensureBuses();
+  const byBus = new Map();
+  stations.forEach((st) => {
+    ensureStationDefaults(st);
+    if (!byBus.has(st.busId)) byBus.set(st.busId, []);
+    byBus.get(st.busId).push(st);
+  });
+  byBus.forEach((list) => {
+    // Preserve array order within each bus for stations still lacking parentId
+    let prev = null;
+    list.forEach((st, i) => {
+      if (st.parentId === undefined) {
+        if (i === 0 || !prev) {
+          st.parentId = null;
+          st.distanceFromParent = 0;
+        } else {
+          st.parentId = prev.id;
+          st.distanceFromParent = Number(st.distanceFromPrev) || Number(st.distanceFromParent) || 0.001;
+        }
+      }
+      if (st.parentId === st.id) st.parentId = null;
+      st.distanceFromPrev = st.distanceFromParent;
+      prev = st;
+    });
+  });
+}
+
 function normalizeStationsInPlace() {
+  ensureBuses();
+  migrateLinearParentsInPlace();
   stations.forEach(ensureStationDefaults);
-  // Trunk positions are cumulative from the first station; its spacing is always 0.
-  if (stations.length > 0) stations[0].distanceFromPrev = 0;
+  // Validate parents exist; orphan → root
+  const ids = new Set(stations.map(s => s.id));
+  stations.forEach(st => {
+    if (st.parentId && !ids.has(st.parentId)) {
+      st.parentId = null;
+      st.distanceFromParent = 0;
+      st.distanceFromPrev = 0;
+    }
+  });
 }
 
 // Prefer shared physics module (js/physics.js); fall back if not loaded
@@ -133,12 +195,57 @@ const computeArbitrationTiming = _phys
       const propNs = 2 * (L * tau + loop) + margin;
       return { bitTimeNs, budgetNs, propNs, marginNs: margin, ok: propNs < budgetNs, tight: propNs >= budgetNs * 0.8 && propNs < budgetNs };
     };
-const maxTrunkLengthM = _phys
-  ? _phys.maxTrunkLengthM.bind(_phys)
-  : function maxTrunkLengthM(baudKbps) {
-      const table = { 1000: 40, 800: 50, 500: 100, 250: 250, 125: 500, 50: 1000, 20: 2500, 10: 5000 };
-      return table[baudKbps] || 40;
-    };
+const maxTrunkLengthM = (baudKbps) =>
+  _phys ? _phys.maxTrunkLengthM(baudKbps, standardsPackId) : ({ 1000: 40, 800: 50, 500: 100, 250: 250, 125: 500, 50: 1000, 20: 2500, 10: 5000 }[baudKbps] || 40);
+
+function getActivePack() {
+  return _phys && _phys.getStandardsPack
+    ? _phys.getStandardsPack(standardsPackId)
+    : { id: 'iso11898-2', name: 'ISO 11898-2', hard: {}, guidelines: {}, starWarnAt: 2, starFailAt: 3, minNodeSpacingM: 0.1 };
+}
+
+function stationsOnBus(busId) {
+  const id = busId || activeBusId;
+  return stations.filter(s => (s.busId || 'bus-1') === id);
+}
+
+function trunkEdges(busId) {
+  const list = stationsOnBus(busId);
+  if (_phys && _phys.trunkEdgesFromStations) return _phys.trunkEdgesFromStations(list);
+  return list.filter(s => s.parentId).map(s => ({
+    from: s.parentId,
+    to: s.id,
+    length: Number(s.distanceFromParent != null ? s.distanceFromParent : s.distanceFromPrev) || 0,
+    busId: s.busId
+  }));
+}
+
+function electricalLengthM(busId) {
+  const list = stationsOnBus(busId);
+  const edges = trunkEdges(busId);
+  if (_phys && _phys.longestPathLengthM) {
+    return _phys.longestPathLengthM(list.map(s => s.id), edges);
+  }
+  return edges.reduce((s, e) => s + e.length, 0);
+}
+
+function cableLengthM(busId) {
+  const edges = trunkEdges(busId);
+  if (_phys && _phys.totalTrunkCableM) return _phys.totalTrunkCableM(edges);
+  return edges.reduce((s, e) => s + e.length, 0);
+}
+
+function leafIds(busId) {
+  const list = stationsOnBus(busId);
+  const edges = trunkEdges(busId);
+  if (_phys && _phys.leafStationIds) return _phys.leafStationIds(list.map(s => s.id), edges);
+  if (list.length <= 1) return list.map(s => s.id);
+  return [list[0].id, list[list.length - 1].id];
+}
+
+function childStations(parentId) {
+  return stations.filter(s => s.parentId === parentId);
+}
 
 /** All termination resistors (station-level + device-level for legacy/onboard ECU terms). */
 function collectTerminations() {
@@ -165,18 +272,38 @@ function stationIsTerminated(s) {
 
 function maxStubLimitMeters() {
   readConfigInputs();
+  if (_phys && _phys.maxStubLimitM) {
+    return _phys.maxStubLimitM(networkConfig.baudRate, {
+      canFd: networkConfig.enableCanFD,
+      dataBaudKbps: networkConfig.dataBaudRate,
+      packId: standardsPackId
+    });
+  }
   if (networkConfig.enableCanFD) {
     return DATA_STUB_LIMITS[networkConfig.dataBaudRate] ?? STANDARD_STUB_LIMITS[networkConfig.baudRate] ?? 0.3;
   }
   return STANDARD_STUB_LIMITS[networkConfig.baudRate] ?? 0.3;
 }
 
+function maxCumStubLimitMeters() {
+  readConfigInputs();
+  if (_phys && _phys.maxCumStubLimitM) {
+    return _phys.maxCumStubLimitM(networkConfig.baudRate, {
+      canFd: networkConfig.enableCanFD,
+      dataBaudKbps: networkConfig.dataBaudRate,
+      packId: standardsPackId
+    });
+  }
+  return STANDARD_CUMULATIVE_LIMITS[networkConfig.baudRate] ?? 15;
+}
+
 function stubGuidanceText() {
   const maxM = maxStubLimitMeters();
+  const pack = getActivePack();
   const br = networkConfig.enableCanFD
     ? `CAN FD data ${networkConfig.dataBaudRate} kbps`
     : `${networkConfig.baudRate} kbps`;
-  return `ISO 11898 guidance: max stub ≈ ${formatLength(maxM)} at ${br}. Keep stubs short; use backbone + short drops.`;
+  return `${pack.shortName || pack.name}: max stub ≈ ${formatLength(maxM)} at ${br}.`;
 }
 
 // Dragging State
@@ -545,19 +672,60 @@ function bindEvents() {
     render();
   });
 
-  // Add Station
+  // Add Station — extends main chain on active bus (append to a leaf root path)
   btnAddStation.addEventListener('click', () => {
+    ensureBuses();
+    const onBus = stationsOnBus(activeBusId);
+    // Prefer attaching to a leaf of the active bus; else new root
+    const leaves = leafIds(activeBusId).map(id => stations.find(s => s.id === id)).filter(Boolean);
+    const parent = leaves.length ? leaves[leaves.length - 1] : (onBus[onBus.length - 1] || null);
     const newStation = {
       id: 's_' + Date.now().toString(),
       name: `Station ${stations.length + 1}`,
-      distanceFromPrev: stations.length === 0 ? 0 : 5.0,
-      termination: 0, // optional bus terminator at this junction
+      parentId: parent ? parent.id : null,
+      distanceFromParent: parent ? 5.0 : 0,
+      distanceFromPrev: parent ? 5.0 : 0,
+      busId: activeBusId,
+      termination: 0,
       devices: [
         { id: 'd_' + Date.now().toString(), name: `Device ${stations.length + 1}`, stubLength: 0.1, termination: 0 }
       ]
     };
     stations.push(newStation);
     try { if (window.ETAnalytics) window.ETAnalytics.trackEngaged('can-bus-designer'); } catch (_) {}
+    render();
+  });
+
+  document.getElementById('select-standards-pack')?.addEventListener('change', (e) => {
+    standardsPackId = e.target.value || 'iso11898-2';
+    refreshStandardsPackUi();
+    render();
+  });
+
+  document.getElementById('select-active-bus')?.addEventListener('change', (e) => {
+    activeBusId = e.target.value || activeBusId;
+    render();
+  });
+
+  document.getElementById('btn-add-bus')?.addEventListener('click', () => {
+    const n = buses.length + 1;
+    const id = 'bus-' + n + '-' + Date.now().toString(36);
+    const name = prompt('Name for the new CAN bus (e.g. Body CAN, Powertrain CAN):', `CAN Network ${n}`);
+    if (name === null) return;
+    buses.push({ id, name: (name || `CAN Network ${n}`).trim() });
+    activeBusId = id;
+    // Seed a root station with termination for the new bus
+    stations.push({
+      id: 's_' + Date.now().toString(36),
+      name: `${name || 'Bus'} Root`,
+      parentId: null,
+      distanceFromParent: 0,
+      distanceFromPrev: 0,
+      busId: id,
+      termination: 120,
+      devices: [{ id: 'd_' + Date.now().toString(36), name: 'Gateway A', stubLength: 0.1, termination: 0 }]
+    });
+    if (window.showToast) window.showToast('New bus added — design each side of a gateway as a separate bus.');
     render();
   });
 
@@ -766,15 +934,18 @@ function applyPreset(presetKey) {
 
   // Deep clone stations
   stations = JSON.parse(JSON.stringify(preset.stations));
+  buses = [{ id: 'bus-1', name: 'CAN Network' }];
+  activeBusId = 'bus-1';
   // Prefer station-level termination: if a station has no term but devices do,
   // lift the largest device terminator onto the station (once) for end-of-bus clarity.
   stations.forEach(st => {
+    st.busId = 'bus-1';
+    st.parentId = undefined; // force linear migrate
     st.termination = Number(st.termination) || 0;
     if (!st.termination && Array.isArray(st.devices)) {
       const devTerms = st.devices.map(d => Number(d.termination) || 0).filter(t => t > 0);
       if (devTerms.length) {
         st.termination = Math.max(...devTerms);
-        // Keep device terms as-is if multiple (over-term demos); if single lift, clear device to avoid double-count
         if (devTerms.length === 1) {
           st.devices.forEach(d => { if ((d.termination || 0) > 0) d.termination = 0; });
         }
@@ -799,14 +970,72 @@ function applyPreset(presetKey) {
   render();
 }
 
+/** Cumulative trunk distance along ordered UI walk of the active bus (for linear spine drawing). */
 function getCumulativePositions() {
+  const ordered = orderedStationsForUi(activeBusId);
   let positions = [];
   let current = 0;
-  for (let i = 0; i < stations.length; i++) {
-    current += stations[i].distanceFromPrev;
-    positions.push(current);
+  ordered.forEach(({ station }, i) => {
+    if (i === 0 || !station.parentId) current = 0;
+    else current = (positions[positions.length - 1] || 0); // reset not right for tree
+    // Better: distance from root along unique path
+    positions.push(distanceFromRoot(station.id));
+  });
+  // Fallback linear if empty
+  if (!positions.length) {
+    let c = 0;
+    stationsOnBus(activeBusId).forEach((st, i) => {
+      if (i > 0) c += Number(st.distanceFromParent || st.distanceFromPrev) || 0;
+      positions.push(c);
+    });
   }
   return positions;
+}
+
+function distanceFromRoot(stationId) {
+  const byId = new Map(stations.map(s => [s.id, s]));
+  let d = 0;
+  let guard = 0;
+  let s = byId.get(stationId);
+  while (s && s.parentId && byId.has(s.parentId) && guard++ < 64) {
+    d += Number(s.distanceFromParent != null ? s.distanceFromParent : s.distanceFromPrev) || 0;
+    s = byId.get(s.parentId);
+  }
+  return d;
+}
+
+/**
+ * Layout positions for active-bus stations (mm world coords for SVG mapper).
+ * x = distance from root along parent chain; y = branch lane offset.
+ */
+function computeBranchLayout(busId) {
+  const list = stationsOnBus(busId);
+  const pos = new Map();
+  if (!list.length) return pos;
+
+  const children = new Map();
+  list.forEach(s => {
+    const p = s.parentId || '__root__';
+    if (!children.has(p)) children.set(p, []);
+    children.get(p).push(s);
+  });
+
+  let laneCounter = 0;
+  function walk(st, lane) {
+    const x = distanceFromRoot(st.id);
+    pos.set(st.id, { x, y: lane * 45, station: st });
+    const kids = children.get(st.id) || [];
+    if (kids.length <= 1) {
+      kids.forEach(k => walk(k, lane));
+    } else {
+      kids.forEach((k, i) => {
+        const childLane = i === 0 ? lane : ++laneCounter;
+        walk(k, childLane);
+      });
+    }
+  }
+  (children.get('__root__') || []).forEach((root, i) => walk(root, i === 0 ? 0 : ++laneCounter));
+  return pos;
 }
 
 function getPhysicalPositionFromX(localX) {
@@ -1327,39 +1556,51 @@ function parseDbcSnippet() {
 function openTopologyWizard() {
   const choice = prompt(
     'New harness wizard:\n' +
-    '1 = Multi-drop daisy-chain (ECUs on backbone)\n' +
-    '2 = Backbone + short stubs (splice stations)\n' +
-    '3 = Empty\n\nEnter 1, 2, or 3:',
+    '1 = Multi-drop daisy-chain (linear backbone)\n' +
+    '2 = Backbone + stub splices\n' +
+    '3 = Y-split branched trunk\n' +
+    '4 = Empty\n\nEnter 1–4:',
     '1'
   );
   if (!choice) return;
-  if (choice === '3') {
+  buses = [{ id: 'bus-1', name: 'CAN Network' }];
+  activeBusId = 'bus-1';
+  if (choice === '4') {
     stations = [];
     render();
     return;
   }
-  if (choice === '2') {
+  if (choice === '3') {
+    // Branched trunk: main A—J—B with branch J—C
     stations = [
-      { id: 's1', name: 'End A', distanceFromPrev: 0, termination: 120, devices: [{ id: 'd1', name: 'ECU A', stubLength: 0.1, termination: 0 }] },
-      { id: 's2', name: 'Harness Splitter', distanceFromPrev: 5, termination: 0, devices: [{ id: 'd2', name: 'Sensor', stubLength: 0.15, termination: 0 }] },
-      { id: 's3', name: 'Star Junction', distanceFromPrev: 4, termination: 0, devices: [
+      { id: 's1', name: 'End A', parentId: null, distanceFromParent: 0, termination: 120, busId: 'bus-1', devices: [{ id: 'd1', name: 'ECU A', stubLength: 0.1, termination: 0 }] },
+      { id: 's2', name: 'Y-Junction', parentId: 's1', distanceFromParent: 5, termination: 0, busId: 'bus-1', devices: [] },
+      { id: 's3', name: 'End B', parentId: 's2', distanceFromParent: 6, termination: 120, busId: 'bus-1', devices: [{ id: 'd2', name: 'ECU B', stubLength: 0.1, termination: 0 }] },
+      { id: 's4', name: 'Branch C', parentId: 's2', distanceFromParent: 3, termination: 0, busId: 'bus-1', devices: [{ id: 'd3', name: 'Door Module', stubLength: 0.15, termination: 0 }] }
+    ];
+  } else if (choice === '2') {
+    stations = [
+      { id: 's1', name: 'End A', distanceFromPrev: 0, termination: 120, busId: 'bus-1', devices: [{ id: 'd1', name: 'ECU A', stubLength: 0.1, termination: 0 }] },
+      { id: 's2', name: 'Harness Splitter', distanceFromPrev: 5, termination: 0, busId: 'bus-1', devices: [{ id: 'd2', name: 'Sensor', stubLength: 0.15, termination: 0 }] },
+      { id: 's3', name: 'Multi-drop', distanceFromPrev: 4, termination: 0, busId: 'bus-1', devices: [
         { id: 'd3', name: 'Module B', stubLength: 0.2, termination: 0 },
         { id: 'd4', name: 'Module C', stubLength: 0.2, termination: 0 }
       ]},
-      { id: 's4', name: 'End B', distanceFromPrev: 6, termination: 120, devices: [{ id: 'd5', name: 'ECU B', stubLength: 0.1, termination: 0 }] }
+      { id: 's4', name: 'End B', distanceFromPrev: 6, termination: 120, busId: 'bus-1', devices: [{ id: 'd5', name: 'ECU B', stubLength: 0.1, termination: 0 }] }
     ];
   } else {
     stations = [
-      { id: 's1', name: 'Node 1', distanceFromPrev: 0, termination: 120, devices: [{ id: 'd1', name: 'ECU 1', stubLength: 0.05, termination: 0 }] },
-      { id: 's2', name: 'Node 2', distanceFromPrev: 3, termination: 0, devices: [{ id: 'd2', name: 'ECU 2', stubLength: 0.05, termination: 0 }] },
-      { id: 's3', name: 'Node 3', distanceFromPrev: 3, termination: 0, devices: [{ id: 'd3', name: 'ECU 3', stubLength: 0.05, termination: 0 }] },
-      { id: 's4', name: 'Node 4', distanceFromPrev: 3, termination: 120, devices: [{ id: 'd4', name: 'ECU 4', stubLength: 0.05, termination: 0 }] }
+      { id: 's1', name: 'Node 1', distanceFromPrev: 0, termination: 120, busId: 'bus-1', devices: [{ id: 'd1', name: 'ECU 1', stubLength: 0.05, termination: 0 }] },
+      { id: 's2', name: 'Node 2', distanceFromPrev: 3, termination: 0, busId: 'bus-1', devices: [{ id: 'd2', name: 'ECU 2', stubLength: 0.05, termination: 0 }] },
+      { id: 's3', name: 'Node 3', distanceFromPrev: 3, termination: 0, busId: 'bus-1', devices: [{ id: 'd3', name: 'ECU 3', stubLength: 0.05, termination: 0 }] },
+      { id: 's4', name: 'Node 4', distanceFromPrev: 3, termination: 120, busId: 'bus-1', devices: [{ id: 'd4', name: 'ECU 4', stubLength: 0.05, termination: 0 }] }
     ];
   }
+  stations.forEach(s => { if (s.parentId === undefined) s.parentId = undefined; });
   normalizeStationsInPlace();
   try { if (window.ETAnalytics) window.ETAnalytics.trackEngaged('can-bus-designer'); } catch (_) {}
   render();
-  if (window.showToast) window.showToast('Wizard topology applied — adjust spacing and stubs as needed');
+  if (window.showToast) window.showToast('Wizard topology applied — use + Branch for more Y-splits');
 }
 
 function exportHarnessSvg() {
@@ -1473,49 +1714,76 @@ function exportHarnessBomCsv() {
   if (window.showToast) window.showToast('Harness BOM CSV exported.');
 }
 
-// Render inputs list (Station hierarchy)
+function orderedStationsForUi(busId) {
+  const list = stationsOnBus(busId);
+  const byParent = new Map();
+  list.forEach(s => {
+    const p = s.parentId || '__root__';
+    if (!byParent.has(p)) byParent.set(p, []);
+    byParent.get(p).push(s);
+  });
+  const out = [];
+  const walk = (pid, depth) => {
+    (byParent.get(pid) || []).forEach(s => {
+      out.push({ station: s, depth });
+      walk(s.id, depth + 1);
+    });
+  };
+  walk('__root__', 0);
+  // Orphans already re-rooted in normalize
+  return out;
+}
+
+// Render inputs list (Station hierarchy / tree)
 function renderStationCards() {
   stationListContainer.innerHTML = '';
-  
-  if (stations.length === 0) {
+  normalizeStationsInPlace();
+  refreshBusSelect();
+  refreshStandardsPackUi();
+
+  const busStations = stationsOnBus(activeBusId);
+  if (busStations.length === 0) {
     stationListContainer.innerHTML = `
       <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px; background: var(--bg-secondary); border: 1px dashed var(--border-color); border-radius: var(--r-md)">
-        No stations configured. Click 'Add Station' or double-click canvas background to start building.
+        No stations on this bus. Click <strong>Add Station</strong> or use the Wizard.
       </div>
     `;
     return;
   }
 
-  stations.forEach((station, index) => {
-    const isFirst = index === 0;
+  const ordered = orderedStationsForUi(activeBusId);
+  ordered.forEach(({ station, depth }, index) => {
+    const isRoot = !station.parentId;
+    const parent = station.parentId ? stations.find(s => s.id === station.parentId) : null;
 
-    // Render connection line and spacing input in-between stations
-    if (!isFirst) {
+    // Trunk edge length from parent
+    if (!isRoot) {
       const connector = document.createElement('div');
       connector.className = 'station-connector';
+      connector.style.marginLeft = `${Math.min(depth, 4) * 12}px`;
       connector.innerHTML = `
         <div class="connector-line"></div>
         <div class="connector-input-wrapper">
-          <i data-lucide="route" style="width: 13px; height: 13px; color: var(--text-muted);"></i>
-          <span class="connector-label">Spacing:</span>
-          <input type="number" class="station-dist-input" value="${fromMeters(station.distanceFromPrev).toFixed(currentUnit === 'mm' ? 0 : 1)}" data-action="edit-station-dist" min="0.001" step="any" title="Distance from previous node in ${currentUnit}">
+          <i data-lucide="git-branch" style="width: 13px; height: 13px; color: var(--text-muted);"></i>
+          <span class="connector-label">${parent ? 'From ' + parent.name : 'Trunk'}:</span>
+          <input type="number" class="station-dist-input" value="${fromMeters(station.distanceFromParent || 0).toFixed(currentUnit === 'mm' ? 0 : 1)}" data-action="edit-station-dist" min="0.001" step="any" title="Trunk cable length from parent junction (${currentUnit})">
           <span style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">${currentUnit}</span>
         </div>
         <div class="connector-line"></div>
       `;
-
-      // Bind spacing edit event
       connector.querySelector('[data-action="edit-station-dist"]').addEventListener('change', (e) => {
-        station.distanceFromPrev = Math.max(0.001, toMeters(parseFloat(e.target.value) || 0));
+        const len = Math.max(0.001, toMeters(parseFloat(e.target.value) || 0));
+        station.distanceFromParent = len;
+        station.distanceFromPrev = len;
         render();
       });
-
       stationListContainer.appendChild(connector);
     }
 
     const card = document.createElement('div');
     card.className = 'station-card';
     card.dataset.id = station.id;
+    card.style.marginLeft = `${Math.min(depth, 4) * 12}px`;
 
     ensureStationDefaults(station);
     const stubMax = maxStubLimitMeters();
@@ -1527,13 +1795,15 @@ function renderStationCards() {
           <i data-lucide="grip-vertical" style="width: 14px; height: 14px; color: var(--text-muted); margin-right: -4px;"></i>
           <i data-lucide="map-pin" style="width: 14px; height: 14px; color: var(--accent);"></i>
           <input type="text" class="station-name-input" value="${station.name}" data-action="edit-station-name" title="Station name">
-          ${isFirst ? `<span class="start-badge">Start</span>` : ''}
+          ${isRoot ? `<span class="start-badge">Root</span>` : `<span class="start-badge" style="opacity:0.85;">Branch</span>`}
           ${stTerm > 0 ? `<span class="term-badge" title="Bus terminator at this station">${stTerm}&nbsp;Ω</span>` : ''}
         </div>
-        
-        <button class="btn-delete" data-action="delete-station" title="Delete this entire station & connected devices" style="margin-left: 8px;">
-          <i data-lucide="x" style="width: 14px; height: 14px;"></i>
-        </button>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <button type="button" class="btn" data-action="add-branch" title="Add trunk branch (Y-split) from this junction" style="padding:2px 8px;font-size:10px;height:28px;">+ Branch</button>
+          <button class="btn-delete" data-action="delete-station" title="Delete this station (children re-attach to parent)" style="margin-left: 4px;">
+            <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+          </button>
+        </div>
       </div>
       <div class="station-term-row" style="display:flex;align-items:center;gap:8px;padding:0 10px 8px;flex-wrap:wrap;">
         <label style="font-size:11px;color:var(--text-muted);white-space:nowrap;" title="Optional 120 Ω bus terminator at this junction (typical at each physical end)">Termination</label>
@@ -1791,12 +2061,35 @@ function renderStationCards() {
       render();
     });
 
-    // Delete Station
+    // Add trunk branch (Y-split)
+    card.querySelector('[data-action="add-branch"]')?.addEventListener('click', () => {
+      const id = 's_' + Date.now().toString(36);
+      stations.push({
+        id,
+        name: `Branch ${childStations(station.id).length + 1}`,
+        parentId: station.id,
+        distanceFromParent: 2.0,
+        distanceFromPrev: 2.0,
+        busId: station.busId || activeBusId,
+        termination: 0,
+        devices: [{ id: 'd_' + Date.now().toString(36), name: 'Node', stubLength: 0.1, termination: 0 }]
+      });
+      try { if (window.ETAnalytics) window.ETAnalytics.trackEngaged('can-bus-designer'); } catch (_) {}
+      render();
+    });
+
+    // Delete Station — reparent children to this station's parent
     card.querySelector('[data-action="delete-station"]').addEventListener('click', () => {
+      const kids = childStations(station.id);
+      kids.forEach(ch => {
+        ch.parentId = station.parentId || null;
+        if (!ch.parentId) {
+          ch.distanceFromParent = 0;
+          ch.distanceFromPrev = 0;
+        }
+      });
       stations = stations.filter(s => s.id !== station.id);
-      if (stations.length > 0) {
-        stations[0].distanceFromPrev = 0.0;
-      }
+      normalizeStationsInPlace();
       render();
     });
 
@@ -1804,27 +2097,54 @@ function renderStationCards() {
   });
 }
 
+function refreshStandardsPackUi() {
+  const sel = document.getElementById('select-standards-pack');
+  const desc = document.getElementById('standards-pack-desc');
+  if (sel && sel.value !== standardsPackId) sel.value = standardsPackId;
+  if (desc) {
+    const pack = getActivePack();
+    desc.textContent = pack.description || '';
+  }
+}
+
+function refreshBusSelect() {
+  ensureBuses();
+  const sel = document.getElementById('select-active-bus');
+  if (!sel) return;
+  sel.innerHTML = buses.map(b =>
+    `<option value="${b.id}" ${b.id === activeBusId ? 'selected' : ''}>${b.name}</option>`
+  ).join('');
+}
+
 // Core Physics and Rule Checker
 function runDiagnostics() {
-  // Always sync from form before evaluating physics
   readConfigInputs();
   normalizeStationsInPlace();
+
+  const pack = getActivePack();
+  const packLabel = pack.shortName || pack.name || 'Standards';
 
   const diagnostics = {
     errors: [],
     warnings: [],
+    guidelines: [],
     eqResistance: 0,
     totalBusLength: 0,
+    cableLength: 0,
     roundTripPropTime: 0,
     timeBudget: 0,
     riskPercentage: 0,
-    stationStatuses: {}, 
-    deviceStatuses: {} 
+    stationStatuses: {},
+    deviceStatuses: {},
+    standardsPackId,
+    standardsPackName: pack.name || packLabel
   };
 
-  if (stations.length === 0) return diagnostics;
+  if (stations.length === 0) {
+    diagnostics.checklists = [];
+    return diagnostics;
+  }
 
-  // Initial pass to clear statuses
   stations.forEach(s => {
     diagnostics.stationStatuses[s.id] = 'pass';
     (s.devices || []).forEach(d => {
@@ -1832,274 +2152,329 @@ function runDiagnostics() {
     });
   });
 
-  // 1. Trunk Length limits based on Baud Rate (arbitration / nominal rate)
-  const cumPositions = getCumulativePositions();
-  const totalLength = cumPositions[cumPositions.length - 1] || 0;
-  diagnostics.totalBusLength = totalLength;
+  const pushHard = (msg) => diagnostics.errors.push(msg);
+  const pushWarn = (msg) => diagnostics.warnings.push(msg);
+  const pushGuide = (msg) => diagnostics.guidelines.push(msg);
 
-  const maxAllowedTrunk = maxTrunkLengthM(networkConfig.baudRate);
-  let trunkStatus = 'pass';
-  if (totalLength > maxAllowedTrunk) {
-    diagnostics.errors.push(`Total bus trunk length (${totalLength.toFixed(1)}m) exceeds maximum recommended length of ${maxAllowedTrunk}m for ${networkConfig.baudRate} kbps.`);
-    trunkStatus = 'fail';
-  } else if (totalLength > maxAllowedTrunk * 0.8) {
-    diagnostics.warnings.push(`Total bus trunk length (${totalLength.toFixed(1)}m) is nearing the maximum limit (${maxAllowedTrunk}m) for ${networkConfig.baudRate} kbps.`);
-    trunkStatus = 'warn';
+  const hard = pack.hard || {};
+  const guides = pack.guidelines || {};
+
+  // Aggregate across all buses; timing/length use worst-case bus
+  let worstElectricalLen = 0;
+  let totalCable = 0;
+  buses.forEach(bus => {
+    const eLen = electricalLengthM(bus.id);
+    const cLen = cableLengthM(bus.id);
+    if (eLen > worstElectricalLen) worstElectricalLen = eLen;
+    totalCable += cLen;
+  });
+  // Single-bus designs: also cover stations without bus list mismatch
+  if (worstElectricalLen === 0 && stations.length) {
+    worstElectricalLen = electricalLengthM(activeBusId);
+    totalCable = cableLengthM(activeBusId);
   }
 
-  // 2. Equivalent Termination Resistance Check (station + device resistors in parallel)
+  diagnostics.totalBusLength = worstElectricalLen; // electrical diameter (timing)
+  diagnostics.cableLength = totalCable;
+
+  // 1. Trunk length (hard) — electrical diameter vs pack table
+  const maxAllowedTrunk = maxTrunkLengthM(networkConfig.baudRate);
+  let trunkStatus = 'pass';
+  if (hard.trunkLength) {
+    if (worstElectricalLen > maxAllowedTrunk) {
+      pushHard(`[${packLabel}] Electrical trunk span (${worstElectricalLen.toFixed(1)} m) exceeds max ${maxAllowedTrunk} m at ${networkConfig.baudRate} kbps.`);
+      trunkStatus = 'fail';
+    } else if (worstElectricalLen > maxAllowedTrunk * 0.8) {
+      pushWarn(`[${packLabel}] Trunk span (${worstElectricalLen.toFixed(1)} m) is nearing the ${maxAllowedTrunk} m limit at ${networkConfig.baudRate} kbps.`);
+      trunkStatus = 'warn';
+    }
+  }
+
+  // 2. Termination Req (hard)
   const terms = collectTerminations();
   const termResistors = terms.map(t => t.ohms);
   const terminatedCount = terms.length;
-
   const eqRaw = parallelResistance(termResistors);
   const eqResistance = eqRaw === Infinity ? Infinity : Math.round(eqRaw);
   diagnostics.eqResistance = eqResistance;
 
   let resistanceStatus = 'pass';
-  if (terminatedCount === 0) {
-    diagnostics.errors.push("Zero termination resistors detected. High signal reflections will occur. Add 120 Ω termination on the first and last stations.");
-    resistanceStatus = 'fail';
-  } else if (terminatedCount === 1) {
-    diagnostics.errors.push(`Only one termination resistor detected (${termResistors[0]} Ω). Exactly two 120 Ω terminations (ideal Req: 60 Ω) are required at the physical ends.`);
-    resistanceStatus = 'fail';
-  } else if (terminatedCount > 2) {
-    diagnostics.errors.push(`Over-terminated bus. ${terminatedCount} terminations detected, reducing equivalent resistance to ${eqResistance} Ω (Nominal: 60 Ω). This will overload transceiver drivers.`);
-    resistanceStatus = 'fail';
-  } else {
-    // Exactly two resistors: ideal is 60 Ω (two 120s). Allow 50–65 for tolerance / custom values.
-    if (eqResistance < 50 || eqResistance > 65) {
-      diagnostics.warnings.push(`Termination resistance (${eqResistance} Ω) is outside the standard 50-65 Ω compliant range. Check resistor values.`);
+  if (hard.terminationCount) {
+    if (terminatedCount === 0) {
+      pushHard(`[${packLabel}] No termination resistors. Add 120 Ω at the two electrical ends of each bus.`);
+      resistanceStatus = 'fail';
+    } else if (terminatedCount === 1) {
+      pushHard(`[${packLabel}] Only one terminator (${termResistors[0]} Ω). Need exactly two 120 Ω (ideal Req ≈ 60 Ω) per bus.`);
+      resistanceStatus = 'fail';
+    } else if (terminatedCount > 2 && buses.length === 1) {
+      pushHard(`[${packLabel}] Over-terminated (${terminatedCount} resistors, Req ≈ ${eqResistance} Ω). Classic single bus expects two terminators.`);
+      resistanceStatus = 'fail';
+    } else if (terminatedCount === 2 && (eqResistance < 50 || eqResistance > 65)) {
+      pushWarn(`[${packLabel}] Equivalent resistance ${eqResistance} Ω is outside the typical 50–65 Ω band.`);
       resistanceStatus = 'warn';
+    } else if (buses.length > 1) {
+      // Multi-bus: expect ~2 terminators per bus
+      const perBus = {};
+      terms.forEach(t => {
+        const st = stations.find(s => s.id === t.stationId);
+        const bid = (st && st.busId) || 'bus-1';
+        perBus[bid] = (perBus[bid] || 0) + 1;
+      });
+      Object.keys(perBus).forEach(bid => {
+        if (perBus[bid] !== 2) {
+          pushHard(`[${packLabel}] Bus "${(buses.find(b => b.id === bid) || {}).name || bid}" has ${perBus[bid]} terminator(s); expect 2.`);
+          resistanceStatus = 'fail';
+        }
+      });
+      buses.forEach(b => {
+        if (!perBus[b.id]) {
+          pushHard(`[${packLabel}] Bus "${b.name}" has no terminators.`);
+          resistanceStatus = 'fail';
+        }
+      });
     }
   }
 
-  // 3. Termination Resistor Placement Check
-  // Require terminators at both physical ends of the trunk (first & last station).
+  // 3. Placement at electrical ends / leaves (hard)
   let placementStatus = 'pass';
-  const firstStation = stations[0];
-  const lastStation = stations[stations.length - 1];
-  const isFirstTerminated = stationIsTerminated(firstStation);
-  const isLastTerminated = stationIsTerminated(lastStation);
+  if (hard.terminationPlacement) {
+    buses.forEach(bus => {
+      const leaves = leafIds(bus.id);
+      const busStations = stationsOnBus(bus.id);
+      if (!busStations.length) return;
+      const leafSet = new Set(leaves);
+      const termLeaves = busStations.filter(s => stationIsTerminated(s) && leafSet.has(s.id));
+      const termAny = busStations.filter(s => stationIsTerminated(s));
+      const nTerm = termAny.length;
+      // Count device+station terms only on this bus
+      let busTermCount = 0;
+      busStations.forEach(s => {
+        if ((s.termination || 0) > 0) busTermCount++;
+        (s.devices || []).forEach(d => { if ((d.termination || 0) > 0) busTermCount++; });
+      });
 
-  if (terminatedCount === 0) {
-    placementStatus = 'fail';
-  } else if (terminatedCount === 2) {
-    if (!isFirstTerminated || !isLastTerminated) {
-      diagnostics.errors.push("Improper termination placement. Put 120 Ω termination on the first and last stations (physical ends of the trunk).");
-      placementStatus = 'fail';
-      if (!isFirstTerminated) diagnostics.stationStatuses[firstStation.id] = 'fail';
-      if (!isLastTerminated) diagnostics.stationStatuses[lastStation.id] = 'fail';
-    }
-  } else {
-    // 1 or 3+ terminators: placement cannot be correct for a classic linear bus
-    placementStatus = 'fail';
-    if (terminatedCount > 2 && (!isFirstTerminated || !isLastTerminated)) {
-      diagnostics.errors.push("Improper termination placement in addition to over-termination. Ends of the trunk should hold the only two terminators.");
-      if (!isFirstTerminated) diagnostics.stationStatuses[firstStation.id] = 'fail';
-      if (!isLastTerminated) diagnostics.stationStatuses[lastStation.id] = 'fail';
-    }
+      if (busTermCount === 2) {
+        const bothOnLeaves = termAny.every(s => leafSet.has(s.id));
+        if (!bothOnLeaves || termLeaves.length < 2) {
+          pushHard(`[${packLabel}] Terminators on "${bus.name}" must sit at electrical ends (leaf junctions of the trunk tree).`);
+          placementStatus = 'fail';
+          termAny.forEach(s => {
+            if (!leafSet.has(s.id)) diagnostics.stationStatuses[s.id] = 'fail';
+          });
+        }
+      } else if (busTermCount !== 2) {
+        placementStatus = 'fail';
+      }
+    });
   }
 
-  // 4. Individual and Cumulative Stub Lengths
-  let maxIndividualStub = STANDARD_STUB_LIMITS[networkConfig.baudRate] || 0.3;
-  let maxCumulativeStub = STANDARD_CUMULATIVE_LIMITS[networkConfig.baudRate] || 3.0;
-
-  if (networkConfig.enableCanFD) {
-    maxIndividualStub = DATA_STUB_LIMITS[networkConfig.dataBaudRate] || 0.1;
-    maxCumulativeStub = DATA_CUMULATIVE_LIMITS[networkConfig.dataBaudRate] || 0.5;
-  }
-
+  // 4. Individual stubs (hard) + cumulative (guideline)
+  const maxIndividualStub = maxStubLimitMeters();
+  const maxCumulativeStub = maxCumStubLimitMeters();
   let anyStubTooLong = false;
   let totalStubLength = 0;
-  
-  stations.forEach(station => {
-    station.devices.forEach(device => {
-      totalStubLength += device.stubLength;
 
-      if (device.stubLength > maxIndividualStub) {
-        diagnostics.errors.push(`Device "${device.name}" stub length (${device.stubLength.toFixed(2)}m) exceeds maximum allowed ${maxIndividualStub}m for the selected bitrate.`);
+  stations.forEach(station => {
+    (station.devices || []).forEach(device => {
+      totalStubLength += device.stubLength || 0;
+      if (hard.individualStub && device.stubLength > maxIndividualStub) {
+        pushHard(`[${packLabel}] Device "${device.name}" stub (${device.stubLength.toFixed(2)} m) exceeds max ${maxIndividualStub} m.`);
         diagnostics.deviceStatuses[device.id] = 'fail';
         diagnostics.stationStatuses[station.id] = 'fail';
         anyStubTooLong = true;
       } else if (device.stubLength > maxIndividualStub * 0.7) {
-        diagnostics.warnings.push(`Device "${device.name}" stub length (${device.stubLength.toFixed(2)}m) is nearing the limit (${maxIndividualStub}m).`);
-        diagnostics.deviceStatuses[device.id] = 'warn';
-        if (diagnostics.stationStatuses[station.id] !== 'fail') {
-          diagnostics.stationStatuses[station.id] = 'warn';
-        }
+        pushWarn(`[${packLabel}] Device "${device.name}" stub (${device.stubLength.toFixed(2)} m) nearing limit ${maxIndividualStub} m.`);
+        if (diagnostics.deviceStatuses[device.id] !== 'fail') diagnostics.deviceStatuses[device.id] = 'warn';
       }
     });
   });
 
   let cumulativeStubStatus = 'pass';
-  if (totalStubLength > maxCumulativeStub) {
-    diagnostics.errors.push(`Cumulative stub length (${totalStubLength.toFixed(2)}m) exceeds standard maximum of ${maxCumulativeStub}m for the current configuration.`);
-    cumulativeStubStatus = 'fail';
-  } else if (totalStubLength > maxCumulativeStub * 0.8) {
-    diagnostics.warnings.push(`Cumulative stub length (${totalStubLength.toFixed(2)}m) is nearing the limit of ${maxCumulativeStub}m.`);
-    cumulativeStubStatus = 'warn';
+  if (guides.cumulativeStub) {
+    if (totalStubLength > maxCumulativeStub) {
+      pushGuide(`[${packLabel}] Cumulative stub length ${totalStubLength.toFixed(2)} m exceeds design guideline ${maxCumulativeStub} m.`);
+      cumulativeStubStatus = 'guideline';
+    } else if (totalStubLength > maxCumulativeStub * 0.8) {
+      pushGuide(`[${packLabel}] Cumulative stubs ${totalStubLength.toFixed(2)} m nearing guideline ${maxCumulativeStub} m.`);
+      cumulativeStubStatus = 'guideline';
+    }
   }
 
-  // 5. Star Topology (Multiple Devices per Station) Checks
+  // 5. Star / multi-drop junctions — design guidelines (device drops + trunk branches)
   let starTopologyDetected = false;
   let criticalStarTopology = false;
+  const starWarnAt = pack.starWarnAt != null ? pack.starWarnAt : 2;
+  const starFailAt = pack.starFailAt != null ? pack.starFailAt : 3;
 
-  stations.forEach(station => {
-    const devCount = station.devices.length;
-    if (devCount >= 2) {
-      starTopologyDetected = true;
-      if (diagnostics.stationStatuses[station.id] === 'pass') {
-        diagnostics.stationStatuses[station.id] = 'warn';
+  if (guides.starTopology) {
+    stations.forEach(station => {
+      const devCount = (station.devices || []).length;
+      const branchCount = childStations(station.id).length;
+      // Trunk degree ≈ children + (parent ? 1 : 0)
+      const trunkDegree = branchCount + (station.parentId ? 1 : 0);
+      const multiDrop = devCount >= starWarnAt || trunkDegree >= 3;
+
+      if (devCount >= starWarnAt || trunkDegree >= 3) {
+        starTopologyDetected = true;
+        if (diagnostics.stationStatuses[station.id] === 'pass') {
+          diagnostics.stationStatuses[station.id] = 'warn';
+        }
       }
-      
-      if (devCount >= 3) {
+      if (devCount >= starFailAt || trunkDegree >= 4) {
         criticalStarTopology = true;
-        diagnostics.stationStatuses[station.id] = 'fail';
-        diagnostics.errors.push(`Critical star splice: ${devCount} devices connected at "${station.name}". Concentrated capacitive loading will degrade signals; recommend star couplers or an active hub.`);
-      } else {
-        diagnostics.warnings.push(`Star splice detected at "${station.name}" (${devCount} drop devices). Keep drop segments as short as possible.`);
+        pushGuide(`[${packLabel}] Dense junction at "${station.name}" (${devCount} device drop(s), ${trunkDegree} trunk leg(s)). Prefer short drops or active hubs — design guideline.`);
+        if (diagnostics.stationStatuses[station.id] !== 'fail') {
+          diagnostics.stationStatuses[station.id] = 'warn';
+        }
+      } else if (devCount >= starWarnAt) {
+        pushGuide(`[${packLabel}] Multi-drop at "${station.name}" (${devCount} devices). Keep stubs short — design guideline.`);
+      } else if (trunkDegree >= 3) {
+        pushGuide(`[${packLabel}] Trunk branch (Y-split) at "${station.name}" (${trunkDegree} trunk legs). Valid topology; keep branch stubs short — design guideline.`);
       }
-    }
-  });
+    });
+  }
 
-  // 6. Node Spacing Check
+  // 6. Node spacing along trunk edges — guideline
   let spacingStatus = 'pass';
-  let tooCloseStations = [];
-  for (let i = 1; i < stations.length; i++) {
-    const dist = stations[i].distanceFromPrev;
-    if (dist < 0.1) {
-      tooCloseStations.push(`"${stations[i-1].name}" & "${stations[i].name}"`);
+  const minSpace = pack.minNodeSpacingM != null ? pack.minNodeSpacingM : 0.1;
+  if (guides.nodeSpacing) {
+    const edges = [];
+    buses.forEach(b => edges.push(...trunkEdges(b.id)));
+    const close = edges.filter(e => e.length > 0 && e.length < minSpace);
+    if (close.length) {
+      pushGuide(`[${packLabel}] ${close.length} trunk segment(s) shorter than ${minSpace} m — local capacitive clustering risk (design guideline).`);
+      spacingStatus = 'guideline';
     }
   }
 
-  if (tooCloseStations.length > 0) {
-    diagnostics.warnings.push(`Local capacitive clustering: Station spacing is under 0.1m between ${tooCloseStations.join(', ')}. Standard recommends spacing nodes > 0.1m to avoid localized impedance drops.`);
-    spacingStatus = 'warn';
-  }
-
-  // 7. Round-Trip Signal Propagation Time Budget Check (arbitration / nominal phase)
-  // CAN FD data phase does not change this — max trunk length is set by nominal bitrate.
-  const timing = computeArbitrationTiming({
-    baudKbps: networkConfig.baudRate,
-    samplePointPct: networkConfig.samplePoint,
-    trunkLengthM: totalLength,
-    propDelayNsPerM: networkConfig.propDelay,
-    loopDelayNs: networkConfig.loopDelay,
-    marginNs: networkConfig.controllerMargin != null ? networkConfig.controllerMargin : 50
-  });
-  const propTime = timing.propNs;
-  const sampleTime = timing.budgetNs;
-
-  diagnostics.roundTripPropTime = Math.round(propTime);
-  diagnostics.timeBudget = Math.round(sampleTime);
-
+  // 7. Arbitration timing (hard) using electrical diameter
   let timingStatus = 'pass';
-  if (!timing.ok) {
-    diagnostics.errors.push(`Arbitration timing violation! Round-trip propagation time (${Math.round(propTime)} ns) exceeds the sample point budget (${Math.round(sampleTime)} ns). CAN controllers will register bit errors during arbitration.`);
-    timingStatus = 'fail';
-  } else if (timing.tight) {
-    diagnostics.warnings.push(`Tight timing margin. Round-trip propagation time (${Math.round(propTime)} ns) takes up ${Math.round(propTime/sampleTime*100)}% of the sample point budget (${Math.round(sampleTime)} ns).`);
-    timingStatus = 'warn';
+  if (hard.arbitrationTiming) {
+    const timing = computeArbitrationTiming({
+      baudKbps: networkConfig.baudRate,
+      samplePointPct: networkConfig.samplePoint,
+      trunkLengthM: worstElectricalLen,
+      propDelayNsPerM: networkConfig.propDelay,
+      loopDelayNs: networkConfig.loopDelay,
+      marginNs: networkConfig.controllerMargin != null ? networkConfig.controllerMargin : 50
+    });
+    diagnostics.roundTripPropTime = Math.round(timing.propNs);
+    diagnostics.timeBudget = Math.round(timing.budgetNs);
+    if (!timing.ok) {
+      pushHard(`[${packLabel}] Arbitration timing: round-trip ${Math.round(timing.propNs)} ns exceeds sample budget ${Math.round(timing.budgetNs)} ns.`);
+      timingStatus = 'fail';
+    } else if (timing.tight) {
+      pushWarn(`[${packLabel}] Tight timing margin (${Math.round(timing.propNs)} / ${Math.round(timing.budgetNs)} ns).`);
+      timingStatus = 'warn';
+    }
+  } else {
+    const timing = computeArbitrationTiming({
+      baudKbps: networkConfig.baudRate,
+      samplePointPct: networkConfig.samplePoint,
+      trunkLengthM: worstElectricalLen,
+      propDelayNsPerM: networkConfig.propDelay,
+      loopDelayNs: networkConfig.loopDelay,
+      marginNs: networkConfig.controllerMargin != null ? networkConfig.controllerMargin : 50
+    });
+    diagnostics.roundTripPropTime = Math.round(timing.propNs);
+    diagnostics.timeBudget = Math.round(timing.budgetNs);
   }
 
-  // Highlight over-termination on stations / devices that contribute resistors
-  if (terminatedCount > 2) {
+  if (terminatedCount > 2 && buses.length === 1) {
     terms.forEach(t => {
       diagnostics.stationStatuses[t.stationId] = 'fail';
       if (t.deviceId) diagnostics.deviceStatuses[t.deviceId] = 'fail';
     });
   }
 
-  // Calculate overall Signal Integrity Risk score (0 - 100)
+  // Risk score: hard fails weigh more than guidelines
   let risk = 0;
-  
-  // Impedance risk (Max 40 pts)
   if (eqResistance === Infinity) risk += 40;
   else if (eqResistance < 45) risk += 30;
   else if (eqResistance > 80) risk += 25;
   else if (eqResistance < 55 || eqResistance > 70) risk += 10;
-
-  // Placement risk (Max 15 pts)
   if (placementStatus === 'fail') risk += 15;
-
-  // Stub lengths risk (Max 25 pts)
   if (anyStubTooLong) risk += 15;
-  if (cumulativeStubStatus === 'fail') risk += 10;
-  else if (cumulativeStubStatus === 'warn') risk += 5;
-
-  // Star topology risk (Max 10 pts)
-  if (criticalStarTopology) risk += 10;
-  else if (starTopologyDetected) risk += 5;
-
-  // Spacing risk (Max 5 pts)
-  if (spacingStatus === 'warn') risk += 5;
-
-  // Timing risk (Max 10 pts)
+  if (cumulativeStubStatus === 'guideline') risk += 5;
+  if (criticalStarTopology) risk += 6;
+  else if (starTopologyDetected) risk += 3;
+  if (spacingStatus === 'guideline') risk += 3;
   if (timingStatus === 'fail') risk += 10;
   else if (timingStatus === 'warn') risk += 5;
-
   diagnostics.riskPercentage = Math.min(risk, 100);
 
-  // Grouped status objects for compliance checklist rendering
+  const sev = (hardKey, status) => {
+    // Map checklist severity: hard checks use fail/warn/pass; guidelines use guideline/pass
+    if (hard[hardKey]) return status;
+    return status === 'fail' ? 'guideline' : status;
+  };
+
   diagnostics.checklists = [
     {
       id: 'res',
-      title: 'Bus Equivalent Impedance',
-      desc: `Measured Req: ${eqResistance === Infinity ? '∞' : eqResistance + ' Ω'} (Ideal: 60 Ω).`,
+      category: 'hard',
+      title: 'Bus equivalent impedance',
+      desc: `Req: ${eqResistance === Infinity ? '∞' : eqResistance + ' Ω'} (ideal 60 Ω). Pack: ${packLabel}.`,
       status: resistanceStatus
     },
     {
       id: 'term_placement',
-      title: 'Termination Resistor Placement',
-      desc: terminatedCount === 2 && placementStatus === 'pass' 
-        ? 'Terminators correctly placed on the absolute ends of the network.'
-        : `Detected ${terminatedCount} terminator(s). Ends terminated: First = ${stationIsTerminated(stations[0]) ? 'Yes' : 'No'}, Last = ${stationIsTerminated(stations[stations.length-1]) ? 'Yes' : 'No'}.`,
+      category: 'hard',
+      title: 'Termination at electrical ends',
+      desc: terminatedCount === 2 && placementStatus === 'pass'
+        ? `Terminators on trunk leaves (${packLabel}).`
+        : `${terminatedCount} terminator(s). Leaves terminated per bus — see messages.`,
       status: placementStatus
     },
     {
       id: 'trunk_len',
-      title: 'Trunk Physical Length',
-      desc: `Total length: ${formatLength(totalLength)} (Max allowed for ${networkConfig.baudRate} kbps: ${formatLength(maxAllowedTrunk)}).`,
+      category: 'hard',
+      title: 'Trunk electrical span',
+      desc: `Longest path: ${formatLength(worstElectricalLen)} · Cable total: ${formatLength(totalCable)} · Max (${packLabel}): ${formatLength(maxAllowedTrunk)}.`,
       status: trunkStatus
     },
     {
       id: 'stubs',
-      title: 'Individual Stub Lengths',
-      desc: anyStubTooLong 
-        ? `One or more stubs exceed the speed-specific limit of ${formatLength(maxIndividualStub)}.`
-        : `All stubs are under the limit of ${formatLength(maxIndividualStub)} for ${networkConfig.enableCanFD ? 'CAN FD Data Phase' : networkConfig.baudRate + ' kbps'}.`,
+      category: 'hard',
+      title: 'Individual stub lengths',
+      desc: anyStubTooLong
+        ? `One or more stubs exceed ${formatLength(maxIndividualStub)} (${packLabel}).`
+        : `All stubs ≤ ${formatLength(maxIndividualStub)} (${packLabel}${networkConfig.enableCanFD ? ', FD data' : ''}).`,
       status: anyStubTooLong ? 'fail' : 'pass'
     },
     {
-      id: 'star_splice',
-      title: 'Star Splicing & Clusters',
-      desc: criticalStarTopology 
-        ? 'Critical star junctions detected. Avoid branching multiple devices from the same splice point.'
-        : starTopologyDetected 
-          ? 'Star splices present. Keep branches as short as possible.'
-          : 'Strict daisy-chain configuration. No star junctions present.',
-      status: criticalStarTopology ? 'fail' : starTopologyDetected ? 'warn' : 'pass'
+      id: 'timing',
+      category: 'hard',
+      title: 'Arbitration propagation margin',
+      desc: `Round trip: ${diagnostics.roundTripPropTime} ns · Budget: ${diagnostics.timeBudget} ns (${packLabel}).`,
+      status: timingStatus
     },
     {
       id: 'cum_stubs',
-      title: 'Cumulative Stub Length',
-      desc: `Sum of all stubs: ${formatLength(totalStubLength)} (Max allowed: ${formatLength(maxCumulativeStub)}).`,
-      status: cumulativeStubStatus
+      category: 'guideline',
+      title: 'Cumulative stub length',
+      desc: `Sum: ${formatLength(totalStubLength)} · Guideline max: ${formatLength(maxCumulativeStub)} (${packLabel}).`,
+      status: cumulativeStubStatus === 'pass' ? 'pass' : 'guideline'
+    },
+    {
+      id: 'star_splice',
+      category: 'guideline',
+      title: 'Branches & multi-drop junctions',
+      desc: criticalStarTopology
+        ? 'Dense junctions present (design guideline).'
+        : starTopologyDetected
+          ? 'Y-splits or multi-drops present — keep drops short (guideline).'
+          : 'Simple trunk topology.',
+      status: criticalStarTopology || starTopologyDetected ? 'guideline' : 'pass'
     },
     {
       id: 'spacing',
-      title: 'Minimum Node Spacing',
-      desc: spacingStatus === 'warn'
-        ? 'Some stations are clustered closer than 0.1m, increasing local capacitive loads.'
-        : 'All adjacent stations are spaced at least 0.1m apart along the trunk.',
-      status: spacingStatus
-    },
-    {
-      id: 'timing',
-      title: 'Arbitration Propagation Margin',
-      desc: `Round trip: ${diagnostics.roundTripPropTime} ns. Available budget to sample point: ${diagnostics.timeBudget} ns.`,
-      status: timingStatus
+      category: 'guideline',
+      title: 'Minimum trunk segment length',
+      desc: spacingStatus === 'guideline'
+        ? `Some segments < ${minSpace} m (clustering guideline).`
+        : `Trunk segments ≥ ${minSpace} m (${packLabel} guideline).`,
+      status: spacingStatus === 'pass' ? 'pass' : 'guideline'
     }
   ];
 
@@ -2152,33 +2527,51 @@ function updateStats(diagnostics) {
 
 function updateChecklist(diagnostics) {
   checklistBody.innerHTML = '';
+  if (!diagnostics.checklists || !diagnostics.checklists.length) return;
 
-  diagnostics.checklists.forEach(item => {
-    const el = document.createElement('div');
-    el.className = 'checklist-item';
+  const hard = diagnostics.checklists.filter(c => c.category !== 'guideline');
+  const guide = diagnostics.checklists.filter(c => c.category === 'guideline');
 
-    let iconClass = 'pass';
-    let iconName = 'check-circle-2';
-    if (item.status === 'warn') {
-      iconClass = 'warn';
-      iconName = 'alert-circle';
-    } else if (item.status === 'fail') {
-      iconClass = 'fail';
-      iconName = 'x-circle';
-    }
+  const renderGroup = (title, items, groupClass) => {
+    if (!items.length) return;
+    const hdr = document.createElement('div');
+    hdr.className = 'checklist-group-label ' + groupClass;
+    hdr.textContent = title;
+    checklistBody.appendChild(hdr);
+    items.forEach(item => {
+      const el = document.createElement('div');
+      el.className = 'checklist-item checklist-' + (item.category || 'hard');
 
-    el.innerHTML = `
-      <div class="checklist-icon ${iconClass}">
-        <i data-lucide="${iconName}" style="width: 18px; height: 18px;"></i>
-      </div>
-      <div class="checklist-content">
-        <div class="checklist-title">${item.title}</div>
-        <div class="checklist-desc">${item.desc}</div>
-      </div>
-    `;
+      let iconClass = 'pass';
+      let iconName = 'check-circle-2';
+      if (item.status === 'warn') {
+        iconClass = 'warn';
+        iconName = 'alert-circle';
+      } else if (item.status === 'fail') {
+        iconClass = 'fail';
+        iconName = 'x-circle';
+      } else if (item.status === 'guideline') {
+        iconClass = 'guideline';
+        iconName = 'info';
+      }
 
-    checklistBody.appendChild(el);
-  });
+      el.innerHTML = `
+        <div class="checklist-icon ${iconClass}">
+          <i data-lucide="${iconName}" style="width: 16px; height: 16px;"></i>
+        </div>
+        <div class="checklist-content">
+          <div class="checklist-title">${item.title}
+            <span class="checklist-cat-tag">${item.category === 'guideline' ? 'Guideline' : 'Must-have'}</span>
+          </div>
+          <div class="checklist-desc" title="${String(item.desc || '').replace(/"/g, '&quot;')}">${item.desc}</div>
+        </div>
+      `;
+      checklistBody.appendChild(el);
+    });
+  };
+
+  renderGroup('Must-have (compliance)', hard, 'hard');
+  renderGroup('Design guidelines', guide, 'guideline');
 }
 
 function updateBanner(diagnostics) {
@@ -2202,7 +2595,8 @@ function drawTopologySVG(diagnostics) {
   // Clear dynamic elements inside zoom container
   zoomContainer.innerHTML = '';
 
-  if (stations.length === 0) return;
+  const busStations = stationsOnBus(activeBusId);
+  if (busStations.length === 0) return;
 
   const width = canvasContainer.clientWidth || 800;
   const height = canvasContainer.clientHeight || 280;
@@ -2213,179 +2607,90 @@ function drawTopologySVG(diagnostics) {
 
   const paddingLeft = 60;
   const paddingRight = 60;
-  const graphWidth = width - paddingLeft - paddingRight;
+  const layout = computeBranchLayout(activeBusId);
+  let maxPos = 0;
+  let minLaneY = 0;
+  let maxLaneY = 0;
+  layout.forEach(p => {
+    maxPos = Math.max(maxPos, p.x);
+    minLaneY = Math.min(minLaneY, p.y);
+    maxLaneY = Math.max(maxLaneY, p.y);
+  });
+  const trunkLen = maxPos || electricalLengthM(activeBusId);
 
-  const cumPositions = getCumulativePositions();
-  const maxPos = cumPositions[cumPositions.length - 1] || 0;
-  const trunkLen = maxPos;
-
-  // Calculate visual spacing with a dynamic minimum gap constraint to prevent star-layout overlap
-  const segmentBaseGaps = [];
-  let totalBaseGap = 0;
-  for (let i = 1; i < stations.length; i++) {
-    const N1 = stations[i-1].devices.length;
-    const N2 = stations[i].devices.length;
-    const rightSpread = N1 > 1 ? ((N1 - 1) * 85) / 2 : 0;
-    const leftSpread = N2 > 1 ? ((N2 - 1) * 85) / 2 : 0;
-    // Box width is 80px, we want at least a 35px safety margin
-    const gap = Math.max(135, rightSpread + leftSpread + 115);
-    segmentBaseGaps.push(gap);
-    totalBaseGap += gap;
-  }
-
-  const minWidth = paddingLeft + paddingRight + totalBaseGap;
-  const svgWidth = Math.max(width, minWidth);
-  const adjustedGraphWidth = svgWidth - paddingLeft - paddingRight;
-
-  let alpha = 0;
-  if (trunkLen > 0 && adjustedGraphWidth > totalBaseGap) {
-    alpha = (adjustedGraphWidth - totalBaseGap) / trunkLen;
-  }
-
-  const screenX = [paddingLeft];
-  let currentX = paddingLeft;
-  for (let i = 1; i < stations.length; i++) {
-    const d = stations[i].distanceFromPrev;
-    const baseGap = segmentBaseGaps[i-1];
-    const segW = baseGap + alpha * d;
-    currentX += segW;
-    screenX.push(currentX);
-  }
-
-  dragInfo.screenX = screenX;
-  dragInfo.scale = adjustedGraphWidth / (trunkLen || 1);
-  dragInfo.graphWidth = adjustedGraphWidth;
+  // Map physical distance → screen X
+  const usableW = Math.max(200, width - paddingLeft - paddingRight);
+  const scaleX = trunkLen > 0 ? usableW / trunkLen : 1;
+  dragInfo.scale = scaleX;
   dragInfo.trunkLen = trunkLen;
   dragInfo.paddingLeft = paddingLeft;
+  dragInfo.screenX = [paddingLeft, paddingLeft + usableW];
 
-  // Proportional visual positioning helper with overlap protection
   function getX(cumPos) {
-    if (stations.length === 0) return paddingLeft;
-    if (stations.length === 1) return paddingLeft + adjustedGraphWidth / 2;
-    
-    for (let i = 0; i < cumPositions.length; i++) {
-      if (Math.abs(cumPos - cumPositions[i]) < 0.0001) {
-        return screenX[i];
-      }
-    }
-    
-    for (let i = 1; i < cumPositions.length; i++) {
-      if (cumPos >= cumPositions[i-1] && cumPos <= cumPositions[i]) {
-        const p1 = cumPositions[i-1];
-        const p2 = cumPositions[i];
-        const x1 = screenX[i-1];
-        const x2 = screenX[i];
-        const t = (cumPos - p1) / (p2 - p1);
-        return x1 + t * (x2 - x1);
-      }
-    }
-    
-    const lastCum = cumPositions[cumPositions.length - 1];
-    const lastX = screenX[screenX.length - 1];
-    if (cumPos < 0) {
-      return screenX[0] + cumPos * dragInfo.scale;
-    } else {
-      return lastX + (cumPos - lastCum) * dragInfo.scale;
-    }
+    if (busStations.length === 1) return paddingLeft + usableW / 2;
+    return paddingLeft + (Number(cumPos) || 0) * scaleX;
+  }
+  function getStationXY(st) {
+    const p = layout.get(st.id) || { x: 0, y: 0 };
+    return { x: getX(p.x), y: p.y - minLaneY };
   }
 
   const canH_Y = 70;
   const canL_Y = 95;
+  const laneBase = (canH_Y + canL_Y) / 2;
 
-  const startX = getX(0);
-  const endX = getX(maxPos);
-
-  // 1. Draw Dual Bus Lines (CAN High & CAN Low)
-  const pathH = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  pathH.setAttribute('x1', startX);
-  pathH.setAttribute('y1', canH_Y);
-  pathH.setAttribute('x2', endX);
-  pathH.setAttribute('y2', canH_Y);
-  pathH.setAttribute('stroke', '#10b981');
-  pathH.setAttribute('stroke-width', '4');
-  pathH.setAttribute('stroke-linecap', 'round');
-  pathH.setAttribute('class', 'svg-doubleclick-zone');
-  pathH.setAttribute('title', 'Double-click empty canvas to insert station');
-  zoomContainer.appendChild(pathH);
-
-  const pathL = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  pathL.setAttribute('x1', startX);
-  pathL.setAttribute('y1', canL_Y);
-  pathL.setAttribute('x2', endX);
-  pathL.setAttribute('y2', canL_Y);
-  pathL.setAttribute('stroke', '#3b82f6');
-  pathL.setAttribute('stroke-width', '4');
-  pathL.setAttribute('stroke-linecap', 'round');
-  pathL.setAttribute('class', 'svg-doubleclick-zone');
-  pathL.setAttribute('title', 'Double-click empty canvas to insert station');
-  zoomContainer.appendChild(pathL);
-
-  // Draw Bus Labels
-  drawLabelSVG('CAN H', startX - 45, canH_Y + 4, '#10b981', 'right', '10px');
-  drawLabelSVG('CAN L', startX - 45, canL_Y + 4, '#3b82f6', 'right', '10px');
-
-  // 2. Draw Dimension Lines (Distance from last node) between adjacent stations
-  for (let i = 1; i < stations.length; i++) {
-    const xPrev = getX(cumPositions[i-1]);
-    const xCurr = getX(cumPositions[i]);
-    const dimY = 35; // Position above trunk
-
-    // Dimension line
-    const dimLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    dimLine.setAttribute('x1', xPrev + 5);
-    dimLine.setAttribute('y1', dimY);
-    dimLine.setAttribute('x2', xCurr - 5);
-    dimLine.setAttribute('y2', dimY);
-    dimLine.setAttribute('stroke', 'var(--text-muted)');
-    dimLine.setAttribute('stroke-width', '1');
-    dimLine.setAttribute('stroke-dasharray', '3, 3');
-    zoomContainer.appendChild(dimLine);
-
-    // Dimension start arrow/tick
-    const tickStart = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    tickStart.setAttribute('x1', xPrev);
-    tickStart.setAttribute('y1', dimY - 4);
-    tickStart.setAttribute('x2', xPrev);
-    tickStart.setAttribute('y2', dimY + 4);
-    tickStart.setAttribute('stroke', 'var(--text-muted)');
-    tickStart.setAttribute('stroke-width', '1');
-    zoomContainer.appendChild(tickStart);
-
-    // Dimension end arrow/tick
-    const tickEnd = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    tickEnd.setAttribute('x1', xCurr);
-    tickEnd.setAttribute('y1', dimY - 4);
-    tickEnd.setAttribute('x2', xCurr);
-    tickEnd.setAttribute('y2', dimY + 4);
-    tickEnd.setAttribute('stroke', 'var(--text-muted)');
-    tickEnd.setAttribute('stroke-width', '1');
-    zoomContainer.appendChild(tickEnd);
-
-    // Distance Text (Double-click to edit)
+  // Draw trunk edges as dual bus lines (supports Y-splits)
+  const edges = trunkEdges(activeBusId);
+  edges.forEach(e => {
+    const a = busStations.find(s => s.id === e.from);
+    const b = busStations.find(s => s.id === e.to);
+    if (!a || !b) return;
+    const pa = getStationXY(a);
+    const pb = getStationXY(b);
+    const yOff = (pa.y + pb.y) / 2;
+    [['#10b981', -6], ['#3b82f6', 6]].forEach(([color, dy]) => {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', pa.x);
+      line.setAttribute('y1', laneBase + yOff + dy);
+      line.setAttribute('x2', pb.x);
+      line.setAttribute('y2', laneBase + yOff + dy);
+      line.setAttribute('stroke', color);
+      line.setAttribute('stroke-width', '3.5');
+      line.setAttribute('stroke-linecap', 'round');
+      zoomContainer.appendChild(line);
+    });
+    // Length label
+    const midX = (pa.x + pb.x) / 2;
+    const midY = laneBase + yOff - 14;
     const distText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    distText.setAttribute('x', (xPrev + xCurr) / 2);
-    distText.setAttribute('y', dimY - 4);
+    distText.setAttribute('x', midX);
+    distText.setAttribute('y', midY);
     distText.setAttribute('text-anchor', 'middle');
     distText.setAttribute('class', 'svg-dimension-text');
-    distText.setAttribute('style', 'cursor: pointer;');
-    distText.textContent = formatLength(stations[i].distanceFromPrev);
-    distText.setAttribute('title', 'Double-click value to edit spacing');
-    
-    // Add double-click handler
-    distText.addEventListener('dblclick', (e) => {
-      e.stopPropagation();
-      showInlineEditor(e.target, stations[i].distanceFromPrev, (newVal) => {
-        stations[i].distanceFromPrev = Math.max(0.001, toMeters(newVal));
-        render();
-      }, true);
-    });
-    
+    distText.textContent = formatLength(e.length);
     zoomContainer.appendChild(distText);
+  });
+
+  // Fallback single dual-line if no edges (one station)
+  const startX = getX(0);
+  const endX = getX(maxPos);
+  if (!edges.length && busStations.length === 1) {
+    // no trunk segments
   }
 
-  // 3. Draw Stations and Star junctions
-  stations.forEach((station, index) => {
-    const x = getX(cumPositions[index]);
+  // Bus labels
+  drawLabelSVG('CAN H', startX - 45, canH_Y + 4, '#10b981', 'right', '10px');
+  drawLabelSVG('CAN L', startX - 45, canL_Y + 4, '#3b82f6', 'right', '10px');
+  const busMeta = buses.find(b => b.id === activeBusId);
+  drawLabelSVG(busMeta ? busMeta.name : 'Bus', startX - 45, canH_Y - 14, 'var(--text-muted)', 'right', '9px');
+
+  // 3. Draw Stations and Star junctions (active bus tree layout)
+  busStations.forEach((station) => {
+    const xy = getStationXY(station);
+    const x = xy.x;
+    const yLane = xy.y;
+    const canH_Y_local = canH_Y + yLane;
+    const canL_Y_local = canL_Y + yLane;
     const stationStatus = diagnostics.stationStatuses[station.id] || 'pass';
 
     // Splice dot color
@@ -2398,38 +2703,34 @@ function drawTopologySVG(diagnostics) {
     // Splice point visual at main bus
     const tapH = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     tapH.setAttribute('cx', x);
-    tapH.setAttribute('cy', canH_Y);
+    tapH.setAttribute('cy', canH_Y_local);
     tapH.setAttribute('r', '4');
     tapH.setAttribute('fill', '#10b981');
     zoomContainer.appendChild(tapH);
 
     const tapL = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     tapL.setAttribute('cx', x);
-    tapL.setAttribute('cy', canL_Y);
+    tapL.setAttribute('cy', canL_Y_local);
     tapL.setAttribute('r', '4');
     tapL.setAttribute('fill', '#3b82f6');
     zoomContainer.appendChild(tapL);
 
-    // Draggable station handle at the trunk
+    // Station handle (drag disabled for branched spacing — edit length in the list)
     const dragHandle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     dragHandle.setAttribute('cx', x);
-    dragHandle.setAttribute('cy', (canH_Y + canL_Y)/2);
+    dragHandle.setAttribute('cy', (canH_Y_local + canL_Y_local)/2);
     dragHandle.setAttribute('r', '7');
-    dragHandle.setAttribute('fill', index === 0 ? 'var(--text-muted)' : 'var(--accent)');
+    dragHandle.setAttribute('fill', !station.parentId ? 'var(--text-muted)' : 'var(--accent)');
     dragHandle.setAttribute('stroke', 'var(--bg-secondary)');
     dragHandle.setAttribute('stroke-width', '1.5');
-    if (index > 0) {
-      dragHandle.setAttribute('class', 'draggable-station');
-      dragHandle.dataset.stationId = station.id;
-      dragHandle.setAttribute('title', 'Drag horizontally to space station');
-    }
+    dragHandle.setAttribute('title', station.name);
     zoomContainer.appendChild(dragHandle);
 
     // Draw Splice point (Junction box / drop connection)
-    const spliceY = canL_Y + 25;
+    const spliceY = canL_Y_local + 25;
     const trunkToSplice = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     trunkToSplice.setAttribute('x1', x);
-    trunkToSplice.setAttribute('y1', canL_Y);
+    trunkToSplice.setAttribute('y1', canL_Y_local);
     trunkToSplice.setAttribute('x2', x);
     trunkToSplice.setAttribute('y2', spliceY);
     trunkToSplice.setAttribute('stroke', 'var(--text-muted)');
@@ -2495,7 +2796,7 @@ function drawTopologySVG(diagnostics) {
     if ((station.termination || 0) > 0) {
       const termLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       termLabel.setAttribute('x', x);
-      termLabel.setAttribute('y', canH_Y - 26);
+      termLabel.setAttribute('y', canH_Y_local - 26);
       termLabel.setAttribute('text-anchor', 'middle');
       termLabel.setAttribute('fill', '#fb923c'); // match device-node termination mark
       termLabel.setAttribute('font-size', '9px');
@@ -2508,7 +2809,7 @@ function drawTopologySVG(diagnostics) {
     // Label station above the trunk line (Double-click to rename)
     const labelStationName = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     labelStationName.setAttribute('x', x);
-    labelStationName.setAttribute('y', canH_Y - 14);
+    labelStationName.setAttribute('y', canH_Y_local - 14);
     labelStationName.setAttribute('text-anchor', 'middle');
     labelStationName.setAttribute('fill', 'var(--text-primary)');
     labelStationName.setAttribute('font-size', '9px');
@@ -3173,10 +3474,13 @@ function loadURLOrPreset() {
 function exportStateJSON() {
   readCanopenInputs();
   const fileContent = JSON.stringify({
-    version: '2.1',
+    version: '3.0',
     type: 'can-bus-harness-design',
     config: networkConfig,
     unit: currentUnit,
+    standardsPackId,
+    buses,
+    activeBusId,
     stations: stations,
     canopen: canopenConfig
   }, null, 2);
@@ -3209,19 +3513,26 @@ function importStateJSON(event) {
       networkConfig = { ...imported.config };
       currentUnit = imported.unit || 'm';
       if (imported.canopen) canopenConfig = { ...canopenConfig, ...imported.canopen };
-      
+      standardsPackId = imported.standardsPackId || 'iso11898-2';
+      buses = Array.isArray(imported.buses) && imported.buses.length
+        ? imported.buses
+        : [{ id: 'bus-1', name: 'CAN Network' }];
+      activeBusId = imported.activeBusId || buses[0].id;
+
       if (imported.version === '1.0') {
         stations = imported.nodes.map((n, i) => ({
           id: 's_' + i,
           name: n.name + ' Station',
           distanceFromPrev: i === 0 ? 0.0 : Math.max(0.001, n.position - imported.nodes[i-1].position),
+          busId: 'bus-1',
           devices: [
             { id: n.id, name: n.name, stubLength: n.stubLength, termination: n.termination }
           ]
         }));
       } else {
-        stations = imported.stations;
+        stations = imported.stations || [];
       }
+      normalizeStationsInPlace();
 
       // Sync form fields
       inputBaud.value = networkConfig.baudRate;
@@ -3257,10 +3568,13 @@ init();
 window.projectManagerConfig = {
   toolId: "can-bus-designer",
   getInputs: () => ({
-    version: '2.1',
+    version: '3.0',
     type: 'can-bus-harness-design',
     config: networkConfig,
     unit: currentUnit,
+    standardsPackId,
+    buses,
+    activeBusId,
     stations: stations,
     canopen: canopenConfig
   }),
@@ -3268,7 +3582,11 @@ window.projectManagerConfig = {
     if (data.type === 'can-bus-harness-design') {
       networkConfig = { ...data.config };
       currentUnit = data.unit || 'm';
-      stations = data.stations;
+      stations = data.stations || [];
+      standardsPackId = data.standardsPackId || 'iso11898-2';
+      buses = Array.isArray(data.buses) && data.buses.length ? data.buses : [{ id: 'bus-1', name: 'CAN Network' }];
+      activeBusId = data.activeBusId || buses[0].id;
+      normalizeStationsInPlace();
       if (data.canopen) canopenConfig = { ...canopenConfig, ...data.canopen };
 
       // Sync form fields
