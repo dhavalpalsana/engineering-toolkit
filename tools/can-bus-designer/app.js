@@ -729,6 +729,10 @@ function bindEvents() {
     render();
   });
 
+  document.getElementById('btn-delete-bus')?.addEventListener('click', () => {
+    deleteActiveBus();
+  });
+
   document.getElementById('btn-topology-wizard')?.addEventListener('click', openTopologyWizard);
   document.getElementById('btn-export-harness-svg')?.addEventListener('click', exportHarnessSvg);
   document.getElementById('btn-export-pin-table')?.addEventListener('click', exportPinTableCsv);
@@ -2114,6 +2118,38 @@ function refreshBusSelect() {
   sel.innerHTML = buses.map(b =>
     `<option value="${b.id}" ${b.id === activeBusId ? 'selected' : ''}>${b.name}</option>`
   ).join('');
+  const delBtn = document.getElementById('btn-delete-bus');
+  if (delBtn) {
+    delBtn.disabled = buses.length <= 1;
+    delBtn.title = buses.length <= 1
+      ? 'Cannot delete the last remaining bus'
+      : 'Delete the active bus and all its stations';
+    delBtn.style.opacity = buses.length <= 1 ? '0.45' : '1';
+    delBtn.style.cursor = buses.length <= 1 ? 'not-allowed' : 'pointer';
+  }
+}
+
+/** Remove the active bus and every station on it. Keeps at least one bus. */
+function deleteActiveBus() {
+  ensureBuses();
+  if (buses.length <= 1) {
+    if (window.showToast) window.showToast('Cannot delete the only bus. Clear stations instead if needed.', false);
+    return;
+  }
+  const bus = buses.find(b => b.id === activeBusId) || buses[0];
+  const nOnBus = stationsOnBus(bus.id).length;
+  const ok = confirm(
+    `Delete bus "${bus.name}"?\n\n` +
+    `This removes the bus and ${nOnBus} station(s) on it. This cannot be undone from this dialog.`
+  );
+  if (!ok) return;
+
+  stations = stations.filter(s => (s.busId || 'bus-1') !== bus.id);
+  buses = buses.filter(b => b.id !== bus.id);
+  activeBusId = buses[0].id;
+  normalizeStationsInPlace();
+  if (window.showToast) window.showToast(`Deleted bus "${bus.name}"`);
+  render();
 }
 
 // Core Physics and Rule Checker

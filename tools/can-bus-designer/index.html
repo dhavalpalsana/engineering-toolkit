@@ -138,11 +138,12 @@
             </div>
             <div class="form-group full-width" style="margin-top: 10px;">
               <label for="select-active-bus">Active bus / network</label>
-              <div style="display:flex;gap:6px;align-items:center;">
-                <select id="select-active-bus" class="input-field" style="flex:1;"></select>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <select id="select-active-bus" class="input-field" style="flex:1;min-width:120px;"></select>
                 <button type="button" id="btn-add-bus" class="btn" style="padding:6px 10px;font-size:11px;white-space:nowrap;" title="Add a second CAN network (e.g. behind a gateway)">+ Bus</button>
+                <button type="button" id="btn-delete-bus" class="btn" style="padding:6px 10px;font-size:11px;white-space:nowrap;color:var(--error);" title="Delete the active bus and all its stations">Delete bus</button>
               </div>
-              <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;line-height:1.35;">Each bus is electrically separate (use for gateways). Branch trunk with “+ Branch” on a station.</p>
+              <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;line-height:1.35;">Each bus is electrically separate (use for gateways). Branch trunk with “+ Branch” on a station. You cannot delete the last remaining bus.</p>
             </div>
           </div>
 
