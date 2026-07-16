@@ -614,7 +614,38 @@ function bootProjectManager() {
   // Find header auth-btn to anchor control injections
   const authBtn = document.getElementById("auth-btn");
   if (!authBtn) return;
-  const headerRight = authBtn.parentElement;
+  // auth-ui may wrap #auth-btn in .auth-btn-wrapper — inject into .hdr-right, not the wrapper
+  const headerRight =
+    document.querySelector("header .hdr-right") ||
+    authBtn.closest(".hdr-right") ||
+    (authBtn.parentElement && authBtn.parentElement.classList.contains("auth-btn-wrapper")
+      ? authBtn.parentElement.parentElement
+      : authBtn.parentElement);
+  if (!headerRight) return;
+
+  /** insertBefore safe when reference was re-parented into a wrapper */
+  const safeInsertBefore = (parent, newNode, referenceNode) => {
+    if (!parent || !newNode) return;
+    if (!referenceNode) {
+      parent.appendChild(newNode);
+      return;
+    }
+    if (referenceNode.parentNode === parent) {
+      parent.insertBefore(newNode, referenceNode);
+      return;
+    }
+    let node = referenceNode;
+    while (node && node.parentNode && node.parentNode !== parent) {
+      node = node.parentNode;
+    }
+    if (node && node.parentNode === parent) parent.insertBefore(newNode, node);
+    else parent.appendChild(newNode);
+  };
+
+  const authInsertRef = () =>
+    headerRight.querySelector(".auth-btn-wrapper") ||
+    headerRight.querySelector("#auth-btn") ||
+    authBtn;
 
   let activeProject = null;
   let allProjects = [];
@@ -1148,7 +1179,7 @@ function bootProjectManager() {
       <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
       <span>My Projects</span>
     `;
-    headerRight.insertBefore(myProjectsBtn, authBtn);
+    safeInsertBefore(headerRight, myProjectsBtn, authInsertRef());
 
     myProjectsBtn.addEventListener("click", openDrawer);
 
@@ -1196,7 +1227,7 @@ function bootProjectManager() {
         <span>Save</span>
       </button>
     `;
-    headerRight.insertBefore(toolbar, authBtn);
+    safeInsertBefore(headerRight, toolbar, authInsertRef());
 
     const openBtn = document.getElementById("pm-open-btn");
     const saveBtn = document.getElementById("pm-save-btn");

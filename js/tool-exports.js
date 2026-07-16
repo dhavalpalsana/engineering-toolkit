@@ -407,6 +407,32 @@
     if (triggerBtn) triggerBtn.setAttribute("aria-expanded", "true");
   }
 
+  /**
+   * insertBefore that works when the reference node was re-parented
+   * (e.g. #auth-btn wrapped in .auth-btn-wrapper by auth-ui.js).
+   */
+  function safeInsertBefore(parent, newNode, referenceNode) {
+    if (!parent || !newNode) return;
+    if (!referenceNode) {
+      parent.appendChild(newNode);
+      return;
+    }
+    if (referenceNode.parentNode === parent) {
+      parent.insertBefore(newNode, referenceNode);
+      return;
+    }
+    // Walk up until we find a direct child of parent that contains the ref
+    let node = referenceNode;
+    while (node && node.parentNode && node.parentNode !== parent) {
+      node = node.parentNode;
+    }
+    if (node && node.parentNode === parent) {
+      parent.insertBefore(newNode, node);
+    } else {
+      parent.appendChild(newNode);
+    }
+  }
+
   function mount(headerRight) {
     const host = headerRight || document.querySelector("header .hdr-right");
     if (!host) return;
@@ -426,6 +452,13 @@
         (document.getElementById("import-file-input") || document.getElementById("file-import"))?.click();
     }
 
+    // Skip empty Export chrome on tools with no export capabilities (e.g. unit-converter)
+    const provisionalItems = buildItems();
+    if (provisionalItems.length === 0) {
+      mounted = true;
+      return;
+    }
+
     hideRedundantExportUi(host);
 
     const wrap = document.createElement("div");
@@ -439,13 +472,13 @@
       <div class="et-export-menu" role="menu"></div>
     `;
 
-    // Insert before project actions / divider / auth
+    // Insert before project actions / divider / auth (auth may be wrapped)
     const divider = host.querySelector(".hdr-divider");
     const auth = host.querySelector("#auth-btn");
+    const authWrap = host.querySelector(".auth-btn-wrapper");
     const pm = host.querySelector(".project-actions-group");
-    const before = pm || divider || auth;
-    if (before) host.insertBefore(wrap, before);
-    else host.appendChild(wrap);
+    const before = pm || divider || authWrap || auth;
+    safeInsertBefore(host, wrap, before);
 
     triggerBtn = wrap.querySelector(".et-export-trigger");
     menuEl = wrap.querySelector(".et-export-menu");
