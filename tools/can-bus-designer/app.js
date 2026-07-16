@@ -2399,9 +2399,9 @@ function showCanvasAddMenu(station, clientX, clientY) {
   menu.className = 'canvas-add-menu';
   menu.innerHTML = `
     <div class="canvas-add-menu-title">Add at “${escapeHtml(station.name)}”</div>
-    <button type="button" data-add="device">Device (ECU stub)</button>
-    <button type="button" data-add="station">Trunk station (chain)</button>
-    <button type="button" data-add="branch">Branch (Y-split)</button>
+    <button type="button" data-add="device">Device</button>
+    <button type="button" data-add="station">Station</button>
+    <button type="button" data-add="branch">Branch</button>
     <button type="button" data-add="cancel" class="canvas-add-cancel">Cancel</button>
   `;
   document.body.appendChild(menu);
