@@ -500,6 +500,12 @@ function bootProjectManager() {
 
   let activeProject = null;
   let allProjects = [];
+  let userFolders = [];
+  // Drawer filter state (session)
+  let pmFilterTool = (config && config.toolId) ? config.toolId : "";
+  let pmFilterTag = "";
+  let pmFilterFolder = ""; // "" = all, "__none__" = unfiled, else folder id
+  let pmSortMode = "recent"; // recent | name | tool
 
   // Inject Drawer Markup globally on all pages
   const overlay = document.createElement("div");
@@ -513,6 +519,24 @@ function bootProjectManager() {
       </div>
       <div class="pm-drawer-body">
         <input type="text" class="pm-drawer-search" id="pm-drawer-search-input" placeholder="Search saved projects by name...">
+        <div class="pm-drawer-filters" id="pm-drawer-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 10px;">
+          <select id="pm-filter-tool" class="pm-filter-select" title="Filter by tool" style="flex:1;min-width:100px;height:32px;font-size:12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-interactive);color:var(--text-primary);padding:0 8px;">
+            <option value="">All tools</option>
+          </select>
+          <select id="pm-filter-folder" class="pm-filter-select" title="Filter by folder" style="flex:1;min-width:90px;height:32px;font-size:12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-interactive);color:var(--text-primary);padding:0 8px;">
+            <option value="">All folders</option>
+            <option value="__none__">Unfiled</option>
+          </select>
+          <select id="pm-sort-mode" class="pm-filter-select" title="Sort" style="flex:1;min-width:90px;height:32px;font-size:12px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-interactive);color:var(--text-primary);padding:0 8px;">
+            <option value="recent">Recent</option>
+            <option value="name">Name</option>
+            <option value="tool">Tool</option>
+          </select>
+        </div>
+        <div id="pm-tag-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <button type="button" id="pm-new-folder-btn" class="project-btn" style="height:30px;font-size:11px;padding:0 10px;">+ Folder</button>
+        </div>
         <div id="pm-drawer-list" class="flex flex-col gap-6">
           <div class="pm-empty-state">Loading saved projects...</div>
         </div>
@@ -525,10 +549,17 @@ function bootProjectManager() {
   const drawerList = document.getElementById("pm-drawer-list");
   const searchInput = document.getElementById("pm-drawer-search-input");
   const closeBtn = document.getElementById("pm-drawer-close-btn");
+  const filterToolEl = document.getElementById("pm-filter-tool");
+  const filterFolderEl = document.getElementById("pm-filter-folder");
+  const sortModeEl = document.getElementById("pm-sort-mode");
+  const tagChipsEl = document.getElementById("pm-tag-chips");
 
   const openDrawer = () => {
     overlay.classList.add("show");
     setTimeout(() => drawer.classList.add("show"), 50);
+    try {
+      if (window.ETAnalytics) window.ETAnalytics.track("pm_open");
+    } catch (_) { /* ignore */ }
     loadProjects();
   };
 
@@ -545,16 +576,56 @@ function bootProjectManager() {
       <div class="pm-skeleton pm-skeleton-card" style="opacity:0.4"></div>
     `;
     try {
-      const { data, error } = await fb.getAllProjects();
+      const [{ data, error }, foldersRes] = await Promise.all([
+        fb.getAllProjects(),
+        fb.getUserFolders ? fb.getUserFolders() : Promise.resolve({ data: [] })
+      ]);
       if (error) {
         drawerList.innerHTML = `<div class="pm-empty-state" style="color:var(--color-error);">Error: ${error.message}</div>`;
         return;
       }
-      allProjects = data;
+      allProjects = data || [];
+      userFolders = (foldersRes && foldersRes.data) || [];
+      refreshFilterControls();
       renderProjectsList();
     } catch (err) {
       drawerList.innerHTML = `<div class="pm-empty-state" style="color:var(--color-error);">Error loading projects.</div>`;
     }
+  };
+
+  const refreshFilterControls = () => {
+    // Tool options
+    const tools = [...new Set(allProjects.map(p => p.toolId).filter(Boolean))].sort();
+    const curTool = pmFilterTool;
+    filterToolEl.innerHTML = `<option value="">All tools</option>` +
+      tools.map(t => `<option value="${escapeHtml(t)}" ${t === curTool ? "selected" : ""}>${escapeHtml(getToolName(t))}</option>`).join("");
+    if (curTool && !tools.includes(curTool) && config && config.toolId === curTool) {
+      filterToolEl.innerHTML += `<option value="${escapeHtml(curTool)}" selected>${escapeHtml(getToolName(curTool))}</option>`;
+    }
+    filterToolEl.value = pmFilterTool;
+
+    // Folders
+    filterFolderEl.innerHTML = `<option value="">All folders</option><option value="__none__">Unfiled</option>` +
+      userFolders.map(f => `<option value="${escapeHtml(f.id)}">${escapeHtml(f.name)}</option>`).join("");
+    filterFolderEl.value = pmFilterFolder || "";
+
+    sortModeEl.value = pmSortMode;
+
+    // Tag chips from all projects
+    const tagSet = new Set();
+    allProjects.forEach(p => (p.tags || []).forEach(t => tagSet.add(t)));
+    const tags = [...tagSet].sort();
+    tagChipsEl.innerHTML = tags.length
+      ? `<button type="button" class="pm-tag-chip${pmFilterTag === "" ? " active" : ""}" data-tag="" style="font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border-color);background:${pmFilterTag === "" ? "var(--accent-primary-glow)" : "transparent"};color:var(--text-secondary);cursor:pointer;">all tags</button>` +
+        tags.map(t => `<button type="button" class="pm-tag-chip${pmFilterTag === t ? " active" : ""}" data-tag="${escapeHtml(t)}" style="font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border-color);background:${pmFilterTag === t ? "var(--accent-primary-glow)" : "transparent"};color:var(--text-secondary);cursor:pointer;">${escapeHtml(t)}</button>`).join("")
+      : `<span style="font-size:11px;color:var(--text-muted);">No tags yet — add tags when saving.</span>`;
+    tagChipsEl.querySelectorAll("[data-tag]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        pmFilterTag = btn.getAttribute("data-tag") || "";
+        renderProjectsList(searchInput.value);
+        refreshFilterControls();
+      });
+    });
   };
 
   const getToolName = (toolId) => {
@@ -598,35 +669,80 @@ function bootProjectManager() {
     return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
+  const openProjectById = async (id, toolId) => {
+    const match = allProjects.find(p => p.id === id);
+    if (!match) return;
+    // Touch last opened (fire and forget)
+    if (fb.touchProjectOpened) {
+      fb.touchProjectOpened(id, toolId).catch(() => {});
+    }
+    match.lastOpenedAt = new Date().toISOString();
+
+    if (config && config.toolId === toolId) {
+      config.setInputs(match.config);
+      activeProject = { id: match.id, name: match.name, tags: match.tags || [], folderId: match.folderId || null };
+      localStorage.setItem(`pm_active_id_${config.toolId}`, match.id);
+      updateActiveIndicator();
+      showToast(`Loaded "${match.name}"`);
+      closeDrawer();
+    } else {
+      window.location.href = `${getToolPath(toolId)}?project=${id}`;
+    }
+  };
+
   const renderProjectsList = (filter = "") => {
-    const filtered = allProjects.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
+    const q = (filter || "").toLowerCase();
+    let filtered = allProjects.filter(p => {
+      if (q && !(p.name || "").toLowerCase().includes(q)) return false;
+      if (pmFilterTool && p.toolId !== pmFilterTool) return false;
+      if (pmFilterTag && !(p.tags || []).includes(pmFilterTag)) return false;
+      if (pmFilterFolder === "__none__" && p.folderId) return false;
+      if (pmFilterFolder && pmFilterFolder !== "__none__" && p.folderId !== pmFilterFolder) return false;
+      return true;
+    });
+
+    const sortKey = (p) => p.lastOpenedAt || p.updatedAt || 0;
+    if (pmSortMode === "name") {
+      filtered.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else if (pmSortMode === "tool") {
+      filtered.sort((a, b) => (a.toolId || "").localeCompare(b.toolId || "") || (a.name || "").localeCompare(b.name || ""));
+    } else {
+      filtered.sort((a, b) => new Date(sortKey(b)) - new Date(sortKey(a)));
+    }
+
     if (filtered.length === 0) {
-      drawerList.innerHTML = `<div class="pm-empty-state">No saved projects found${filter ? " matching search" : ""}.</div>`;
+      drawerList.innerHTML = `<div class="pm-empty-state">No saved projects found${q || pmFilterTool || pmFilterTag || pmFilterFolder ? " matching filters" : ""}.</div>`;
       return;
     }
 
-    // Group projects by toolId
+    // Group projects by toolId for display
     const grouped = {};
+    const toolOrder = [];
     filtered.forEach(p => {
-      if (!grouped[p.toolId]) grouped[p.toolId] = [];
+      if (!grouped[p.toolId]) {
+        grouped[p.toolId] = [];
+        toolOrder.push(p.toolId);
+      }
       grouped[p.toolId].push(p);
     });
 
-    drawerList.innerHTML = Object.keys(grouped).map(toolId => {
+    drawerList.innerHTML = toolOrder.map(toolId => {
       const groupItems = grouped[toolId].map(p => {
-        const dateStr = new Date(p.updatedAt).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit"
-        });
+        const tagsHtml = (p.tags || []).slice(0, 4).map(t =>
+          `<span style="font-size:10px;padding:1px 6px;border-radius:999px;background:var(--bg-tertiary);color:var(--text-muted);margin-right:3px;">${escapeHtml(t)}</span>`
+        ).join("");
+        const folderName = p.folderId ? (userFolders.find(f => f.id === p.folderId) || {}).name : "";
         return `
           <div class="pm-item">
             <div class="pm-item-info" data-id="${p.id}" data-tool="${p.toolId}">
               <span class="pm-item-name">${escapeHtml(p.name)}</span>
-              <span class="pm-item-date">${relativeTime(p.updatedAt)}</span>
+              <span class="pm-item-date">${relativeTime(p.lastOpenedAt || p.updatedAt)}${folderName ? " · " + escapeHtml(folderName) : ""}</span>
+              ${tagsHtml ? `<div style="margin-top:4px;">${tagsHtml}</div>` : ""}
             </div>
             <div class="pm-item-actions">
+              <button class="pm-item-btn pm-item-dup" data-id="${p.id}" title="Duplicate project" style="margin-right:2px;">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              </button>
               <button class="pm-item-btn pm-item-delete" data-id="${p.id}" data-name="${escapeHtml(p.name)}" title="Delete project">
                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
@@ -645,24 +761,25 @@ function bootProjectManager() {
 
     // Bind Load Click handlers
     drawerList.querySelectorAll(".pm-item-info").forEach(el => {
-      el.addEventListener("click", () => {
-        const id = el.dataset.id;
-        const toolId = el.dataset.tool;
+      el.addEventListener("click", () => openProjectById(el.dataset.id, el.dataset.tool));
+    });
 
-        // If we are currently inside the target tool subpage, load locally!
-        if (config && config.toolId === toolId) {
-          const match = allProjects.find(p => p.id === id);
-          if (match) {
-            config.setInputs(match.config);
-            activeProject = { id: match.id, name: match.name };
-            localStorage.setItem(`pm_active_id_${config.toolId}`, match.id);
-            updateActiveIndicator();
-            showToast(`Loaded "${match.name}"`);
-            closeDrawer();
-          }
+    // Duplicate
+    drawerList.querySelectorAll(".pm-item-dup").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const match = allProjects.find(p => p.id === id);
+        if (!match || !fb.duplicateProject) return;
+        btn.disabled = true;
+        const { id: newId, error } = await fb.duplicateProject(match);
+        btn.disabled = false;
+        if (error) {
+          showToast("Duplicate failed: " + error.message, false);
         } else {
-          // Redirect to target page with query parameter
-          window.location.href = `${getToolPath(toolId)}?project=${id}`;
+          showToast(`Duplicated as "${(match.name || "").replace(/\s*\(copy\)\s*$/i, "")} (copy)"`);
+          try { if (window.ETAnalytics) window.ETAnalytics.track("pm_duplicate"); } catch (_) {}
+          loadProjects();
         }
       });
     });
@@ -674,7 +791,6 @@ function bootProjectManager() {
         const id = btn.dataset.id;
         const name = btn.dataset.name;
 
-        // Styled confirm modal instead of browser confirm()
         const confirmOverlay = document.createElement("div");
         confirmOverlay.className = "pm-confirm-overlay";
         confirmOverlay.innerHTML = `
@@ -722,6 +838,32 @@ function bootProjectManager() {
   });
   searchInput.addEventListener("input", (e) => {
     renderProjectsList(e.target.value);
+  });
+  filterToolEl.addEventListener("change", () => {
+    pmFilterTool = filterToolEl.value;
+    renderProjectsList(searchInput.value);
+  });
+  filterFolderEl.addEventListener("change", () => {
+    pmFilterFolder = filterFolderEl.value;
+    renderProjectsList(searchInput.value);
+  });
+  sortModeEl.addEventListener("change", () => {
+    pmSortMode = sortModeEl.value || "recent";
+    renderProjectsList(searchInput.value);
+  });
+  document.getElementById("pm-new-folder-btn")?.addEventListener("click", async () => {
+    const name = prompt("New folder name:");
+    if (!name || !name.trim()) return;
+    if (!fb.saveUserFolder) {
+      showToast("Folders unavailable", false);
+      return;
+    }
+    const { error } = await fb.saveUserFolder(name.trim());
+    if (error) showToast(error.message || "Could not create folder", false);
+    else {
+      showToast(`Folder "${name.trim()}" created`);
+      loadProjects();
+    }
   });
   // Escape key closes drawer
   document.addEventListener("keydown", (e) => {
@@ -859,6 +1001,16 @@ function bootProjectManager() {
               <label for="pm-name">Design Name</label>
               <input type="text" class="pm-form-input" id="pm-name" required placeholder="e.g. Feeder Busbar 200A" value="${prefill}">
             </div>
+            <div class="pm-form-group">
+              <label class="pm-form-label" for="pm-tags">Tags (comma-separated, optional)</label>
+              <input type="text" class="pm-form-input" id="pm-tags" placeholder="e.g. site-a, wip, review" value="">
+            </div>
+            <div class="pm-form-group">
+              <label class="pm-form-label" for="pm-folder">Folder (optional)</label>
+              <select class="pm-form-input" id="pm-folder" style="height:40px;">
+                <option value="">Unfiled</option>
+              </select>
+            </div>
             <button type="submit" class="project-btn primary" style="width:100%;justify-content:center;height:42px;">Save Design</button>
           </form>
         </div>
@@ -868,6 +1020,21 @@ function bootProjectManager() {
       const closeSaveBtn = document.getElementById("pm-close-save-modal");
       const form = document.getElementById("pm-save-form");
       const nameInput = document.getElementById("pm-name");
+      const tagsInput = document.getElementById("pm-tags");
+      const folderSelect = document.getElementById("pm-folder");
+
+      // Populate folders async
+      (async () => {
+        if (fb.getUserFolders) {
+          const { data } = await fb.getUserFolders();
+          (data || []).forEach(f => {
+            const opt = document.createElement("option");
+            opt.value = f.id;
+            opt.textContent = f.name;
+            folderSelect.appendChild(opt);
+          });
+        }
+      })();
 
       const closeModal = () => {
         overlayModal.classList.add("pm-fade-out");
@@ -883,6 +1050,8 @@ function bootProjectManager() {
         e.preventDefault();
         const name = nameInput.value.trim();
         if (!name) return;
+        const tags = (tagsInput.value || "").split(",").map(t => t.trim().toLowerCase()).filter(Boolean).slice(0, 12);
+        const folderId = folderSelect.value || null;
 
         const submitBtn = form.querySelector("button[type=submit]");
         submitBtn.disabled = true;
@@ -890,11 +1059,11 @@ function bootProjectManager() {
 
         try {
           const data = config.getInputs();
-          const { id, error } = await fb.saveProject(config.toolId, name, data);
+          const { id, error } = await fb.saveProject(config.toolId, name, data, null, { tags, folderId });
           if (error) {
             showToast("Save failed: " + error.message, false);
           } else {
-            activeProject = { id, name };
+            activeProject = { id, name, tags, folderId };
             localStorage.setItem(`pm_active_id_${config.toolId}`, id);
             updateActiveIndicator();
             markClean();
@@ -1011,6 +1180,26 @@ function bootProjectManager() {
               .replace(/'/g, "&#039;");
   }
 
+  // Notify shell that modals are ready (flush any queued Report Bug / Suggest clicks)
+  if (window.ToolShell && typeof window.ToolShell.flushPendingAction === "function") {
+    try { window.ToolShell.flushPendingAction(); } catch (_) { /* ignore */ }
+  }
+
+  function resolveBugContext() {
+    if (window.ToolShell && typeof window.ToolShell.getBugContext === "function") {
+      return window.ToolShell.getBugContext();
+    }
+    const toolId = (config && config.toolId) || "homepage";
+    return {
+      toolId,
+      path: (window.location && window.location.pathname) || "",
+      href: (window.location && window.location.href) || "",
+      userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || "",
+      screen: "",
+      ts: new Date().toISOString()
+    };
+  }
+
   // ── Global Bug Report Modal ──────────────────────────────────────
   window.openBugReportModal = function(e) {
     if (e) e.preventDefault();
@@ -1024,12 +1213,21 @@ function bootProjectManager() {
       return;
     }
 
+    const bugCtx = resolveBugContext();
+
     // Check if modal already exists
     let overlay = document.getElementById("bug-report-modal");
     if (overlay) {
       overlay.style.display = "flex";
       document.getElementById("bug-report-form").style.display = "block";
       document.getElementById("bug-success-state").style.display = "none";
+      const metaEl = document.getElementById("bug-meta-line");
+      if (metaEl) {
+        metaEl.textContent = `Tool: ${bugCtx.toolId} · ${bugCtx.path || "—"}`;
+      }
+      overlay.dataset.toolId = bugCtx.toolId;
+      overlay.dataset.path = bugCtx.path || "";
+      overlay.dataset.ua = bugCtx.userAgent || "";
       return;
     }
 
@@ -1037,6 +1235,9 @@ function bootProjectManager() {
     overlay.id = "bug-report-modal";
     overlay.className = "pm-modal-overlay"; // Reuses project-manager drawer overlay animations
     overlay.style.cssText = "position:fixed; inset:0; background:rgba(9, 13, 22, 0.7); display:flex; align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(4px);";
+    overlay.dataset.toolId = bugCtx.toolId;
+    overlay.dataset.path = bugCtx.path || "";
+    overlay.dataset.ua = bugCtx.userAgent || "";
     
     // Grab active user email
     const prefillEmail = user.email || "";
@@ -1050,6 +1251,7 @@ function bootProjectManager() {
           </div>
           <h3 style="font-weight:700; font-size:18px; color:var(--text-primary); margin:0 0 6px 0;">Report a Bug</h3>
           <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.4;">Help us improve this utility by describing the issue.</p>
+          <p id="bug-meta-line" style="font-size:11px; color:var(--text-muted); margin:8px 0 0 0; font-family:var(--font-mono, monospace);">Tool: ${escapeHtml(bugCtx.toolId)} · ${escapeHtml(bugCtx.path || "—")}</p>
         </div>
         <form id="bug-report-form">
           <div style="margin-bottom:16px; text-align:left;">
@@ -1109,7 +1311,10 @@ function bootProjectManager() {
 
       const desc = document.getElementById("bug-desc").value;
       const email = document.getElementById("bug-email").value;
-      const toolId = config ? config.toolId : "homepage";
+      const liveCtx = resolveBugContext();
+      const toolId = overlay.dataset.toolId || liveCtx.toolId || (config ? config.toolId : "homepage");
+      const pagePath = overlay.dataset.path || liveCtx.path || "";
+      const userAgent = overlay.dataset.ua || liveCtx.userAgent || "";
 
       // 1. Submit to Firestore if configured
       if (fb && fb.isConfigured()) {
@@ -1120,6 +1325,8 @@ function bootProjectManager() {
             email: email || (userObj ? userObj.email : null),
             userId: userObj ? userObj.uid : null,
             toolId,
+            path: pagePath,
+            userAgent,
             createdAt: new Date().toISOString(),
             status: "open"
           });
@@ -1129,7 +1336,7 @@ function bootProjectManager() {
       } else {
         // Local fallback
         const existing = JSON.parse(localStorage.getItem("bug_reports") || "[]");
-        existing.push({ desc, email, toolId, date: new Date().toISOString() });
+        existing.push({ desc, email, toolId, path: pagePath, userAgent, date: new Date().toISOString() });
         localStorage.setItem("bug_reports", JSON.stringify(existing));
       }
 
@@ -1138,7 +1345,9 @@ function bootProjectManager() {
       const title = encodeURIComponent(`Bug: [${toolId}] issue`);
       const body = encodeURIComponent(
         `### Bug Report\n\n` +
-        `**Tool:** ${toolId}\n\n` +
+        `**Tool:** ${toolId}\n` +
+        `**Path:** ${pagePath || "N/A"}\n` +
+        `**User-Agent:** ${userAgent || "N/A"}\n\n` +
         `**Description:**\n${desc}\n\n` +
         `**Contact (Optional):** ${email || "N/A"}\n\n` +
         `*Submitted via Engineering Toolkit Bug Reporting Portal.*`

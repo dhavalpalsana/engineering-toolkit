@@ -168,27 +168,29 @@ main {
   display: grid;
   grid-template-columns: 1fr;
   gap: 24px;
+  align-items: start;
+}
+
+/* Config left | canvas + diagnostics right (full remaining width) */
+@media (min-width: 950px) {
+  main {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  }
 }
 
 @media (min-width: 1400px) {
   main {
-    grid-template-columns: 420px 1fr 380px;
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
   }
 }
 
-@media (min-width: 1200px) {
-  main {
-    grid-template-columns: 360px 1fr 380px;
-  }
-}
-
-@media (min-width: 950px) and (max-width: 1199px) {
-  main {
-    grid-template-columns: 360px 1fr;
-  }
-  .diagnostics-panel {
-    grid-column: span 2;
-  }
+/* Right workspace stacks canvas above diagnostics */
+.workspace-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0; /* allow grid child to shrink / expand */
+  width: 100%;
 }
 
 .panel, .config-panel {
@@ -202,12 +204,24 @@ main {
   transition: background var(--tr), border-color var(--tr);
 }
 
+/* Left config column: fixed viewport height + internal scroll (not page scroll) */
+@media (min-width: 950px) {
+  .config-panel {
+    position: sticky;
+    top: 80px; /* below sticky header (68px) + main padding */
+    max-height: calc(100vh - 104px);
+    height: calc(100vh - 104px);
+    align-self: start;
+  }
+}
+
 .panel-header {
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .panel-title {
@@ -222,6 +236,18 @@ main {
 .panel-body {
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0; /* critical for flex child scrolling */
+  overscroll-behavior: contain; /* don't chain scroll to the page */
+  scrollbar-gutter: stable;
+}
+
+/* Mobile: still allow panel body scroll with a reasonable max height */
+@media (max-width: 949px) {
+  .config-panel .panel-body {
+    max-height: min(70vh, 640px);
+  }
 }
 
 /* Config mode tabs (Harness / Advanced / CANopen) */
@@ -466,6 +492,65 @@ select.input-field {
   transition: all var(--tr);
 }
 
+.station-card.list-focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-glow), var(--sh-sm);
+}
+
+.device-row.list-focus {
+  background: rgba(13, 148, 136, 0.1);
+  border-radius: var(--r-md);
+  outline: 1px solid var(--accent);
+}
+
+/* Canvas + add menu */
+.canvas-add-menu {
+  position: fixed;
+  z-index: 10050;
+  min-width: 200px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-sans);
+}
+
+.canvas-add-menu-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 2px;
+}
+
+.canvas-add-menu button {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+.canvas-add-menu button:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+}
+
+.canvas-add-menu button.canvas-add-cancel {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .station-card:hover {
   border-color: var(--text-muted);
 }
@@ -494,7 +579,10 @@ select.input-field {
   border: none;
   background: transparent;
   color: var(--text-primary);
-  width: 150px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
   padding: 2px 4px;
   border-radius: var(--r-sm);
   outline: none;
@@ -530,16 +618,65 @@ select.input-field {
 }
 
 .device-row {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 28px;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
   border-bottom: 1px dashed var(--border-color);
 }
 
 .device-row:last-child {
   border-bottom: none;
+}
+
+.device-row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.device-row-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-left: 16px; /* align under name, past grip */
+}
+
+.device-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.device-field-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 28px;
+}
+
+.device-field-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.device-field-hint {
+  font-size: 9px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.device-field .device-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-field .custom-term-input {
+  max-width: 72px;
 }
 
 .device-input {
@@ -627,15 +764,167 @@ select.input-field {
 }
 
 
-/* Left Diagnostics Panel */
+/* Diagnostics below canvas — single compact stack (no tall multi-columns) */
 .diagnostics-panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  align-self: start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
 }
 
-/* Visual Harness Diagram */
+.diagnostics-banner {
+  width: 100%;
+}
+
+.diagnostics-summary {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-sm);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Key metrics in one horizontal strip */
+.diagnostics-metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+}
+
+@media (min-width: 720px) {
+  .diagnostics-metrics-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(140px, 1.2fr);
+  }
+}
+
+.diag-metric .stat-value {
+  font-size: 18px;
+}
+
+.diag-metric .stat-label {
+  margin-top: 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.diag-risk {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 720px) {
+  .diag-risk {
+    grid-column: auto;
+  }
+}
+
+.diag-risk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.diagnostics-section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+/* Compact checklist: wrap as chips, not a tall list */
+.checklist-compact {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 0;
+}
+
+@media (min-width: 800px) {
+  .checklist-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .checklist-compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.checklist-compact .checklist-item {
+  padding: 8px 10px;
+  gap: 8px;
+  align-items: center;
+}
+
+.checklist-compact .checklist-title {
+  font-size: 12px;
+}
+
+.checklist-compact .checklist-desc {
+  font-size: 10px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.diagnostics-scope-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  position: relative; /* local stacking; toggles are NOT absolute here */
+}
+
+/* Scope/Eye were absolute (for overlay inside the canvas). In the new header they must be normal flex items. */
+.diagnostics-scope-header .scope-toggle-container {
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.diagnostics-scope-header .scope-toggle-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.diagnostics-scope-header .waveform-title {
+  position: static;
+  top: auto;
+  left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: none;
+  font-family: var(--font-sans);
+}
+
+.diagnostics-scope .waveform-container {
+  height: 88px;
+  margin-top: 0;
+}
+
+/* Visual Harness Diagram — primary workspace, full remaining width */
 .diagram-card {
   position: relative;
   background: var(--bg-secondary);
@@ -646,15 +935,16 @@ select.input-field {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  align-self: start;
+  width: 100%;
+  min-width: 0;
+  min-height: 420px;
+  height: min(62vh, 720px);
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 950px) {
   .diagram-card {
-    position: sticky;
-    top: 92px;
-    height: calc(100vh - 140px);
-    min-height: 550px;
+    min-height: 480px;
+    height: min(68vh, 780px);
   }
 }
 
@@ -662,21 +952,24 @@ select.input-field {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .diagram-svg-container {
-  width: 100%;
+  position: relative;
   flex: 1;
+  min-height: 0;
+  width: 100%;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--r-lg);
   overflow: hidden;
-  position: relative;
 }
 
 .diagram-svg {
   width: 100%;
   height: 100%;
+  display: block;
 }
 
 .svg-grid {
@@ -813,6 +1106,43 @@ select.input-field {
 .checklist-icon.pass { color: var(--success); }
 .checklist-icon.warn { color: var(--warning); }
 .checklist-icon.fail { color: var(--error); }
+.checklist-icon.guideline { color: #38bdf8; }
+
+.checklist-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 8px 0 4px;
+  grid-column: 1 / -1;
+}
+.checklist-group-label.hard { color: var(--text-secondary); }
+.checklist-group-label.guideline { color: #38bdf8; }
+
+.checklist-cat-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+}
+.checklist-item.checklist-guideline .checklist-cat-tag {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.1);
+}
+.checklist-item.checklist-hard .checklist-cat-tag {
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.1);
+}
 
 .checklist-content {
   flex: 1;
@@ -932,11 +1262,18 @@ select.input-field {
     grid-template-columns: 1fr !important;
     padding: 0;
   }
+  .workspace-main {
+    display: block;
+  }
   .panel, .config-panel, .diagram-card, .checklist-card, .stats-card {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
     page-break-inside: avoid;
+  }
+  .diagram-card {
+    height: auto !important;
+    min-height: 400px !important;
   }
   .node-input, .input-field {
     border: none !important;
@@ -1060,6 +1397,24 @@ input[type="number"] {
   letter-spacing: 0.5px;
   margin-left: 8px;
   user-select: none;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Bus terminator badge — same amber as canvas node TERM marks (#fb923c) */
+.term-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 99px;
+  margin-left: 6px;
+  user-select: none;
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.14);
+  border: 1px solid rgba(251, 146, 60, 0.45);
+  letter-spacing: 0.02em;
 }
 
 /* Drag and Drop Sorting States */

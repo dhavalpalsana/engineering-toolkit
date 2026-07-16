@@ -37,7 +37,9 @@ let riskData = [];
 let editingRiskId = null;
 let authListenerAttached = false;
 let loadedFromShareLink = false;
+let readOnlyShareMode = false;
 let activeRegisterId = localStorage.getItem("riskManagementActiveRegister") || "default";
+let heatmapMode = sessionStorage.getItem("riskHeatmapMode") || "inherent"; // inherent | residual
 
 // ----- Firebase Helpers -----
 async function getCurrentUser() {
@@ -207,11 +209,37 @@ async function replaceRiskData(risks) {
   renderAll();
 }
 
-function residualScore(r) {
+function hasResidual(r) {
   const s = parseInt(r.residualSeverity, 10);
   const p = parseInt(r.residualProbability, 10);
-  if (!s || !p) return computeScore(r.severity, r.probability);
-  return s * p;
+  return !!(s && p);
+}
+
+function residualScore(r) {
+  if (!hasResidual(r)) return null;
+  return parseInt(r.residualSeverity, 10) * parseInt(r.residualProbability, 10);
+}
+
+/** Score used for matrix / ranking when residual mode is on. */
+function effectiveScore(r, mode) {
+  if (mode === "residual" && hasResidual(r)) return residualScore(r);
+  return computeScore(r.severity, r.probability);
+}
+
+function parseJiraKey(url) {
+  if (!url) return null;
+  const m = String(url).match(/\b([A-Z][A-Z0-9]+-\d+)\b/);
+  return m ? m[1] : null;
+}
+
+function isValidHttpUrl(str) {
+  if (!str) return true;
+  try {
+    const u = new URL(str);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch (_) {
+    return false;
+  }
 }
 
 function normalizeRisk(r) {
@@ -224,9 +252,10 @@ function normalizeRisk(r) {
     score,
     residualScore: resScore,
     level: determineLevel(score).level,
-    residualLevel: determineLevel(resScore).level,
+    residualLevel: resScore != null ? determineLevel(resScore).level : null,
     registerId: r.registerId || activeRegisterId,
-    jiraLink: r.jiraLink || ""
+    jiraLink: r.jiraLink || "",
+    jiraKey: r.jiraKey || parseJiraKey(r.jiraLink) || ""
   };
 }
 
@@ -340,10 +369,19 @@ function renderRiskList() {
     const score = computeScore(risk.severity, risk.probability);
     const res = residualScore(risk);
     const lvl = determineLevel(score);
-    const resLvl = determineLevel(res);
+    const resLvl = res != null ? determineLevel(res) : null;
+    const delta = res != null ? (score - res) : null;
+    const jiraKey = risk.jiraKey || parseJiraKey(risk.jiraLink);
     const linkHtml = risk.jiraLink
-      ? `<a href="${escapeHTML(risk.jiraLink)}" target="_blank" rel="noopener" title="${escapeHTML(risk.jiraLink)}" style="color:var(--accent-primary);">Jira</a>`
+      ? `<a href="${escapeHTML(risk.jiraLink)}" target="_blank" rel="noopener" title="${escapeHTML(risk.jiraLink)}" style="color:var(--accent-primary);">${escapeHTML(jiraKey || "Open")}</a>`
       : '<span style="color:var(--text-muted)">—</span>';
+    const resCell = res != null
+      ? `<span class="badge ${resLvl.cssClass}" title="Residual ${resLvl.level}${delta != null ? " · Δ " + delta : ""}">${res}</span>`
+      : '<span style="color:var(--text-muted)">—</span>';
+    const actions = readOnlyShareMode
+      ? `<span style="color:var(--text-muted);font-size:11px;">view</span>`
+      : `<button class="action-btn" data-action="edit" data-id="${risk.id}" title="Edit risk"><i data-lucide="pencil"></i></button>
+        <button class="action-btn danger" data-action="delete" data-id="${risk.id}" title="Delete risk"><i data-lucide="trash-2"></i></button>`;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHTML(risk.description)}</td>
@@ -352,15 +390,12 @@ function renderRiskList() {
       <td class="center"><span class="score-pill">${risk.severity}</span></td>
       <td class="center"><span class="score-pill">${risk.probability}</span></td>
       <td class="center"><span class="score-pill">${score}</span></td>
-      <td class="center"><span class="score-pill" title="Residual ${resLvl.level}">${res}</span></td>
+      <td class="center">${resCell}</td>
       <td class="center"><span class="badge ${lvl.cssClass}">${lvl.level}</span></td>
       <td>${linkHtml}</td>
       <td><span class="status-badge ${getStatusClass(risk.status)}">${escapeHTML(risk.status)}</span></td>
       <td>${risk.nextCheckpoint ? escapeHTML(risk.nextCheckpoint) : '<span style="color:var(--text-muted)">—</span>'}</td>
-      <td class="center">
-        <button class="action-btn" data-action="edit" data-id="${risk.id}" title="Edit risk"><i data-lucide="pencil"></i></button>
-        <button class="action-btn danger" data-action="delete" data-id="${risk.id}" title="Delete risk"><i data-lucide="trash-2"></i></button>
-      </td>
+      <td class="center">${actions}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -417,14 +452,26 @@ function renderHeatMap() {
   const heatmapEl = document.getElementById("heatmap");
   if (!heatmapEl) return;
 
-  // Count risks per (severity, probability) cell
+  // Count risks per (severity, probability) cell — inherent or residual
   const counts = {};
   riskData.forEach(r => {
-    const key = `${r.severity}-${r.probability}`;
+    let sev, prob;
+    if (heatmapMode === "residual" && hasResidual(r)) {
+      sev = parseInt(r.residualSeverity, 10);
+      prob = parseInt(r.residualProbability, 10);
+    } else {
+      sev = r.severity;
+      prob = r.probability;
+    }
+    const key = `${sev}-${prob}`;
     counts[key] = (counts[key] || 0) + 1;
   });
 
-  let html = '<div class="heatmap-container">';
+  let html = `<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px;">
+    <button type="button" class="btn-secondary heatmap-mode-btn${heatmapMode === "inherent" ? " active" : ""}" data-hm="inherent" style="font-size:11px;padding:4px 10px;${heatmapMode === "inherent" ? "border-color:var(--accent-primary);color:var(--accent-primary);" : ""}">Inherent</button>
+    <button type="button" class="btn-secondary heatmap-mode-btn${heatmapMode === "residual" ? " active" : ""}" data-hm="residual" style="font-size:11px;padding:4px 10px;${heatmapMode === "residual" ? "border-color:var(--accent-primary);color:var(--accent-primary);" : ""}">Residual</button>
+  </div>`;
+  html += '<div class="heatmap-container">';
 
   // Y-axis title
   html += '<div class="heatmap-y-title">Severity</div>';
@@ -466,6 +513,14 @@ function renderHeatMap() {
   html += '</div>'; // heatmap-container
 
   heatmapEl.innerHTML = html;
+  heatmapEl.querySelectorAll(".heatmap-mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      heatmapMode = btn.getAttribute("data-hm") || "inherent";
+      try { sessionStorage.setItem("riskHeatmapMode", heatmapMode); } catch (_) {}
+      renderHeatMap();
+      renderTop5();
+    });
+  });
 }
 
 // ----- Dashboard: Top 5 -----
@@ -474,7 +529,7 @@ function renderTop5() {
   if (!top5El) return;
 
   const sorted = [...riskData]
-    .sort((a, b) => computeScore(b.severity, b.probability) - computeScore(a.severity, a.probability))
+    .sort((a, b) => effectiveScore(b, heatmapMode) - effectiveScore(a, heatmapMode))
     .slice(0, 5);
 
   if (sorted.length === 0) {
@@ -680,10 +735,19 @@ async function saveRisk() {
     dateResolved: null
   };
 
+  if (riskObj.jiraLink && !isValidHttpUrl(riskObj.jiraLink)) {
+    if (window.showToast) window.showToast("Jira link looks invalid — saved anyway. Use https://…", false);
+  }
+  riskObj.jiraKey = parseJiraKey(riskObj.jiraLink) || "";
   riskObj.score = computeScore(riskObj.severity, riskObj.probability);
   riskObj.level = determineLevel(riskObj.score).level;
   riskObj.residualScore = residualScore(riskObj);
-  riskObj.residualLevel = determineLevel(riskObj.residualScore).level;
+  riskObj.residualLevel = riskObj.residualScore != null ? determineLevel(riskObj.residualScore).level : null;
+
+  if (readOnlyShareMode) {
+    if (window.showToast) window.showToast("Shared register is read-only. Import it first to edit.", false);
+    return;
+  }
 
   if (editingRiskId) {
     // Update existing
@@ -706,6 +770,7 @@ async function saveRisk() {
   } else {
     localStorage.setItem(registerStorageKey(), JSON.stringify(riskData));
   }
+  try { if (window.ETAnalytics) window.ETAnalytics.trackEngaged("risk-management"); } catch (_) {}
   renderAll();
   closeModal("risk-modal");
   editingRiskId = null;
@@ -1044,12 +1109,20 @@ function importJSON(event) {
 function shareLink() {
   try {
     const encode = window.encodeShareState || ((obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj)))));
-    const serialized = encode({ risks: riskData });
+    const reg = listRegisters().find(r => r.id === activeRegisterId);
+    const payload = {
+      v: 2,
+      mode: "readonly",
+      registerName: reg ? reg.name : "Shared Register",
+      risks: riskData
+    };
+    const serialized = encode(payload);
     const url = new URL(window.location.href);
     url.searchParams.set("design", serialized);
     navigator.clipboard.writeText(url.toString())
       .then(() => {
-        if (window.showToast) window.showToast("Share link copied to clipboard.");
+        try { if (window.ETAnalytics) window.ETAnalytics.track("share_copy"); } catch (_) {}
+        if (window.showToast) window.showToast("Read-only share link copied.");
         else alert("Link copied to clipboard");
       })
       .catch(() => {
@@ -1061,9 +1134,119 @@ function shareLink() {
   }
 }
 
+function applyReadOnlyChrome() {
+  if (!readOnlyShareMode) return;
+  let banner = document.getElementById("risk-readonly-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "risk-readonly-banner";
+    banner.style.cssText = "background:rgba(13,148,136,0.12);border-bottom:1px solid var(--accent-primary);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;";
+    banner.innerHTML = `
+      <span><strong>Viewing shared register (read-only).</strong> Import a copy to edit in your workspace.</span>
+      <button type="button" id="risk-import-share-btn" class="btn-primary" style="padding:6px 12px;font-size:12px;">Import to my registers</button>
+    `;
+    const main = document.querySelector("main.page-content") || document.body;
+    main.insertBefore(banner, main.firstChild);
+    document.getElementById("risk-import-share-btn")?.addEventListener("click", async () => {
+      const name = prompt("Name for imported register:", "Imported register");
+      if (!name) return;
+      const id = "reg_" + Date.now().toString(36);
+      const list = listRegisters();
+      list.push({ id, name: name.trim() });
+      saveRegisterList(list);
+      activeRegisterId = id;
+      localStorage.setItem("riskManagementActiveRegister", id);
+      readOnlyShareMode = false;
+      loadedFromShareLink = false;
+      banner.remove();
+      await persistRisks();
+      document.getElementById("add-risk-btn")?.removeAttribute("disabled");
+      if (window.showToast) window.showToast(`Imported as "${name.trim()}"`);
+      renderAll();
+      // Refresh register select if present
+      const sel = document.getElementById("risk-register-select");
+      if (sel) {
+        sel.innerHTML = list.map(r => `<option value="${r.id}" ${r.id === id ? "selected" : ""}>${escapeHTML(r.name)}</option>`).join("");
+      }
+    });
+  }
+  document.getElementById("add-risk-btn")?.setAttribute("disabled", "true");
+  document.getElementById("new-register-btn")?.setAttribute("disabled", "true");
+}
+
+function compareRegisters() {
+  const regs = listRegisters();
+  if (regs.length < 2) {
+    if (window.showToast) window.showToast("Create at least two registers to compare.", false);
+    return;
+  }
+  const aId = prompt(`Compare — enter first register id:\n${regs.map(r => r.id + " = " + r.name).join("\n")}`, regs[0].id);
+  if (!aId) return;
+  const bId = prompt(`Second register id:`, regs[1].id);
+  if (!bId) return;
+
+  const loadReg = (id) => {
+    try {
+      const raw = localStorage.getItem(registerStorageKey(id));
+      return raw ? JSON.parse(raw).map(normalizeRisk) : [];
+    } catch (_) { return []; }
+  };
+  // Active register may be in memory
+  const aRisks = aId === activeRegisterId ? riskData : loadReg(aId);
+  const bRisks = bId === activeRegisterId ? riskData : loadReg(bId);
+  const aName = (regs.find(r => r.id === aId) || {}).name || aId;
+  const bName = (regs.find(r => r.id === bId) || {}).name || bId;
+
+  const stats = (arr) => {
+    const scores = arr.map(r => computeScore(r.severity, r.probability));
+    const resScores = arr.map(r => residualScore(r)).filter(s => s != null);
+    return {
+      n: arr.length,
+      avg: scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : "0",
+      crit: scores.filter(s => s >= RISK_THRESHOLDS.critical).length,
+      avgRes: resScores.length ? (resScores.reduce((a, b) => a + b, 0) / resScores.length).toFixed(1) : "—"
+    };
+  };
+  const sa = stats(aRisks);
+  const sb = stats(bRisks);
+  const top = (arr) => [...arr].sort((x, y) => computeScore(y.severity, y.probability) - computeScore(x.severity, x.probability)).slice(0, 5);
+
+  let overlay = document.getElementById("risk-compare-modal");
+  if (overlay) overlay.remove();
+  overlay = document.createElement("div");
+  overlay.id = "risk-compare-modal";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(9,13,22,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
+  overlay.innerHTML = `
+    <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:14px;max-width:720px;width:100%;max-height:90vh;overflow:auto;padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:16px;">Register compare</h3>
+        <button type="button" id="risk-compare-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-secondary);">&times;</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div style="padding:12px;border:1px solid var(--border-color);border-radius:10px;">
+          <div style="font-weight:700;margin-bottom:8px;">${escapeHTML(aName)}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Risks: ${sa.n}<br>Avg score: ${sa.avg}<br>Critical: ${sa.crit}<br>Avg residual: ${sa.avgRes}</div>
+        </div>
+        <div style="padding:12px;border:1px solid var(--border-color);border-radius:10px;">
+          <div style="font-weight:700;margin-bottom:8px;">${escapeHTML(bName)}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Risks: ${sb.n}<br>Avg score: ${sb.avg}<br>Critical: ${sb.crit}<br>Avg residual: ${sb.avgRes}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;">
+        <div><strong>Top ${escapeHTML(aName)}</strong><ol style="margin:8px 0 0 18px;padding:0;">${top(aRisks).map(r => `<li>${escapeHTML(r.description)} (${computeScore(r.severity, r.probability)})</li>`).join("") || "<li>—</li>"}</ol></div>
+        <div><strong>Top ${escapeHTML(bName)}</strong><ol style="margin:8px 0 0 18px;padding:0;">${top(bRisks).map(r => `<li>${escapeHTML(r.description)} (${computeScore(r.severity, r.probability)})</li>`).join("") || "<li>—</li>"}</ol></div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  document.getElementById("risk-compare-close")?.addEventListener("click", close);
+  overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+}
+
 window.shareLink = shareLink;
 window.exportJSON = exportJSON;
 window.importJSON = importJSON;
+window.compareRegisters = compareRegisters;
 
 document.addEventListener("DOMContentLoaded", () => {
   // Apply shared URL state before first paint of the register
@@ -1076,10 +1259,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (decoded && Array.isArray(decoded.risks)) {
         riskData = decoded.risks.map(normalizeRisk);
         loadedFromShareLink = true;
+        // v2 readonly by default; legacy shares without mode stay editable import-only via flag
+        readOnlyShareMode = decoded.mode !== "edit";
       }
     }
   } catch (err) {
     console.error("Failed to load shared risk design:", err);
   }
   init();
+  if (readOnlyShareMode) applyReadOnlyChrome();
+  document.getElementById("compare-registers-btn")?.addEventListener("click", compareRegisters);
 });
