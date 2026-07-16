@@ -863,7 +863,6 @@ function bindEvents() {
     deleteActiveBus();
   });
 
-  document.getElementById('btn-topology-wizard')?.addEventListener('click', openTopologyWizard);
   document.getElementById('btn-export-harness-svg')?.addEventListener('click', exportHarnessSvg);
   document.getElementById('btn-export-pin-table')?.addEventListener('click', exportPinTableCsv);
 
@@ -1756,57 +1755,7 @@ function parseDbcSnippet() {
   if (window.showToast) window.showToast(`Parsed ${messages.length} DBC message(s)${uniqueNodes.length ? ', ' + uniqueNodes.length + ' node(s)' : ''}.`);
 }
 
-// ── Topology wizard + harness exports ────────────────────────
-function openTopologyWizard() {
-  const choice = prompt(
-    'New harness wizard:\n' +
-    '1 = Multi-drop daisy-chain (linear backbone)\n' +
-    '2 = Backbone + stub splices\n' +
-    '3 = Y-split branched trunk\n' +
-    '4 = Empty\n\nEnter 1–4:',
-    '1'
-  );
-  if (!choice) return;
-  buses = [{ id: 'bus-1', name: 'CAN Network' }];
-  activeBusId = 'bus-1';
-  if (choice === '4') {
-    stations = [];
-    render();
-    return;
-  }
-  if (choice === '3') {
-    // Branched trunk: main A—J—B with branch J—C
-    stations = [
-      { id: 's1', name: 'End A', parentId: null, distanceFromParent: 0, termination: 120, busId: 'bus-1', devices: [{ id: 'd1', name: 'ECU A', stubLength: 0.1, termination: 0 }] },
-      { id: 's2', name: 'Y-Junction', parentId: 's1', distanceFromParent: 5, termination: 0, busId: 'bus-1', devices: [] },
-      { id: 's3', name: 'End B', parentId: 's2', distanceFromParent: 6, termination: 120, busId: 'bus-1', devices: [{ id: 'd2', name: 'ECU B', stubLength: 0.1, termination: 0 }] },
-      { id: 's4', name: 'Branch C', parentId: 's2', distanceFromParent: 3, termination: 0, busId: 'bus-1', devices: [{ id: 'd3', name: 'Door Module', stubLength: 0.15, termination: 0 }] }
-    ];
-  } else if (choice === '2') {
-    stations = [
-      { id: 's1', name: 'End A', distanceFromPrev: 0, termination: 120, busId: 'bus-1', devices: [{ id: 'd1', name: 'ECU A', stubLength: 0.1, termination: 0 }] },
-      { id: 's2', name: 'Harness Splitter', distanceFromPrev: 5, termination: 0, busId: 'bus-1', devices: [{ id: 'd2', name: 'Sensor', stubLength: 0.15, termination: 0 }] },
-      { id: 's3', name: 'Multi-drop', distanceFromPrev: 4, termination: 0, busId: 'bus-1', devices: [
-        { id: 'd3', name: 'Module B', stubLength: 0.2, termination: 0 },
-        { id: 'd4', name: 'Module C', stubLength: 0.2, termination: 0 }
-      ]},
-      { id: 's4', name: 'End B', distanceFromPrev: 6, termination: 120, busId: 'bus-1', devices: [{ id: 'd5', name: 'ECU B', stubLength: 0.1, termination: 0 }] }
-    ];
-  } else {
-    stations = [
-      { id: 's1', name: 'Node 1', distanceFromPrev: 0, termination: 120, busId: 'bus-1', devices: [{ id: 'd1', name: 'ECU 1', stubLength: 0.05, termination: 0 }] },
-      { id: 's2', name: 'Node 2', distanceFromPrev: 3, termination: 0, busId: 'bus-1', devices: [{ id: 'd2', name: 'ECU 2', stubLength: 0.05, termination: 0 }] },
-      { id: 's3', name: 'Node 3', distanceFromPrev: 3, termination: 0, busId: 'bus-1', devices: [{ id: 'd3', name: 'ECU 3', stubLength: 0.05, termination: 0 }] },
-      { id: 's4', name: 'Node 4', distanceFromPrev: 3, termination: 120, busId: 'bus-1', devices: [{ id: 'd4', name: 'ECU 4', stubLength: 0.05, termination: 0 }] }
-    ];
-  }
-  stations.forEach(s => { if (s.parentId === undefined) s.parentId = undefined; });
-  normalizeStationsInPlace();
-  try { if (window.ETAnalytics) window.ETAnalytics.trackEngaged('can-bus-designer'); } catch (_) {}
-  render();
-  if (window.showToast) window.showToast('Wizard topology applied — use + Branch for more Y-splits');
-}
-
+// ── Harness exports ──────────────────────────────────────────
 function exportHarnessSvg() {
   if (!harnessSvg) return;
   const clone = harnessSvg.cloneNode(true);
@@ -1949,7 +1898,7 @@ function renderStationCards() {
   if (busStations.length === 0) {
     stationListContainer.innerHTML = `
       <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px; background: var(--bg-secondary); border: 1px dashed var(--border-color); border-radius: var(--r-md)">
-        No stations on this bus. Click <strong>Add Station</strong> or use the Wizard.
+        No stations on this bus. Click <strong>Add Station</strong> to start.
       </div>
     `;
     return;

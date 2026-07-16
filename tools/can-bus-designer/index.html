@@ -201,15 +201,6 @@
           <div class="section-card" style="background: none; border: none; padding: 0;">
             <div class="section-title" style="margin-bottom: 12px; flex-wrap: wrap; gap: 6px;">
               <span>Stations &amp; trunk topology</span>
-              <button id="btn-topology-wizard" class="btn" style="padding: 4px 10px; font-size: 11px;" title="Guided multi-drop or backbone+stubs setup">
-                Wizard
-              </button>
-              <button id="btn-export-harness-svg" class="btn" style="padding: 4px 10px; font-size: 11px;" title="Download topology SVG">
-                SVG
-              </button>
-              <button id="btn-export-pin-table" class="btn" style="padding: 4px 10px; font-size: 11px;" title="Export station/device pin table CSV">
-                Pin CSV
-              </button>
               <button id="btn-add-station" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
                 <i data-lucide="plus" style="width: 12px; height: 12px;"></i> Add Station
               </button>
@@ -262,15 +253,23 @@
             <div id="dbc-parse-results" style="margin-top: 10px; font-size: 12px; max-height: 160px; overflow: auto;"></div>
           </div>
 
-          <!-- Harness BOM Export -->
+          <!-- Harness exports -->
           <div class="section-card">
-            <span class="section-title">Harness BOM Export</span>
-            <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px; line-height: 1.4;">
-              Export a parts list: trunk segments, devices/stubs, and terminators as CSV.
+            <span class="section-title">Harness Exports</span>
+            <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.4;">
+              Download topology drawing, pin table, or parts list (BOM).
             </p>
-            <button type="button" id="btn-export-bom" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px; width: 100%;">
-              <i data-lucide="file-spreadsheet" style="width:14px;height:14px;"></i> Export BOM CSV
-            </button>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <button type="button" id="btn-export-harness-svg" class="btn" style="padding: 8px 12px; font-size: 12px; width: 100%;">
+                <i data-lucide="image" style="width:14px;height:14px;"></i> Export topology SVG
+              </button>
+              <button type="button" id="btn-export-pin-table" class="btn" style="padding: 8px 12px; font-size: 12px; width: 100%;">
+                <i data-lucide="table" style="width:14px;height:14px;"></i> Export pin table CSV
+              </button>
+              <button type="button" id="btn-export-bom" class="btn btn-primary" style="padding: 8px 12px; font-size: 12px; width: 100%;">
+                <i data-lucide="file-spreadsheet" style="width:14px;height:14px;"></i> Export BOM CSV
+              </button>
+            </div>
           </div>
         </div>
 
