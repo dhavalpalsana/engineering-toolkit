@@ -2356,15 +2356,32 @@ function focusListItem({ stationId, deviceId } = {}) {
     }
   }
 
-  // Center in the scrollable panel-body if possible
+  // Scroll only inside the config panel — never the whole page
   const panelBody = card.closest('.panel-body') || stationListContainer;
-  if (panelBody && panelBody.scrollHeight > panelBody.clientHeight) {
+  if (!panelBody) return;
+
+  // Use offsetTop relative to panelBody for stable in-panel scrolling
+  let offsetTop = 0;
+  let el = scrollTarget;
+  while (el && el !== panelBody) {
+    offsetTop += el.offsetTop;
+    el = el.offsetParent;
+    // If offsetParent jumps outside panelBody, fall back to getBoundingClientRect math
+    if (el && !panelBody.contains(el) && el !== panelBody) {
+      offsetTop = null;
+      break;
+    }
+  }
+
+  if (offsetTop != null && Number.isFinite(offsetTop)) {
+    const targetCenter = offsetTop + scrollTarget.offsetHeight / 2;
+    const nextTop = Math.max(0, targetCenter - panelBody.clientHeight / 2);
+    panelBody.scrollTo({ top: nextTop, behavior: 'smooth' });
+  } else {
     const panelRect = panelBody.getBoundingClientRect();
     const targetRect = scrollTarget.getBoundingClientRect();
     const delta = (targetRect.top + targetRect.height / 2) - (panelRect.top + panelRect.height / 2);
-    panelBody.scrollBy({ top: delta, behavior: 'smooth' });
-  } else {
-    scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    panelBody.scrollTop += delta;
   }
 }
 

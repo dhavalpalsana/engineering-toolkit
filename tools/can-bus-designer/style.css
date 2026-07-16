@@ -204,12 +204,24 @@ main {
   transition: background var(--tr), border-color var(--tr);
 }
 
+/* Left config column: fixed viewport height + internal scroll (not page scroll) */
+@media (min-width: 950px) {
+  .config-panel {
+    position: sticky;
+    top: 80px; /* below sticky header (68px) + main padding */
+    max-height: calc(100vh - 104px);
+    height: calc(100vh - 104px);
+    align-self: start;
+  }
+}
+
 .panel-header {
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .panel-title {
@@ -224,6 +236,18 @@ main {
 .panel-body {
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0; /* critical for flex child scrolling */
+  overscroll-behavior: contain; /* don't chain scroll to the page */
+  scrollbar-gutter: stable;
+}
+
+/* Mobile: still allow panel body scroll with a reasonable max height */
+@media (max-width: 949px) {
+  .config-panel .panel-body {
+    max-height: min(70vh, 640px);
+  }
 }
 
 /* Config mode tabs (Harness / Advanced / CANopen) */
