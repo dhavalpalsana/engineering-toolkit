@@ -468,6 +468,65 @@ select.input-field {
   transition: all var(--tr);
 }
 
+.station-card.list-focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-glow), var(--sh-sm);
+}
+
+.device-row.list-focus {
+  background: rgba(13, 148, 136, 0.1);
+  border-radius: var(--r-md);
+  outline: 1px solid var(--accent);
+}
+
+/* Canvas + add menu */
+.canvas-add-menu {
+  position: fixed;
+  z-index: 10050;
+  min-width: 200px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-sans);
+}
+
+.canvas-add-menu-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 2px;
+}
+
+.canvas-add-menu button {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+.canvas-add-menu button:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+}
+
+.canvas-add-menu button.canvas-add-cancel {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .station-card:hover {
   border-color: var(--text-muted);
 }

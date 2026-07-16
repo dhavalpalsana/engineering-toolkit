@@ -2129,6 +2129,151 @@ function refreshBusSelect() {
   }
 }
 
+/** Scroll station (and optional device) into view in the config list and highlight it. */
+function focusListItem({ stationId, deviceId } = {}) {
+  if (!stationListContainer || !stationId) return;
+  // Switch active bus if the station lives on another bus
+  const st = stations.find(s => s.id === stationId);
+  if (st && st.busId && st.busId !== activeBusId) {
+    activeBusId = st.busId;
+    renderStationCards();
+  }
+
+  stationListContainer.querySelectorAll('.station-card.list-focus, .device-row.list-focus').forEach(el => {
+    el.classList.remove('list-focus');
+  });
+
+  const card = stationListContainer.querySelector(`.station-card[data-id="${stationId}"]`);
+  if (!card) return;
+  card.classList.add('list-focus');
+
+  let scrollTarget = card;
+  if (deviceId) {
+    const row = card.querySelector(`.device-row[data-device-id="${deviceId}"]`);
+    if (row) {
+      row.classList.add('list-focus');
+      scrollTarget = row;
+    }
+  }
+
+  // Center in the scrollable panel-body if possible
+  const panelBody = card.closest('.panel-body') || stationListContainer;
+  if (panelBody && panelBody.scrollHeight > panelBody.clientHeight) {
+    const panelRect = panelBody.getBoundingClientRect();
+    const targetRect = scrollTarget.getBoundingClientRect();
+    const delta = (targetRect.top + targetRect.height / 2) - (panelRect.top + panelRect.height / 2);
+    panelBody.scrollBy({ top: delta, behavior: 'smooth' });
+  } else {
+    scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function hideCanvasAddMenu() {
+  document.getElementById('canvas-add-menu')?.remove();
+}
+
+/**
+ * Floating chooser when clicking + on the canvas: Device | Trunk station | Branch.
+ */
+function showCanvasAddMenu(station, clientX, clientY) {
+  hideCanvasAddMenu();
+  const menu = document.createElement('div');
+  menu.id = 'canvas-add-menu';
+  menu.className = 'canvas-add-menu';
+  menu.innerHTML = `
+    <div class="canvas-add-menu-title">Add at “${escapeHtml(station.name)}”</div>
+    <button type="button" data-add="device">Device (ECU stub)</button>
+    <button type="button" data-add="station">Trunk station (chain)</button>
+    <button type="button" data-add="branch">Branch (Y-split)</button>
+    <button type="button" data-add="cancel" class="canvas-add-cancel">Cancel</button>
+  `;
+  document.body.appendChild(menu);
+
+  // Position near click, keep on-screen
+  const pad = 8;
+  const rect = menu.getBoundingClientRect();
+  let left = clientX + 6;
+  let top = clientY + 6;
+  if (left + rect.width > window.innerWidth - pad) left = window.innerWidth - rect.width - pad;
+  if (top + rect.height > window.innerHeight - pad) top = window.innerHeight - rect.height - pad;
+  if (left < pad) left = pad;
+  if (top < pad) top = pad;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+
+  const close = () => {
+    hideCanvasAddMenu();
+    document.removeEventListener('mousedown', onOutside, true);
+  };
+  const onOutside = (ev) => {
+    if (!menu.contains(ev.target)) close();
+  };
+  setTimeout(() => document.addEventListener('mousedown', onOutside, true), 0);
+
+  menu.querySelectorAll('button[data-add]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const kind = btn.getAttribute('data-add');
+      close();
+      if (kind === 'cancel') return;
+      addFromCanvas(station, kind);
+    });
+  });
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function addFromCanvas(station, kind) {
+  if (!station) return;
+  if (kind === 'device') {
+    station.devices = station.devices || [];
+    const id = 'd_' + Date.now().toString(36);
+    station.devices.push({
+      id,
+      name: `Node ${station.devices.length + 1}`,
+      stubLength: 0.1,
+      termination: 0
+    });
+    render();
+    focusListItem({ stationId: station.id, deviceId: id });
+    return;
+  }
+  if (kind === 'station' || kind === 'branch') {
+    // Both create a child trunk station; "station" vs "branch" is the same graph op (Y if siblings exist)
+    const id = 's_' + Date.now().toString(36);
+    const n = childStations(station.id).length + 1;
+    stations.push({
+      id,
+      name: kind === 'branch' ? `Branch ${n}` : `Station ${stations.length + 1}`,
+      parentId: station.id,
+      distanceFromParent: 2.0,
+      distanceFromPrev: 2.0,
+      busId: station.busId || activeBusId,
+      termination: 0,
+      devices: [{
+        id: 'd_' + Date.now().toString(36),
+        name: 'Node',
+        stubLength: 0.1,
+        termination: 0
+      }]
+    });
+    try { if (window.ETAnalytics) window.ETAnalytics.trackEngaged('can-bus-designer'); } catch (_) {}
+    render();
+    focusListItem({ stationId: id });
+    if (window.showToast) {
+      window.showToast(kind === 'branch'
+        ? 'Trunk branch added — set length and termination as needed'
+        : 'Trunk station added on this junction');
+    }
+  }
+}
+
 /** Remove the active bus and every station on it. Keeps at least one bus. */
 function deleteActiveBus() {
   ensureBuses();
@@ -2780,18 +2925,18 @@ function drawTopologySVG(diagnostics) {
     spliceDot.setAttribute('fill', dotColor);
     zoomContainer.appendChild(spliceDot);
 
-    // Draw a small "+" button group next to splice dot to add Devices directly on canvas
+    // "+" on canvas → choose Device / Trunk station / Branch
     const addX = x + 15;
     const addY = spliceY;
     const addGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     addGroup.setAttribute('class', 'svg-interactive-btn');
     addGroup.setAttribute('style', 'cursor: pointer;');
-    addGroup.setAttribute('title', 'Click to add device branch');
+    addGroup.setAttribute('title', 'Add device, trunk station, or branch');
 
     const plusCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     plusCircle.setAttribute('cx', addX);
     plusCircle.setAttribute('cy', addY);
-    plusCircle.setAttribute('r', '7');
+    plusCircle.setAttribute('r', '8');
     plusCircle.setAttribute('fill', 'var(--accent)');
     plusCircle.setAttribute('stroke', 'var(--bg-secondary)');
     plusCircle.setAttribute('stroke-width', '1.5');
@@ -2817,15 +2962,23 @@ function drawTopologySVG(diagnostics) {
 
     addGroup.addEventListener('click', (e) => {
       e.stopPropagation();
-      station.devices.push({
-        id: 'd_' + Date.now().toString(),
-        name: `Node ${station.devices.length + 1}`,
-        stubLength: 0.1,
-        termination: 0
-      });
-      render();
+      showCanvasAddMenu(station, e.clientX, e.clientY);
     });
     zoomContainer.appendChild(addGroup);
+
+    // Click station geometry → center in list
+    const focusStation = (e) => {
+      e.stopPropagation();
+      focusListItem({ stationId: station.id });
+    };
+    dragHandle.style.cursor = 'pointer';
+    dragHandle.addEventListener('click', focusStation);
+    spliceDot.style.cursor = 'pointer';
+    spliceDot.addEventListener('click', focusStation);
+    tapH.style.cursor = 'pointer';
+    tapL.style.cursor = 'pointer';
+    tapH.addEventListener('click', focusStation);
+    tapL.addEventListener('click', focusStation);
 
     // Termination badge on diagram (if station has bus terminator)
     ensureStationDefaults(station);
@@ -2852,7 +3005,11 @@ function drawTopologySVG(diagnostics) {
     labelStationName.setAttribute('font-weight', '700');
     labelStationName.textContent = truncateText(station.name, 12);
     labelStationName.setAttribute('style', 'cursor: pointer;');
-    labelStationName.setAttribute('title', 'Double-click to rename station');
+    labelStationName.setAttribute('title', 'Click to show in list · double-click to rename');
+    labelStationName.addEventListener('click', (e) => {
+      e.stopPropagation();
+      focusListItem({ stationId: station.id });
+    });
     labelStationName.addEventListener('dblclick', (e) => {
       e.stopPropagation();
       showInlineEditor(e.target, station.name, (newName) => {
@@ -2918,15 +3075,12 @@ function drawTopologySVG(diagnostics) {
       nodeBox.setAttribute('stroke-width', '2');
       nodeBox.setAttribute('style', 'cursor: pointer; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));');
       
-      // Select station card in HTML list upon click on device
-      nodeBox.addEventListener('click', () => {
-        const targetCard = stationListContainer.querySelector(`[data-id="${station.id}"]`);
-        if (targetCard) {
-          stationListContainer.querySelectorAll('.station-card').forEach(c => c.style.borderColor = '');
-          targetCard.style.borderColor = 'var(--accent)';
-          targetCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      });
+      // Click device → center station + device row in the list
+      const focusDevice = (e) => {
+        e.stopPropagation();
+        focusListItem({ stationId: station.id, deviceId: device.id });
+      };
+      nodeBox.addEventListener('click', focusDevice);
       zoomContainer.appendChild(nodeBox);
 
       // Terminations inside device boxes
@@ -2952,7 +3106,8 @@ function drawTopologySVG(diagnostics) {
       labelDevName.setAttribute('font-weight', '700');
       labelDevName.textContent = truncateText(device.name, 12);
       labelDevName.setAttribute('style', 'cursor: pointer;');
-      labelDevName.setAttribute('title', 'Double-click to rename node');
+      labelDevName.setAttribute('title', 'Click to show in list · double-click to rename');
+      labelDevName.addEventListener('click', focusDevice);
       labelDevName.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         showInlineEditor(e.target, device.name, (newName) => {
@@ -2971,8 +3126,9 @@ function drawTopologySVG(diagnostics) {
       labelDevStub.setAttribute('font-size', '8.5px');
       labelDevStub.setAttribute('font-weight', device.stubLength > maxIndividualStub ? '700' : '500');
       labelDevStub.textContent = `Stub: ${formatLength(device.stubLength)}`;
-      labelDevStub.setAttribute('title', 'Double-click value to edit stub length');
-      
+      labelDevStub.setAttribute('style', 'cursor: pointer;');
+      labelDevStub.setAttribute('title', 'Click to show in list · double-click to edit stub length');
+      labelDevStub.addEventListener('click', focusDevice);
       labelDevStub.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         showInlineEditor(e.target, device.stubLength, (newVal) => {
