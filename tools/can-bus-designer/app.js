@@ -106,7 +106,39 @@ function ensureStationDefaults(st) {
 
 function normalizeStationsInPlace() {
   stations.forEach(ensureStationDefaults);
+  // Trunk positions are cumulative from the first station; its spacing is always 0.
+  if (stations.length > 0) stations[0].distanceFromPrev = 0;
 }
+
+// Prefer shared physics module (js/physics.js); fall back if not loaded
+const _phys = (typeof window !== 'undefined' && window.CanPhysics) ? window.CanPhysics : null;
+const parallelResistance = _phys
+  ? _phys.parallelResistance.bind(_phys)
+  : function parallelResistance(ohmsList) {
+      const vals = (ohmsList || []).map(Number).filter(r => r > 0 && Number.isFinite(r));
+      if (vals.length === 0) return Infinity;
+      return 1 / vals.reduce((s, r) => s + 1 / r, 0);
+    };
+const computeArbitrationTiming = _phys
+  ? _phys.computeArbitrationTiming.bind(_phys)
+  : function computeArbitrationTiming(opts) {
+      const baud = Math.max(1, Number(opts.baudKbps) || 250);
+      const sp = Math.min(95, Math.max(50, Number(opts.samplePointPct) || 80));
+      const L = Math.max(0, Number(opts.trunkLengthM) || 0);
+      const tau = Math.max(0.1, Number(opts.propDelayNsPerM) || 5);
+      const loop = Math.max(0, Number(opts.loopDelayNs) || 0);
+      const margin = Math.max(0, Number(opts.marginNs) || 0);
+      const bitTimeNs = 1e6 / baud;
+      const budgetNs = (sp / 100) * bitTimeNs;
+      const propNs = 2 * (L * tau + loop) + margin;
+      return { bitTimeNs, budgetNs, propNs, marginNs: margin, ok: propNs < budgetNs, tight: propNs >= budgetNs * 0.8 && propNs < budgetNs };
+    };
+const maxTrunkLengthM = _phys
+  ? _phys.maxTrunkLengthM.bind(_phys)
+  : function maxTrunkLengthM(baudKbps) {
+      const table = { 1000: 40, 800: 50, 500: 100, 250: 250, 125: 500, 50: 1000, 20: 2500, 10: 5000 };
+      return table[baudKbps] || 40;
+    };
 
 /** All termination resistors (station-level + device-level for legacy/onboard ECU terms). */
 function collectTerminations() {
@@ -734,6 +766,21 @@ function applyPreset(presetKey) {
 
   // Deep clone stations
   stations = JSON.parse(JSON.stringify(preset.stations));
+  // Prefer station-level termination: if a station has no term but devices do,
+  // lift the largest device terminator onto the station (once) for end-of-bus clarity.
+  stations.forEach(st => {
+    st.termination = Number(st.termination) || 0;
+    if (!st.termination && Array.isArray(st.devices)) {
+      const devTerms = st.devices.map(d => Number(d.termination) || 0).filter(t => t > 0);
+      if (devTerms.length) {
+        st.termination = Math.max(...devTerms);
+        // Keep device terms as-is if multiple (over-term demos); if single lift, clear device to avoid double-count
+        if (devTerms.length === 1) {
+          st.devices.forEach(d => { if ((d.termination || 0) > 0) d.termination = 0; });
+        }
+      }
+    }
+  });
   normalizeStationsInPlace();
 
   // Update inputs
@@ -1759,6 +1806,10 @@ function renderStationCards() {
 
 // Core Physics and Rule Checker
 function runDiagnostics() {
+  // Always sync from form before evaluating physics
+  readConfigInputs();
+  normalizeStationsInPlace();
+
   const diagnostics = {
     errors: [],
     warnings: [],
@@ -1776,28 +1827,17 @@ function runDiagnostics() {
   // Initial pass to clear statuses
   stations.forEach(s => {
     diagnostics.stationStatuses[s.id] = 'pass';
-    s.devices.forEach(d => {
+    (s.devices || []).forEach(d => {
       diagnostics.deviceStatuses[d.id] = 'pass';
     });
   });
 
-  // 1. Trunk Length limits based on Baud Rate
+  // 1. Trunk Length limits based on Baud Rate (arbitration / nominal rate)
   const cumPositions = getCumulativePositions();
   const totalLength = cumPositions[cumPositions.length - 1] || 0;
   diagnostics.totalBusLength = totalLength;
 
-  const standardBusLimits = {
-    1000: 40,
-    800: 50,
-    500: 100,
-    250: 250,
-    125: 500,
-    50: 1000,
-    20: 2500,
-    10: 5000
-  };
-
-  const maxAllowedTrunk = standardBusLimits[networkConfig.baudRate] || 40;
+  const maxAllowedTrunk = maxTrunkLengthM(networkConfig.baudRate);
   let trunkStatus = 'pass';
   if (totalLength > maxAllowedTrunk) {
     diagnostics.errors.push(`Total bus trunk length (${totalLength.toFixed(1)}m) exceeds maximum recommended length of ${maxAllowedTrunk}m for ${networkConfig.baudRate} kbps.`);
@@ -1807,18 +1847,13 @@ function runDiagnostics() {
     trunkStatus = 'warn';
   }
 
-  // 2. Equivalent Termination Resistance Check (station + device)
+  // 2. Equivalent Termination Resistance Check (station + device resistors in parallel)
   const terms = collectTerminations();
   const termResistors = terms.map(t => t.ohms);
   const terminatedCount = terms.length;
 
-  let eqResistance = 0;
-  if (termResistors.length > 0) {
-    const sumInverse = termResistors.reduce((sum, r) => sum + (1 / r), 0);
-    eqResistance = Math.round(1 / sumInverse);
-  } else {
-    eqResistance = Infinity;
-  }
+  const eqRaw = parallelResistance(termResistors);
+  const eqResistance = eqRaw === Infinity ? Infinity : Math.round(eqRaw);
   diagnostics.eqResistance = eqResistance;
 
   let resistanceStatus = 'pass';
@@ -1832,6 +1867,7 @@ function runDiagnostics() {
     diagnostics.errors.push(`Over-terminated bus. ${terminatedCount} terminations detected, reducing equivalent resistance to ${eqResistance} Ω (Nominal: 60 Ω). This will overload transceiver drivers.`);
     resistanceStatus = 'fail';
   } else {
+    // Exactly two resistors: ideal is 60 Ω (two 120s). Allow 50–65 for tolerance / custom values.
     if (eqResistance < 50 || eqResistance > 65) {
       diagnostics.warnings.push(`Termination resistance (${eqResistance} Ω) is outside the standard 50-65 Ω compliant range. Check resistor values.`);
       resistanceStatus = 'warn';
@@ -1839,23 +1875,30 @@ function runDiagnostics() {
   }
 
   // 3. Termination Resistor Placement Check
+  // Require terminators at both physical ends of the trunk (first & last station).
   let placementStatus = 'pass';
-  if (terminatedCount === 2) {
-    const firstStation = stations[0];
-    const lastStation = stations[stations.length - 1];
+  const firstStation = stations[0];
+  const lastStation = stations[stations.length - 1];
+  const isFirstTerminated = stationIsTerminated(firstStation);
+  const isLastTerminated = stationIsTerminated(lastStation);
 
-    const isFirstTerminated = stationIsTerminated(firstStation);
-    const isLastTerminated = stationIsTerminated(lastStation);
-
+  if (terminatedCount === 0) {
+    placementStatus = 'fail';
+  } else if (terminatedCount === 2) {
     if (!isFirstTerminated || !isLastTerminated) {
       diagnostics.errors.push("Improper termination placement. Put 120 Ω termination on the first and last stations (physical ends of the trunk).");
       placementStatus = 'fail';
-      
       if (!isFirstTerminated) diagnostics.stationStatuses[firstStation.id] = 'fail';
       if (!isLastTerminated) diagnostics.stationStatuses[lastStation.id] = 'fail';
     }
-  } else if (terminatedCount > 0) {
+  } else {
+    // 1 or 3+ terminators: placement cannot be correct for a classic linear bus
     placementStatus = 'fail';
+    if (terminatedCount > 2 && (!isFirstTerminated || !isLastTerminated)) {
+      diagnostics.errors.push("Improper termination placement in addition to over-termination. Ends of the trunk should hold the only two terminators.");
+      if (!isFirstTerminated) diagnostics.stationStatuses[firstStation.id] = 'fail';
+      if (!isLastTerminated) diagnostics.stationStatuses[lastStation.id] = 'fail';
+    }
   }
 
   // 4. Individual and Cumulative Stub Lengths
@@ -1935,20 +1978,27 @@ function runDiagnostics() {
     spacingStatus = 'warn';
   }
 
-  // 7. Round-Trip Signal Propagation Time Budget Check
-  const bitTime = 1000000 / networkConfig.baudRate; // ns
-  const sampleTime = (networkConfig.samplePoint / 100) * bitTime; // ns
-  
-  const propTime = 2 * (totalLength * networkConfig.propDelay + networkConfig.loopDelay) + networkConfig.controllerMargin;
-  
+  // 7. Round-Trip Signal Propagation Time Budget Check (arbitration / nominal phase)
+  // CAN FD data phase does not change this — max trunk length is set by nominal bitrate.
+  const timing = computeArbitrationTiming({
+    baudKbps: networkConfig.baudRate,
+    samplePointPct: networkConfig.samplePoint,
+    trunkLengthM: totalLength,
+    propDelayNsPerM: networkConfig.propDelay,
+    loopDelayNs: networkConfig.loopDelay,
+    marginNs: networkConfig.controllerMargin != null ? networkConfig.controllerMargin : 50
+  });
+  const propTime = timing.propNs;
+  const sampleTime = timing.budgetNs;
+
   diagnostics.roundTripPropTime = Math.round(propTime);
   diagnostics.timeBudget = Math.round(sampleTime);
 
   let timingStatus = 'pass';
-  if (propTime >= sampleTime) {
+  if (!timing.ok) {
     diagnostics.errors.push(`Arbitration timing violation! Round-trip propagation time (${Math.round(propTime)} ns) exceeds the sample point budget (${Math.round(sampleTime)} ns). CAN controllers will register bit errors during arbitration.`);
     timingStatus = 'fail';
-  } else if (propTime >= sampleTime * 0.8) {
+  } else if (timing.tight) {
     diagnostics.warnings.push(`Tight timing margin. Round-trip propagation time (${Math.round(propTime)} ns) takes up ${Math.round(propTime/sampleTime*100)}% of the sample point budget (${Math.round(sampleTime)} ns).`);
     timingStatus = 'warn';
   }
@@ -2822,51 +2872,50 @@ function drawWaveform(riskPercent = 0) {
   }
   ctxWaveform.stroke();
 
-  // 1. Calculate physical network parameters dynamically from stations data
+  // 1. Physical network parameters (qualitative SI visualization — not a full EM solver)
   let totalTrunkLength = 0;
   let maxStubLength = 0;
-  let unterminatedStubsCount = 0;
   let reflectionsWeight = 0;
-  let totalTerminations = 0;
 
-  stations.forEach(s => {
-    totalTrunkLength += s.distanceFromPrev;
-    s.devices.forEach(d => {
-      if (d.termination === 120) {
-        totalTerminations++;
-      } else {
-        unterminatedStubsCount++;
-        maxStubLength = Math.max(maxStubLength, d.stubLength);
-        // Reflection weight is proportional to stub length and mismatch factor
-        reflectionsWeight += d.stubLength * (1 - (d.termination || 0) / 120);
-      }
+  stations.forEach((s, i) => {
+    if (i > 0) totalTrunkLength += s.distanceFromPrev || 0;
+    (s.devices || []).forEach(d => {
+      const stub = d.stubLength || 0;
+      maxStubLength = Math.max(maxStubLength, stub);
+      // Unt terminated / weakly terminated drops contribute to reflection weight
+      const localTerm = (d.termination || 0) > 0 ? d.termination : 0;
+      reflectionsWeight += stub * (1 - Math.min(1, localTerm / 120));
     });
   });
 
-  // Calculate transceiver sample point based on configuration (nominal or data phase)
+  // Prefer shared termination model (station + device)
+  const totalTerminations = (typeof collectTerminations === 'function')
+    ? collectTerminations().length
+    : 0;
+
+  // Visualize at the critical (faster) bit time: data phase when FD is on
   const isFD = networkConfig.enableCanFD;
   const baud = isFD ? networkConfig.dataBaudRate : networkConfig.baudRate;
-  const bitTime = 1000000 / baud; // Bit time in nanoseconds
+  const bitTime = 1e6 / Math.max(1, baud); // ns
   const samplePointPercent = isFD ? networkConfig.dataSamplePoint : networkConfig.samplePoint;
   const samplePointTime = bitTime * (samplePointPercent / 100);
 
   // 2. Generate a bit pattern sequence
-  // We use a fixed sequence that contains both short and long pulses to highlight inter-symbol interference (ISI)
+  // Fixed sequence with short and long pulses to highlight ISI
   const bits = [1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1];
   const numBits = bits.length;
 
-  // Let the canvas width 'w' map to the time window of all bits in 'scope' mode.
-  // In 'eye' mode, we will fold the bits into 2x bit period.
   const points = [];
   const samplesPerBit = 60;
   const totalSamples = numBits * samplesPerBit;
 
-  // Physical constants
-  const v_prop = 0.2; // Propagation speed: 0.2 meters per nanosecond (approx 2/3 speed of light)
-  
-  // Calculate transition rise time (tau) based on trunk length and termination mismatch
+  // Propagation speed from configured τ (ns/m): v = 1/τ m/ns
+  const tauCable = Math.max(0.1, networkConfig.propDelay || 5);
+  const v_prop = 1 / tauCable; // m/ns  (5 ns/m → 0.2 m/ns ≈ 0.67c)
+
+  // Transition rise time constant from trunk length + termination mismatch
   const termMismatchPenalty = Math.abs(totalTerminations - 2) * 15;
-  const tau = 10 + 0.25 * totalTrunkLength + termMismatchPenalty; // Rise-time constant in nanoseconds
+  const tau = 10 + 0.25 * totalTrunkLength + termMismatchPenalty; // ns
 
   // Ringing frequency and damping
   // Lower resonant frequency for longer stubs: f = v_prop / (4 * L_stub)

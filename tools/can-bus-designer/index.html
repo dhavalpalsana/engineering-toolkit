@@ -354,113 +354,117 @@
       </div>
     </div>
 
-    <!-- CENTER COLUMN: Live Harness Topology Diagram -->
-    <div class="diagram-card" style="display: flex; flex-direction: column;">
-      <div class="diagram-header">
-        <span class="panel-title">
-          <i data-lucide="route" style="color: var(--accent);"></i>
-          Physical Harness Topology
-        </span>
-        <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Nodes auto-sorted by trunk position</span>
-      </div>
-      <div class="diagram-svg-container" id="canvas-container" style="position: relative; flex: 1;">
-        <svg class="diagram-svg" id="harness-svg" style="user-select: none; height: 100%; width: 100%;">
-          <defs>
-            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M 20 0 L 0 0 0 20" fill="none" class="svg-grid" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" class="svg-background-grid" />
-          <g id="zoom-container">
-            <!-- SVG content rendered in app.js -->
-          </g>
-        </svg>
-        
-        <!-- Zoom & Pan Toolbar -->
-        <div class="canvas-controls">
-          <button id="zoom-in" title="Zoom In"><i data-lucide="plus"></i></button>
-          <button id="zoom-out" title="Zoom Out"><i data-lucide="minus"></i></button>
-          <button id="zoom-reset" title="Reset View"><i data-lucide="maximize"></i></button>
+    <!-- RIGHT WORKSPACE: wide canvas on top, diagnostics below -->
+    <div class="workspace-main">
+      <!-- Live Harness Topology Diagram (full remaining width) -->
+      <div class="diagram-card">
+        <div class="diagram-header">
+          <span class="panel-title">
+            <i data-lucide="route" style="color: var(--accent);"></i>
+            Physical Harness Topology
+          </span>
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Nodes auto-sorted by trunk position</span>
         </div>
-
-        <!-- Inline Dimensions / Names Editor -->
-        <input type="text" id="inline-editor" style="display: none; position: absolute; z-index: 100; width: 110px; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 4px; border: 2px solid var(--accent); background: var(--bg-interactive); color: var(--text-primary); border-radius: var(--r-sm); outline: none;" placeholder="Edit value">
-      </div>
-    </div>
-
-    <!-- RIGHT COLUMN: Diagnostics & Visualizations -->
-    <div class="diagnostics-panel">
-      
-      <!-- Top Alert Notification Banner -->
-      <div id="compliance-banner" class="banner banner-success">
-        <i data-lucide="check-circle" id="banner-icon"></i>
-        <span id="banner-text">All harness parameters meet ISO 11898 physical layer constraints.</span>
-      </div>
-
-      <!-- Signal Integrity Risk Card -->
-      <div class="stats-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-        <div>
-          <div class="stat-label" style="margin-top: 0; display: flex; align-items: center; justify-content: space-between;">
-            <span>SIGNAL REFLECTION RISK</span>
-            <span id="risk-badge" class="risk-level-badge risk-low">LOW</span>
-          </div>
-          <div class="risk-gauge-container">
-            <div class="risk-gauge-bar">
-              <div class="risk-gauge-fill" id="risk-gauge-fill"></div>
-            </div>
-          </div>
+        <div class="diagram-svg-container" id="canvas-container">
+          <svg class="diagram-svg" id="harness-svg" style="user-select: none; height: 100%; width: 100%;">
+            <defs>
+              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" class="svg-grid" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" class="svg-background-grid" />
+            <g id="zoom-container">
+              <!-- SVG content rendered in app.js -->
+            </g>
+          </svg>
           
-          <!-- Waveform & Eye Diagram Preview -->
-          <div class="waveform-container">
-            <span class="waveform-title" id="waveform-title-text">Estimated Ringing / Reflections</span>
-            <div class="scope-toggle-container">
-              <button id="scope-btn-scope" class="scope-toggle-btn active" title="Show continuous transient signal trace">Scope</button>
-              <button id="scope-btn-eye" class="scope-toggle-btn" title="Show folded transitions eye diagram">Eye Diagram</button>
+          <!-- Zoom & Pan Toolbar -->
+          <div class="canvas-controls">
+            <button id="zoom-in" title="Zoom In"><i data-lucide="plus"></i></button>
+            <button id="zoom-out" title="Zoom Out"><i data-lucide="minus"></i></button>
+            <button id="zoom-reset" title="Reset View"><i data-lucide="maximize"></i></button>
+          </div>
+
+          <!-- Inline Dimensions / Names Editor -->
+          <input type="text" id="inline-editor" style="display: none; position: absolute; z-index: 100; width: 110px; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 4px; border: 2px solid var(--accent); background: var(--bg-interactive); color: var(--text-primary); border-radius: var(--r-sm); outline: none;" placeholder="Edit value">
+        </div>
+      </div>
+
+      <!-- Diagnostics & Visualizations (below canvas) -->
+      <div class="diagnostics-panel">
+        
+        <!-- Top Alert Notification Banner (full width of diagnostics row) -->
+        <div id="compliance-banner" class="banner banner-success diagnostics-banner">
+          <i data-lucide="check-circle" id="banner-icon"></i>
+          <span id="banner-text">All harness parameters meet ISO 11898 physical layer constraints.</span>
+        </div>
+
+        <div class="diagnostics-grid">
+          <!-- Signal Integrity Risk Card -->
+          <div class="stats-card diagnostics-risk-card">
+            <div>
+              <div class="stat-label" style="margin-top: 0; display: flex; align-items: center; justify-content: space-between;">
+                <span>SIGNAL REFLECTION RISK</span>
+                <span id="risk-badge" class="risk-level-badge risk-low">LOW</span>
+              </div>
+              <div class="risk-gauge-container">
+                <div class="risk-gauge-bar">
+                  <div class="risk-gauge-fill" id="risk-gauge-fill"></div>
+                </div>
+              </div>
+              
+              <!-- Waveform & Eye Diagram Preview -->
+              <div class="waveform-container">
+                <span class="waveform-title" id="waveform-title-text">Estimated Ringing / Reflections</span>
+                <div class="scope-toggle-container">
+                  <button id="scope-btn-scope" class="scope-toggle-btn active" title="Show continuous transient signal trace">Scope</button>
+                  <button id="scope-btn-eye" class="scope-toggle-btn" title="Show folded transitions eye diagram">Eye Diagram</button>
+                </div>
+                <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
+              </div>
             </div>
-            <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
+            <div class="stat-footer" style="margin-top: 8px;">
+              Qualitative signal analysis at receiving ends. Ringing increases with stub lengths.
+            </div>
           </div>
-        </div>
-        <div class="stat-footer" style="margin-top: 8px;">
-          Qualitative signal analysis at receiving ends. Ringing increases with stub lengths.
+
+          <!-- Equivalent Resistance & Timing Card (Status) -->
+          <div class="stats-card diagnostics-metrics-card">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <div class="stat-value" id="val-resistance">60 Ω</div>
+                <div class="stat-label">BUS IMPEDANCE (Req)</div>
+              </div>
+              <div>
+                <div class="stat-value" id="val-trunk-len">35.0 m</div>
+                <div class="stat-label">TOTAL BUS LENGTH</div>
+              </div>
+              <div>
+                <div class="stat-value" id="val-prop-time">350 ns</div>
+                <div class="stat-label">ROUND-TRIP PROP TIME</div>
+              </div>
+              <div>
+                <div class="stat-value" id="val-time-budget">800 ns</div>
+                <div class="stat-label">BIT TIME BUDGET</div>
+              </div>
+            </div>
+            <div class="stat-footer" style="margin-top: 12px;">
+              Target impedance: 60 Ω. Round-trip prop time must not exceed sample point time budget.
+            </div>
+          </div>
+
+          <!-- Compliance Diagnostics Checklist -->
+          <div class="checklist-card diagnostics-checklist-card">
+            <span class="panel-title" style="margin-bottom: 12px;">
+              <i data-lucide="shield-alert" style="color: var(--accent);"></i>
+              ISO 11898 / Physics Compliance Checklist
+            </span>
+            <div class="checklist" id="checklist-body">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
         </div>
       </div>
-
-      <!-- Equivalent Resistance & Timing Card (Status) -->
-      <div class="stats-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-          <div>
-            <div class="stat-value" id="val-resistance">60 Ω</div>
-            <div class="stat-label">BUS IMPEDANCE (Req)</div>
-          </div>
-          <div>
-            <div class="stat-value" id="val-trunk-len">35.0 m</div>
-            <div class="stat-label">TOTAL BUS LENGTH</div>
-          </div>
-          <div>
-            <div class="stat-value" id="val-prop-time">350 ns</div>
-            <div class="stat-label">ROUND-TRIP PROP TIME</div>
-          </div>
-          <div>
-            <div class="stat-value" id="val-time-budget">800 ns</div>
-            <div class="stat-label">BIT TIME BUDGET</div>
-          </div>
-        </div>
-        <div class="stat-footer" style="margin-top: 12px;">
-          Target impedance: 60 Ω. Round-trip prop time must not exceed sample point time budget.
-        </div>
-      </div>
-
-      <!-- Compliance Diagnostics Checklist -->
-      <div class="checklist-card">
-        <span class="panel-title" style="margin-bottom: 12px;">
-          <i data-lucide="shield-alert" style="color: var(--accent);"></i>
-          ISO 11898 / Physics Compliance Checklist
-        </span>
-        <div class="checklist" id="checklist-body">
-          <!-- Populated dynamically -->
-        </div>
-      </div>
-
     </div>
 
   </main>
@@ -480,6 +484,7 @@
     </div>
   </footer>
 
+  <script src="js/physics.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

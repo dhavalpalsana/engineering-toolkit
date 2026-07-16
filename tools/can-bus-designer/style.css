@@ -168,27 +168,29 @@ main {
   display: grid;
   grid-template-columns: 1fr;
   gap: 24px;
+  align-items: start;
+}
+
+/* Config left | canvas + diagnostics right (full remaining width) */
+@media (min-width: 950px) {
+  main {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  }
 }
 
 @media (min-width: 1400px) {
   main {
-    grid-template-columns: 420px 1fr 380px;
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
   }
 }
 
-@media (min-width: 1200px) {
-  main {
-    grid-template-columns: 360px 1fr 380px;
-  }
-}
-
-@media (min-width: 950px) and (max-width: 1199px) {
-  main {
-    grid-template-columns: 360px 1fr;
-  }
-  .diagnostics-panel {
-    grid-column: span 2;
-  }
+/* Right workspace stacks canvas above diagnostics */
+.workspace-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0; /* allow grid child to shrink / expand */
+  width: 100%;
 }
 
 .panel, .config-panel {
@@ -679,15 +681,55 @@ select.input-field {
 }
 
 
-/* Left Diagnostics Panel */
+/* Diagnostics below canvas — horizontal card row on wide screens */
 .diagnostics-panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  align-self: start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
 }
 
-/* Visual Harness Diagram */
+.diagnostics-banner {
+  width: 100%;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .diagnostics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .diagnostics-checklist-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1280px) {
+  .diagnostics-grid {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
+  }
+  .diagnostics-checklist-card {
+    grid-column: auto;
+  }
+}
+
+.diagnostics-risk-card,
+.diagnostics-metrics-card,
+.diagnostics-checklist-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  height: 100%;
+}
+
+/* Visual Harness Diagram — primary workspace, full remaining width */
 .diagram-card {
   position: relative;
   background: var(--bg-secondary);
@@ -698,15 +740,16 @@ select.input-field {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  align-self: start;
+  width: 100%;
+  min-width: 0;
+  min-height: 420px;
+  height: min(62vh, 720px);
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 950px) {
   .diagram-card {
-    position: sticky;
-    top: 92px;
-    height: calc(100vh - 140px);
-    min-height: 550px;
+    min-height: 480px;
+    height: min(68vh, 780px);
   }
 }
 
@@ -714,21 +757,24 @@ select.input-field {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .diagram-svg-container {
-  width: 100%;
+  position: relative;
   flex: 1;
+  min-height: 0;
+  width: 100%;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--r-lg);
   overflow: hidden;
-  position: relative;
 }
 
 .diagram-svg {
   width: 100%;
   height: 100%;
+  display: block;
 }
 
 .svg-grid {
@@ -984,11 +1030,18 @@ select.input-field {
     grid-template-columns: 1fr !important;
     padding: 0;
   }
+  .workspace-main {
+    display: block;
+  }
   .panel, .config-panel, .diagram-card, .checklist-card, .stats-card {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
     page-break-inside: avoid;
+  }
+  .diagram-card {
+    height: auto !important;
+    min-height: 400px !important;
   }
   .node-input, .input-field {
     border: none !important;
