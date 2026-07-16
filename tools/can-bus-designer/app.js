@@ -89,28 +89,46 @@ const DATA_CUMULATIVE_LIMITS = {
   8000: 0.2
 };
 
-/** Station topology roles — splitter/junction is a station, not a device. */
-const STATION_TYPES = {
-  end: { label: 'End node', glyph: 'E' },
-  splice: { label: 'Splice / T', glyph: 'T' },
-  star: { label: 'Star', glyph: '★' },
-  terminator: { label: 'Terminator', glyph: '⟂' }
-};
-
-function inferStationType(station, index, total) {
-  if (station.type && STATION_TYPES[station.type]) return station.type;
-  const n = (station.devices || []).length;
-  const hasTerm = (station.devices || []).some(d => (d.termination || 0) > 0);
-  if (n >= 2) return 'star';
-  if (hasTerm && (index === 0 || index === total - 1)) return 'terminator';
-  if (index === 0 || index === total - 1) return 'end';
-  return 'splice';
+/**
+ * Stations are junctions on the backbone (splitters/taps).
+ * Optional station.termination (Ω) models a terminator at that location.
+ * Devices are ECUs hanging off the station via stubLength.
+ */
+function ensureStationDefaults(st) {
+  if (!st || typeof st !== 'object') return st;
+  if (st.termination == null || st.termination === '') st.termination = 0;
+  else st.termination = Number(st.termination) || 0;
+  // Drop legacy type field if present (no longer used in UI)
+  if ('type' in st) delete st.type;
+  if (!Array.isArray(st.devices)) st.devices = [];
+  return st;
 }
 
 function normalizeStationsInPlace() {
-  stations.forEach((st, i) => {
-    st.type = inferStationType(st, i, stations.length);
+  stations.forEach(ensureStationDefaults);
+}
+
+/** All termination resistors (station-level + device-level for legacy/onboard ECU terms). */
+function collectTerminations() {
+  const list = [];
+  stations.forEach(s => {
+    ensureStationDefaults(s);
+    if (s.termination > 0) {
+      list.push({ ohms: s.termination, stationId: s.id, source: 'station' });
+    }
+    (s.devices || []).forEach(d => {
+      if ((d.termination || 0) > 0) {
+        list.push({ ohms: d.termination, stationId: s.id, deviceId: d.id, source: 'device' });
+      }
+    });
   });
+  return list;
+}
+
+function stationIsTerminated(s) {
+  if (!s) return false;
+  if ((s.termination || 0) > 0) return true;
+  return (s.devices || []).some(d => (d.termination || 0) > 0);
 }
 
 function maxStubLimitMeters() {
@@ -500,10 +518,10 @@ function bindEvents() {
     const newStation = {
       id: 's_' + Date.now().toString(),
       name: `Station ${stations.length + 1}`,
-      type: stations.length === 0 ? 'terminator' : 'splice',
-      distanceFromPrev: 5.0, // Default distance
+      distanceFromPrev: stations.length === 0 ? 0 : 5.0,
+      termination: 0, // optional bus terminator at this junction
       devices: [
-        { id: 'd_' + Date.now().toString(), name: `Device ${stations.length + 1}`, stubLength: 0.1, termination: stations.length === 0 ? 120 : 0 }
+        { id: 'd_' + Date.now().toString(), name: `Device ${stations.length + 1}`, stubLength: 0.1, termination: 0 }
       ]
     };
     stations.push(newStation);
@@ -1240,8 +1258,8 @@ function parseDbcSnippet() {
       stations.push({
         id: 's_dbc',
         name: 'DBC Nodes',
-        type: 'star',
         distanceFromPrev: 0,
+        termination: 0,
         devices: []
       });
     }
@@ -1275,20 +1293,20 @@ function openTopologyWizard() {
   }
   if (choice === '2') {
     stations = [
-      { id: 's1', name: 'End A', type: 'terminator', distanceFromPrev: 0, devices: [{ id: 'd1', name: 'ECU A', stubLength: 0.1, termination: 120 }] },
-      { id: 's2', name: 'Harness Splitter', type: 'splice', distanceFromPrev: 5, devices: [{ id: 'd2', name: 'Sensor', stubLength: 0.15, termination: 0 }] },
-      { id: 's3', name: 'Star Junction', type: 'star', distanceFromPrev: 4, devices: [
+      { id: 's1', name: 'End A', distanceFromPrev: 0, termination: 120, devices: [{ id: 'd1', name: 'ECU A', stubLength: 0.1, termination: 0 }] },
+      { id: 's2', name: 'Harness Splitter', distanceFromPrev: 5, termination: 0, devices: [{ id: 'd2', name: 'Sensor', stubLength: 0.15, termination: 0 }] },
+      { id: 's3', name: 'Star Junction', distanceFromPrev: 4, termination: 0, devices: [
         { id: 'd3', name: 'Module B', stubLength: 0.2, termination: 0 },
         { id: 'd4', name: 'Module C', stubLength: 0.2, termination: 0 }
       ]},
-      { id: 's4', name: 'End B', type: 'terminator', distanceFromPrev: 6, devices: [{ id: 'd5', name: 'ECU B', stubLength: 0.1, termination: 120 }] }
+      { id: 's4', name: 'End B', distanceFromPrev: 6, termination: 120, devices: [{ id: 'd5', name: 'ECU B', stubLength: 0.1, termination: 0 }] }
     ];
   } else {
     stations = [
-      { id: 's1', name: 'Node 1', type: 'terminator', distanceFromPrev: 0, devices: [{ id: 'd1', name: 'ECU 1', stubLength: 0.05, termination: 120 }] },
-      { id: 's2', name: 'Node 2', type: 'end', distanceFromPrev: 3, devices: [{ id: 'd2', name: 'ECU 2', stubLength: 0.05, termination: 0 }] },
-      { id: 's3', name: 'Node 3', type: 'end', distanceFromPrev: 3, devices: [{ id: 'd3', name: 'ECU 3', stubLength: 0.05, termination: 0 }] },
-      { id: 's4', name: 'Node 4', type: 'terminator', distanceFromPrev: 3, devices: [{ id: 'd4', name: 'ECU 4', stubLength: 0.05, termination: 120 }] }
+      { id: 's1', name: 'Node 1', distanceFromPrev: 0, termination: 120, devices: [{ id: 'd1', name: 'ECU 1', stubLength: 0.05, termination: 0 }] },
+      { id: 's2', name: 'Node 2', distanceFromPrev: 3, termination: 0, devices: [{ id: 'd2', name: 'ECU 2', stubLength: 0.05, termination: 0 }] },
+      { id: 's3', name: 'Node 3', distanceFromPrev: 3, termination: 0, devices: [{ id: 'd3', name: 'ECU 3', stubLength: 0.05, termination: 0 }] },
+      { id: 's4', name: 'Node 4', distanceFromPrev: 3, termination: 120, devices: [{ id: 'd4', name: 'ECU 4', stubLength: 0.05, termination: 0 }] }
     ];
   }
   normalizeStationsInPlace();
@@ -1318,15 +1336,15 @@ function exportHarnessSvg() {
 }
 
 function exportPinTableCsv() {
-  const rows = [['Station', 'Type', 'Device', 'Stub_m', 'Termination_ohm', 'Position_m']];
+  const rows = [['Station', 'Station_Term_ohm', 'Device', 'Stub_m', 'Device_Term_ohm', 'Position_m']];
   let pos = 0;
-  stations.forEach((st, i) => {
+  stations.forEach((st) => {
+    ensureStationDefaults(st);
     pos += st.distanceFromPrev || 0;
-    const type = inferStationType(st, i, stations.length);
     (st.devices || []).forEach(dev => {
       rows.push([
         st.name,
-        type,
+        String(st.termination || 0),
         dev.name,
         (dev.stubLength || 0).toFixed(3),
         String(dev.termination || 0),
@@ -1334,7 +1352,7 @@ function exportPinTableCsv() {
       ]);
     });
     if (!(st.devices || []).length) {
-      rows.push([st.name, type, '', '', '', pos.toFixed(3)]);
+      rows.push([st.name, String(st.termination || 0), '', '', '', pos.toFixed(3)]);
     }
   });
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -1452,12 +1470,9 @@ function renderStationCards() {
     card.className = 'station-card';
     card.dataset.id = station.id;
 
-    const stType = inferStationType(station, index, stations.length);
-    station.type = stType;
-    const typeOptions = Object.entries(STATION_TYPES).map(([k, v]) =>
-      `<option value="${k}" ${stType === k ? 'selected' : ''}>${v.glyph} ${v.label}</option>`
-    ).join('');
+    ensureStationDefaults(station);
     const stubMax = maxStubLimitMeters();
+    const stTerm = station.termination || 0;
 
     card.innerHTML = `
       <div class="station-header">
@@ -1466,17 +1481,21 @@ function renderStationCards() {
           <i data-lucide="map-pin" style="width: 14px; height: 14px; color: var(--accent);"></i>
           <input type="text" class="station-name-input" value="${station.name}" data-action="edit-station-name" title="Station name">
           ${isFirst ? `<span class="start-badge">Start</span>` : ''}
+          ${stTerm > 0 ? `<span class="start-badge" style="background:rgba(13,148,136,0.15);color:var(--accent);" title="Bus terminator at this station">${stTerm} Ω</span>` : ''}
         </div>
         
         <button class="btn-delete" data-action="delete-station" title="Delete this entire station & connected devices" style="margin-left: 8px;">
           <i data-lucide="x" style="width: 14px; height: 14px;"></i>
         </button>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;padding:0 10px 8px;flex-wrap:wrap;">
-        <label style="font-size:11px;color:var(--text-muted);">Station type</label>
-        <select class="device-input" data-action="edit-station-type" title="Harness location type. Splitter = Splice or Star. Devices are ECUs only." style="max-width:160px;">
-          ${typeOptions}
+      <div class="station-term-row" style="display:flex;align-items:center;gap:8px;padding:0 10px 8px;flex-wrap:wrap;">
+        <label style="font-size:11px;color:var(--text-muted);white-space:nowrap;" title="Optional 120 Ω bus terminator at this junction (typical at each physical end)">Termination</label>
+        <select class="device-input" data-action="edit-station-term" title="Bus terminator at this station (not a device)" style="max-width:120px;">
+          <option value="0" ${stTerm === 0 ? 'selected' : ''}>None</option>
+          <option value="120" ${stTerm === 120 ? 'selected' : ''}>120 Ω</option>
+          <option value="custom" ${stTerm !== 0 && stTerm !== 120 ? 'selected' : ''}>Custom…</option>
         </select>
+        <input type="number" class="device-input station-term-custom" data-action="edit-station-term-val" value="${stTerm || 120}" min="1" max="1000" style="display:${stTerm !== 0 && stTerm !== 120 ? 'block' : 'none'};max-width:80px;" title="Custom termination (Ω)">
       </div>
       
       <div class="station-devices-container">
@@ -1490,8 +1509,20 @@ function renderStationCards() {
       </div>
     `;
 
-    card.querySelector('[data-action="edit-station-type"]')?.addEventListener('change', (e) => {
-      station.type = e.target.value;
+    card.querySelector('[data-action="edit-station-term"]')?.addEventListener('change', (e) => {
+      const val = e.target.value;
+      const customInput = card.querySelector('.station-term-custom');
+      if (val === 'custom') {
+        if (customInput) customInput.style.display = 'block';
+        station.termination = Math.max(1, parseInt(customInput?.value, 10) || 120);
+      } else {
+        if (customInput) customInput.style.display = 'none';
+        station.termination = parseInt(val, 10) || 0;
+      }
+      render();
+    });
+    card.querySelector('[data-action="edit-station-term-val"]')?.addEventListener('change', (e) => {
+      station.termination = Math.max(1, parseInt(e.target.value, 10) || 120);
       render();
     });
 
@@ -1776,18 +1807,10 @@ function runDiagnostics() {
     trunkStatus = 'warn';
   }
 
-  // 2. Equivalent Termination Resistance Check
-  let termResistors = [];
-  let terminatedDevicesCount = 0;
-  
-  stations.forEach(s => {
-    s.devices.forEach(d => {
-      if (d.termination > 0) {
-        termResistors.push(d.termination);
-        terminatedDevicesCount++;
-      }
-    });
-  });
+  // 2. Equivalent Termination Resistance Check (station + device)
+  const terms = collectTerminations();
+  const termResistors = terms.map(t => t.ohms);
+  const terminatedCount = terms.length;
 
   let eqResistance = 0;
   if (termResistors.length > 0) {
@@ -1799,14 +1822,14 @@ function runDiagnostics() {
   diagnostics.eqResistance = eqResistance;
 
   let resistanceStatus = 'pass';
-  if (terminatedDevicesCount === 0) {
-    diagnostics.errors.push("Zero termination resistors detected. High signal reflections will occur. Add exactly two 120 Ω resistors at physical ends.");
+  if (terminatedCount === 0) {
+    diagnostics.errors.push("Zero termination resistors detected. High signal reflections will occur. Add 120 Ω termination on the first and last stations.");
     resistanceStatus = 'fail';
-  } else if (terminatedDevicesCount === 1) {
-    diagnostics.errors.push(`Only one termination resistor detected (${termResistors[0]} Ω). At least two 120 Ω parallel termination resistors (ideal Req: 60 Ω) are required.`);
+  } else if (terminatedCount === 1) {
+    diagnostics.errors.push(`Only one termination resistor detected (${termResistors[0]} Ω). Exactly two 120 Ω terminations (ideal Req: 60 Ω) are required at the physical ends.`);
     resistanceStatus = 'fail';
-  } else if (terminatedDevicesCount > 2) {
-    diagnostics.errors.push(`Over-terminated bus. ${terminatedDevicesCount} terminations detected, reducing equivalent resistance to ${eqResistance} Ω (Nominal: 60 Ω). This will overload transceiver drivers.`);
+  } else if (terminatedCount > 2) {
+    diagnostics.errors.push(`Over-terminated bus. ${terminatedCount} terminations detected, reducing equivalent resistance to ${eqResistance} Ω (Nominal: 60 Ω). This will overload transceiver drivers.`);
     resistanceStatus = 'fail';
   } else {
     if (eqResistance < 50 || eqResistance > 65) {
@@ -1817,21 +1840,21 @@ function runDiagnostics() {
 
   // 3. Termination Resistor Placement Check
   let placementStatus = 'pass';
-  if (terminatedDevicesCount === 2) {
+  if (terminatedCount === 2) {
     const firstStation = stations[0];
     const lastStation = stations[stations.length - 1];
 
-    const isFirstTerminated = firstStation.devices.some(d => d.termination > 0);
-    const isLastTerminated = lastStation.devices.some(d => d.termination > 0);
+    const isFirstTerminated = stationIsTerminated(firstStation);
+    const isLastTerminated = stationIsTerminated(lastStation);
 
     if (!isFirstTerminated || !isLastTerminated) {
-      diagnostics.errors.push("Improper termination placement. Termination resistors must be located at the extreme physical ends of the bus line (first & last stations) to avoid unterminated branches.");
+      diagnostics.errors.push("Improper termination placement. Put 120 Ω termination on the first and last stations (physical ends of the trunk).");
       placementStatus = 'fail';
       
       if (!isFirstTerminated) diagnostics.stationStatuses[firstStation.id] = 'fail';
       if (!isLastTerminated) diagnostics.stationStatuses[lastStation.id] = 'fail';
     }
-  } else if (terminatedDevicesCount > 0) {
+  } else if (terminatedCount > 0) {
     placementStatus = 'fail';
   }
 
@@ -1930,15 +1953,11 @@ function runDiagnostics() {
     timingStatus = 'warn';
   }
 
-  // Highlight over-termination errors on specific devices
-  if (terminatedDevicesCount > 2) {
-    stations.forEach(s => {
-      s.devices.forEach(d => {
-        if (d.termination > 0) {
-          diagnostics.deviceStatuses[d.id] = 'fail';
-          diagnostics.stationStatuses[s.id] = 'fail';
-        }
-      });
+  // Highlight over-termination on stations / devices that contribute resistors
+  if (terminatedCount > 2) {
+    terms.forEach(t => {
+      diagnostics.stationStatuses[t.stationId] = 'fail';
+      if (t.deviceId) diagnostics.deviceStatuses[t.deviceId] = 'fail';
     });
   }
 
@@ -1983,9 +2002,9 @@ function runDiagnostics() {
     {
       id: 'term_placement',
       title: 'Termination Resistor Placement',
-      desc: terminatedDevicesCount === 2 && placementStatus === 'pass' 
+      desc: terminatedCount === 2 && placementStatus === 'pass' 
         ? 'Terminators correctly placed on the absolute ends of the network.'
-        : `Detected ${terminatedDevicesCount} terminators. End nodes terminated: First = ${stations[0]?.devices.some(d=>d.termination>0) ? 'Yes' : 'No'}, Last = ${stations[stations.length-1]?.devices.some(d=>d.termination>0) ? 'Yes' : 'No'}.`,
+        : `Detected ${terminatedCount} terminator(s). Ends terminated: First = ${stationIsTerminated(stations[0]) ? 'Yes' : 'No'}, Last = ${stationIsTerminated(stations[stations.length-1]) ? 'Yes' : 'No'}.`,
       status: placementStatus
     },
     {
@@ -2421,19 +2440,20 @@ function drawTopologySVG(diagnostics) {
     });
     zoomContainer.appendChild(addGroup);
 
-    // Type glyph (E / T / ★ / ⟂)
-    const stType = inferStationType(station, index, stations.length);
-    station.type = stType;
-    const typeGlyph = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    typeGlyph.setAttribute('x', x);
-    typeGlyph.setAttribute('y', canH_Y - 26);
-    typeGlyph.setAttribute('text-anchor', 'middle');
-    typeGlyph.setAttribute('fill', 'var(--accent)');
-    typeGlyph.setAttribute('font-size', '10px');
-    typeGlyph.setAttribute('font-weight', '800');
-    typeGlyph.textContent = (STATION_TYPES[stType] || STATION_TYPES.splice).glyph;
-    typeGlyph.setAttribute('title', (STATION_TYPES[stType] || {}).label || stType);
-    zoomContainer.appendChild(typeGlyph);
+    // Termination badge on diagram (if station has bus terminator)
+    ensureStationDefaults(station);
+    if ((station.termination || 0) > 0) {
+      const termLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      termLabel.setAttribute('x', x);
+      termLabel.setAttribute('y', canH_Y - 26);
+      termLabel.setAttribute('text-anchor', 'middle');
+      termLabel.setAttribute('fill', 'var(--accent)');
+      termLabel.setAttribute('font-size', '9px');
+      termLabel.setAttribute('font-weight', '800');
+      termLabel.textContent = `${station.termination}Ω`;
+      termLabel.setAttribute('title', 'Bus terminator at this station');
+      zoomContainer.appendChild(termLabel);
+    }
 
     // Label station above the trunk line (Double-click to rename)
     const labelStationName = document.createElementNS('http://www.w3.org/2000/svg', 'text');
