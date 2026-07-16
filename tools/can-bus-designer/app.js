@@ -1562,9 +1562,8 @@ function renderStationCards() {
         <div class="device-row-bottom">
           <div class="device-field">
             <span class="device-field-label">Stub</span>
-            <input type="number" class="device-input" value="${fromMeters(device.stubLength).toFixed(currentUnit === 'm' ? 2 : currentUnit === 'mm' ? 0 : 1)}" data-action="edit-device-stub" min="0" step="any" title="Stub from station/splice in ${currentUnit}. Max recommended ≈ ${formatLength(stubMax)}">
+            <input type="number" class="device-input" value="${fromMeters(device.stubLength).toFixed(currentUnit === 'm' ? 2 : currentUnit === 'mm' ? 0 : 1)}" data-action="edit-device-stub" min="0" step="any" title="Stub length from station/splice (${currentUnit})">
             <span class="device-field-unit">${currentUnit}</span>
-            <span class="device-field-hint" style="color:${device.stubLength > stubMax ? 'var(--error)' : 'var(--text-muted)'};" title="${stubGuidanceText()}">max ${formatLength(stubMax)}</span>
           </div>
           <div class="device-field">
             <span class="device-field-label">Term</span>
