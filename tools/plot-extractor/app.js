@@ -2008,3 +2008,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   loadURLDesign();
 });
+
+// Header Export ▾ — JSON + CSV + plot image + lookup table
+if (window.ToolExports) {
+  const click = (id) => () => document.getElementById(id)?.click();
+  window.ToolExports.register({
+    json: () => window.exportJSON(),
+    import: () => document.getElementById("import-file-input")?.click(),
+    csv: click("btn-download-csv"),
+    image: click("btn-download-plot"),
+    extra: [
+      { id: "copy-csv", label: "Copy active CSV", run: click("btn-copy-csv") },
+      { id: "combined-csv", label: "Save combined CSV", run: click("btn-download-combined-csv") },
+      { id: "lookup-table", label: "Generate lookup table", run: click("btn-export-table") }
+    ],
+    hide: ["[data-et-export-ui]", "#btn-export"]
+  });
+  window.ToolExports.mount();
+}

@@ -79,7 +79,7 @@
                         </div>
                         <button class="btn-secondary" id="new-register-btn" type="button" title="Create another risk register">+ Register</button>
                         <button class="btn-secondary" id="compare-registers-btn" type="button" title="Compare two risk registers">Compare</button>
-                        <button class="btn-secondary" id="export-matrix-btn" type="button" title="Export risk matrix PDF/print">Matrix PDF</button>
+                        <button class="btn-secondary" id="export-matrix-btn" data-et-export-ui type="button" style="display:none;" aria-hidden="true" title="Export risk matrix PDF/print">Matrix PDF</button>
                         <button class="btn-primary" id="add-risk-btn" title="Add a new risk">
                             <i data-lucide="plus"></i> Add Risk
                         </button>
@@ -310,6 +310,7 @@
     <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

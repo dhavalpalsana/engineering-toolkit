@@ -199,6 +199,51 @@ header {
   flex-shrink: 0;
 }
 
+/* ── Export dropdown (tool-exports.js) ─────────────────────── */
+.et-export-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+.et-export-trigger {
+  gap: 4px;
+}
+.et-export-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  z-index: 100;
+  flex-direction: column;
+  gap: 2px;
+}
+.et-export-menu.open {
+  display: flex;
+}
+.et-export-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.et-export-item:hover {
+  background: var(--accent-primary-glow);
+  color: var(--accent-primary);
+}
+
 /* ── Responsive: collapse on small screens ──────────────────── */
 @media (max-width: 640px) {
   header { padding: 0 16px; height: auto; min-height: 64px; }

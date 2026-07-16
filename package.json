@@ -1,0 +1,18 @@
+{
+  "name": "engineering-toolkit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static multi-tool engineering calculators — CI checks and smoke tests",
+  "scripts": {
+    "check": "node scripts/check-site.mjs",
+    "test": "node --test tools/can-bus-designer/js/physics.test.js js/tool-exports.test.js && node tools/drafting-board/js/solver.test.js && node tools/drafting-board/js/dxf.test.js",
+    "smoke": "node scripts/smoke-tools.mjs",
+    "verify": "npm run check && npm run test && npm run smoke"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

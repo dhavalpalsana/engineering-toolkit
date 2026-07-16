@@ -173,7 +173,7 @@ window.fbHelper = {
   },
 
   /**
-   * Save project. Optional 5th arg meta: { tags, folderId, lastOpenedAt }
+   * Save project. Optional 5th arg meta: { tags, folderId, lastOpenedAt, notes }
    * Additive fields only — older clients ignore them.
    */
   saveProject: async (toolId, name, config, projectId = null, meta = null) => {
@@ -185,11 +185,15 @@ window.fbHelper = {
       ? (meta.folderId || null)
       : undefined;
     const lastOpenedAt = meta && meta.lastOpenedAt ? meta.lastOpenedAt : undefined;
+    const notes = meta && Object.prototype.hasOwnProperty.call(meta, "notes")
+      ? String(meta.notes || "").slice(0, 2000)
+      : undefined;
 
     const applyMeta = (proj) => {
       if (tags !== undefined) proj.tags = tags;
       if (folderId !== undefined) proj.folderId = folderId;
       if (lastOpenedAt !== undefined) proj.lastOpenedAt = lastOpenedAt;
+      if (notes !== undefined) proj.notes = notes;
       return proj;
     };
 
@@ -204,7 +208,8 @@ window.fbHelper = {
         updatedAt: now,
         tags: existingIdx >= 0 ? (local[existingIdx].tags || []) : [],
         folderId: existingIdx >= 0 ? (local[existingIdx].folderId || null) : null,
-        lastOpenedAt: existingIdx >= 0 ? (local[existingIdx].lastOpenedAt || null) : null
+        lastOpenedAt: existingIdx >= 0 ? (local[existingIdx].lastOpenedAt || null) : null,
+        notes: existingIdx >= 0 ? (local[existingIdx].notes || "") : ""
       };
       if (existingIdx >= 0) {
         newProj = { ...local[existingIdx], ...newProj, config, name, updatedAt: now };
@@ -232,7 +237,8 @@ window.fbHelper = {
           updatedAt: now,
           tags: existingIdx >= 0 ? (local[existingIdx].tags || []) : [],
           folderId: existingIdx >= 0 ? (local[existingIdx].folderId || null) : null,
-          lastOpenedAt: existingIdx >= 0 ? (local[existingIdx].lastOpenedAt || null) : null
+          lastOpenedAt: existingIdx >= 0 ? (local[existingIdx].lastOpenedAt || null) : null,
+          notes: existingIdx >= 0 ? (local[existingIdx].notes || "") : ""
         };
         if (existingIdx >= 0) {
           newProj = { ...local[existingIdx], ...newProj, config, name, updatedAt: now };
@@ -260,6 +266,7 @@ window.fbHelper = {
         if (tags !== undefined) patch.tags = tags;
         if (folderId !== undefined) patch.folderId = folderId;
         if (lastOpenedAt !== undefined) patch.lastOpenedAt = lastOpenedAt;
+        if (notes !== undefined) patch.notes = notes;
         await db.collection("projects").doc(projectId).update(patch);
         return { id: projectId, error: null };
       }
@@ -277,11 +284,13 @@ window.fbHelper = {
         if (tags !== undefined) patch.tags = tags;
         if (folderId !== undefined) patch.folderId = folderId;
         if (lastOpenedAt !== undefined) patch.lastOpenedAt = lastOpenedAt;
+        if (notes !== undefined) patch.notes = notes;
         await db.collection("projects").doc(docId).update(patch);
         return { id: docId, error: null };
       } else {
         if (!projData.tags) projData.tags = [];
         if (projData.folderId === undefined) projData.folderId = null;
+        if (projData.notes === undefined) projData.notes = "";
         const docRef = await db.collection("projects").add(projData);
         return { id: docRef.id, error: null };
       }
@@ -322,7 +331,7 @@ window.fbHelper = {
       name,
       project.config,
       null,
-      { tags: project.tags || [], folderId: project.folderId || null }
+      { tags: project.tags || [], folderId: project.folderId || null, notes: project.notes || "" }
     );
   },
 

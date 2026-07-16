@@ -1393,3 +1393,17 @@
         window.shareLink = shareLink;
         window.exportJSON = exportJSON;
         window.importJSON = importJSON;
+        window.downloadSVG = downloadSVG;
+        window.downloadPNG = downloadPNG;
+
+// Platform export menu — all formats in header Export ▾
+if (window.ToolExports) {
+  window.ToolExports.register({
+    json: () => window.exportJSON(),
+    import: () => document.getElementById("import-file-input")?.click(),
+    svg: () => window.downloadSVG(),
+    image: () => window.downloadPNG(),
+    hide: ["[data-et-export-ui]"]
+  });
+  window.ToolExports.mount();
+}

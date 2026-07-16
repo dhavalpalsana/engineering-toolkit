@@ -2291,3 +2291,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 500);
 });
 
+
+// Platform export menu (standard JSON/import; tool-specific formats may already live in body UI)
+if (window.ToolExports) {
+  window.ToolExports.register({
+    json: () => window.exportJSON(),
+    import: () => document.getElementById("import-file-input")?.click(),
+    csv: () => exportPanelScheduleCsv(),
+    hide: ["[data-et-export-ui]"]
+  });
+  window.ToolExports.mount();
+}

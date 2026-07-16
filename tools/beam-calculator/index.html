@@ -366,18 +366,8 @@
           </div>
         </div>
 
-        <!-- Diagram export toolbar -->
-        <div class="output-card" style="padding: 12px 16px;">
-          <div class="card-header-actions" style="margin-bottom: 0;">
-            <h2 style="margin: 0; font-size: 14px;"><i data-lucide="image"></i> Export Diagrams</h2>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button type="button" class="add-row-btn" onclick="exportDiagramPng('sfd-svg','SFD')" title="Export SFD as PNG">SFD PNG</button>
-              <button type="button" class="add-row-btn" onclick="exportDiagramPng('bmd-svg','BMD')" title="Export BMD as PNG">BMD PNG</button>
-              <button type="button" class="add-row-btn" onclick="exportDiagramPng('deflection-svg','Deflection')" title="Export deflection as PNG">δ PNG</button>
-              <button type="button" class="add-row-btn" onclick="exportAllDiagramsPdf()" title="Open print/PDF view of all diagrams">PDF / Print</button>
-            </div>
-          </div>
-        </div>
+        <!-- Diagram exports live in header Export ▾ -->
+        <div class="output-card" data-et-export-ui style="display:none;padding:12px 16px;" aria-hidden="true"></div>
 
         <!-- Shear Force Diagram -->
         <div class="output-card diagram-card">
@@ -429,6 +419,7 @@
   <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
   

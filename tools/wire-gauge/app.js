@@ -127,8 +127,20 @@
             const stateParam = urlParams.get('state');
             if (stateParam) {
                 try {
-                    const decoded = (window.decodeShareState ? window.decodeShareState(stateParam) : JSON.parse(decodeURIComponent(escape(atob(stateParam)))));
-                    loadStateObject(decoded);
+                    let decoded = null;
+                    if (window.decodeToolShare) {
+                        const res = window.decodeToolShare(stateParam, "wire-gauge");
+                        if (!res.ok) {
+                            if (window.showToast) window.showToast(res.error || "Invalid share link", false);
+                        } else {
+                            if (res.warning && window.ToolExports) window.ToolExports.showPhysicsWarning(res.warning);
+                            decoded = res.payload;
+                        }
+                    } else {
+                        decoded = (window.decodeShareState ? window.decodeShareState(stateParam) : JSON.parse(decodeURIComponent(escape(atob(stateParam)))));
+                    }
+                    if (decoded) loadStateObject(decoded);
+                    else addSegmentRow('AWG', 23, 1000.0);
                     // Clear the query param silently to keep URL clean
                     window.history.replaceState({}, document.title, window.location.pathname);
                 } catch (e) {
@@ -921,8 +933,9 @@
         // Generate dynamic hash URL for team sharing configurations
         function shareState() {
             const state = captureCurrentState();
-            const stringified = JSON.stringify(state);
-            const encoded = (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(stringified))));
+            const encoded = window.encodeToolShare
+                ? window.encodeToolShare("wire-gauge", state)
+                : (window.encodeShareState ? window.encodeShareState(state) : btoa(unescape(encodeURIComponent(JSON.stringify(state)))));
             const shareUrl = `${window.location.origin}${window.location.pathname}?state=${encoded}`;
 
             // robust copying to clipboard supporting frames/sandboxes via traditional text area injection fallback
@@ -934,6 +947,7 @@
             try {
                 document.execCommand('copy');
                 showAlert('Link Copied!', 'A shareable link containing your exact active parameters and spliced segments has been copied to your clipboard.');
+                if (window.pmMaybeGuestUpgradeCta) window.pmMaybeGuestUpgradeCta();
             } catch (err) {
                 showAlert('Share link ready', `Copy this URL to share: ${shareUrl}`);
             }
@@ -941,11 +955,64 @@
             document.body.removeChild(tempTextArea);
         }
 
+        function buildWireMarkdown() {
+            const s = captureCurrentState();
+            const segs = (s.segments || []).map((seg, i) =>
+                `| ${i + 1} | ${seg.gauge ?? "—"} | ${seg.length ?? "—"} ${s.distUnit || "m"} |`
+            );
+            return [
+                "## Cable Thermal & Loss Summary",
+                "",
+                `| Parameter | Value |`,
+                `|---|---|`,
+                `| Phase | ${s.phase ?? "—"} |`,
+                `| Voltage | ${s.voltage ?? "—"} V |`,
+                `| Current | ${s.current ?? "—"} A |`,
+                `| Ambient | ${s.ambientTemp ?? "—"} ${s.ambientUnit || "°C"} |`,
+                `| Material | ${s.material ?? "—"} |`,
+                `| Allowable drop | ${s.allowableDrop ?? "—"} % |`,
+                "",
+                `| # | Gauge | Length |`,
+                `|---|---|---|`,
+                ...segs,
+                "",
+                `_Engineering Toolkit · Wire Gauge_`
+            ].join("\n");
+        }
 
-    
+        function openWireReport() {
+            if (!window.ToolExports) return;
+            window.ToolExports.openPrintReport({
+                title: "Cable Thermal & Voltage Drop Report",
+                metaLines: [
+                    `V=${captureCurrentState().voltage} V`,
+                    `I=${captureCurrentState().current} A`,
+                    `physics v${window.ToolExports.getPhysicsVersion("wire-gauge")}`
+                ],
+                sections: [{ heading: "Configuration", text: buildWireMarkdown() }]
+            });
+        }
+
+        // Normalize globals for PM / ToolExports
+        window.exportJSON = typeof exportStateJSON === "function" ? exportStateJSON : window.exportJSON;
+        window.shareLink = shareState;
+        window.importJSON = typeof importStateJSON === "function" ? importStateJSON : window.importJSON;
+
         // Register project manager hooks
         window.projectManagerConfig = {
             toolId: "wire-gauge",
             getInputs: () => captureCurrentState(),
             setInputs: (data) => loadStateObject(data)
         };
+
+        // Export menu
+        if (window.ToolExports) {
+            window.ToolExports.register({
+                json: () => (window.exportJSON || exportStateJSON)(),
+                import: () => document.getElementById("import-file-input")?.click(),
+                report: () => openWireReport(),
+                markdown: () => buildWireMarkdown(),
+                hide: ['button[onclick*="exportStateJSON"]', 'button[onclick*="importStateJSON"]']
+            });
+            window.ToolExports.mount();
+        }

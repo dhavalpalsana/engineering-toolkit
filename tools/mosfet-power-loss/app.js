@@ -505,12 +505,16 @@ window.projectManagerConfig = {
 window.shareLink = function() {
   try {
     const configData = getInputsConfig();
-    const serialized = (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
+    const serialized = window.encodeToolShare
+      ? window.encodeToolShare("mosfet-power-loss", configData)
+      : (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
     const url = new URL(window.location.href);
     url.searchParams.set('design', serialized);
     
     navigator.clipboard.writeText(url.toString()).then(() => {
-      alert("Design link copied to clipboard! Share this URL with other engineers.");
+      if (window.showToast) window.showToast("Design link copied to clipboard!");
+      else alert("Design link copied to clipboard!");
+      if (window.pmMaybeGuestUpgradeCta) window.pmMaybeGuestUpgradeCta();
     }).catch(() => {
       alert("Could not write to clipboard automatically. Copy URL manually: " + url.toString());
     });
@@ -518,6 +522,36 @@ window.shareLink = function() {
     console.error(err);
     alert("Failed to generate share link.");
   }
+};
+
+window.buildMosfetMarkdown = function() {
+  const cfg = getInputsConfig();
+  const rows = (cfg.devices || []).map((d, i) =>
+    `| ${d.name || "Device " + (i + 1)} | ${d.rdsOn ?? "—"} | ${d.qg ?? "—"} |`
+  );
+  return [
+    "## MOSFET Power Loss Comparison",
+    "",
+    `| Device | Rds(on) | Qg |`,
+    `|---|---|---|`,
+    ...rows,
+    "",
+    `_Conditions from Engineering Toolkit MOSFET calculator_`
+  ].join("\n");
+};
+
+window.openMosfetReport = function() {
+  if (!window.ToolExports) return;
+  const cfg = getInputsConfig();
+  const md = window.buildMosfetMarkdown();
+  window.ToolExports.openPrintReport({
+    title: "MOSFET Power Loss Report",
+    metaLines: [
+      `Devices: ${(cfg.devices || []).length}`,
+      `physics v${window.ToolExports.getPhysicsVersion("mosfet-power-loss")}`
+    ],
+    sections: [{ heading: "Summary", text: md }]
+  });
 };
 
 window.exportJSON = function() {
@@ -559,15 +593,44 @@ document.addEventListener("DOMContentLoaded", () => {
   const design = urlParams.get('design');
   if (design) {
     try {
-      const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
-      setInputsConfig(decoded);
+      let decoded = null;
+      if (window.decodeToolShare) {
+        const res = window.decodeToolShare(design, "mosfet-power-loss");
+        if (!res.ok) {
+          if (window.showToast) window.showToast(res.error || "Invalid share link", false);
+        } else {
+          if (res.warning && window.ToolExports) window.ToolExports.showPhysicsWarning(res.warning);
+          decoded = res.payload;
+        }
+      } else {
+        decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
+      }
+      if (decoded) setInputsConfig(decoded);
+      else {
+        renderColumns();
+        recalculateAll();
+      }
     } catch (err) {
       console.error("Failed to load design from URL:", err);
+      renderColumns();
+      recalculateAll();
     }
   } else {
     // Initial Render and Recalculation
     renderColumns();
     recalculateAll();
+  }
+
+  // Export menu
+  if (window.ToolExports) {
+    window.ToolExports.register({
+      json: () => window.exportJSON(),
+      import: () => document.getElementById("import-file-input")?.click(),
+      report: () => window.openMosfetReport(),
+      markdown: () => window.buildMosfetMarkdown(),
+      hide: ['button[onclick*="exportJSON"]', 'button[onclick*="importJSON"]']
+    });
+    window.ToolExports.mount();
   }
 
   // Render Lucide icons

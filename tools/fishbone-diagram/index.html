@@ -80,6 +80,7 @@
     <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
 </head>
@@ -364,15 +365,8 @@
                     <span id="zoom-indicator" class="text-[10px] font-bold text-slate-500 px-1.5 font-mono">100%</span>
                 </div>
 
-                <!-- Export SVG / PNG float -->
-                <div class="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-white/95 p-1.5 rounded-xl border border-slate-200 shadow-sm backdrop-blur-md">
-                    <button onclick="downloadSVG()" class="px-2.5 py-1.5 hover:bg-slate-100 text-slate-700 font-bold text-[10px] rounded-lg transition-all flex items-center gap-1">
-                        <i data-lucide="file-type-2" class="w-3.5 h-3.5 text-orange-500"></i> SVG Vector
-                    </button>
-                    <button onclick="downloadPNG()" class="px-2.5 py-1.5 hover:bg-slate-100 text-slate-700 font-bold text-[10px] rounded-lg transition-all flex items-center gap-1">
-                        <i data-lucide="image" class="w-3.5 h-3.5 text-blue-500"></i> PNG Image
-                    </button>
-                </div>
+                <!-- SVG/PNG exports live in header Export ▾ -->
+                <div data-et-export-ui class="hidden" aria-hidden="true"></div>
 
                 <!-- Double-click / Zoom guide status line in canvas bottom -->
                 <div class="absolute bottom-4 left-4 z-20 text-[10px] font-bold text-slate-400 flex items-center gap-1 pointer-events-none select-none">

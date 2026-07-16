@@ -297,12 +297,49 @@ body::before {
   gap: 12px;
   font-size: 14px;
   font-weight: 600;
+  padding: 24px;
+  text-align: center;
+  z-index: 20;
 }
 
 .spin-icon {
   width: 24px;
   height: 24px;
   animation: spin 1s linear infinite;
+}
+
+.sim-progress-track {
+  width: min(280px, 70vw);
+  height: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sim-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #0d9488, #38bdf8);
+  border-radius: 999px;
+  transition: width 0.12s linear;
+}
+
+.sim-cancel-btn {
+  appearance: none;
+  margin-top: 4px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.sim-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: rgba(239, 68, 68, 0.6);
 }
 
 @keyframes spin {

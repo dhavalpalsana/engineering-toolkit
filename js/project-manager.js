@@ -97,6 +97,124 @@ function bootProjectManager() {
       border-radius: var(--radius-sm);
       display: none;
     }
+    .pm-save-status {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-right: 4px;
+      padding: 4px 8px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      display: none;
+      line-height: 1.2;
+    }
+    .pm-save-status.is-dirty {
+      color: var(--color-warning, #d97706);
+      background: var(--color-warning-bg, rgba(245, 158, 11, 0.08));
+      border-color: rgba(245, 158, 11, 0.35);
+    }
+    .pm-save-status.is-clean {
+      color: var(--color-success, #059669);
+      background: var(--color-success-bg, rgba(16, 185, 129, 0.08));
+      border-color: rgba(16, 185, 129, 0.28);
+    }
+    .et-guest-banner {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 8px 16px;
+      background: linear-gradient(90deg, rgba(13,148,136,0.06), rgba(37,99,235,0.08), rgba(13,148,136,0.06));
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.4;
+      text-align: center;
+      z-index: 39;
+    }
+    .et-guest-banner strong { color: var(--text-primary); font-weight: 600; }
+    .et-guest-banner-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .et-guest-banner-btn {
+      appearance: none;
+      border: 1px solid var(--accent-primary);
+      background: var(--accent-primary);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: var(--radius-md, 8px);
+      cursor: pointer;
+    }
+    .et-guest-banner-btn.secondary {
+      background: var(--bg-secondary, #fff);
+      color: var(--accent-primary);
+    }
+    .et-guest-banner-dismiss {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 6px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .et-guest-banner-dismiss:hover { color: var(--text-primary); background: rgba(0,0,0,0.04); }
+    .et-physics-banner {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 8px 16px;
+      background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+      border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+      color: var(--text-secondary);
+      font-size: 13px;
+      z-index: 39;
+    }
+    .pm-item-notes {
+      display: block;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pm-form-textarea {
+      width: 100%;
+      min-height: 72px;
+      resize: vertical;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--bg-interactive);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .pm-form-textarea:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--accent-primary-glow);
+    }
 
     /* Drawer Styles */
     .pm-drawer-overlay {
@@ -496,7 +614,38 @@ function bootProjectManager() {
   // Find header auth-btn to anchor control injections
   const authBtn = document.getElementById("auth-btn");
   if (!authBtn) return;
-  const headerRight = authBtn.parentElement;
+  // auth-ui may wrap #auth-btn in .auth-btn-wrapper — inject into .hdr-right, not the wrapper
+  const headerRight =
+    document.querySelector("header .hdr-right") ||
+    authBtn.closest(".hdr-right") ||
+    (authBtn.parentElement && authBtn.parentElement.classList.contains("auth-btn-wrapper")
+      ? authBtn.parentElement.parentElement
+      : authBtn.parentElement);
+  if (!headerRight) return;
+
+  /** insertBefore safe when reference was re-parented into a wrapper */
+  const safeInsertBefore = (parent, newNode, referenceNode) => {
+    if (!parent || !newNode) return;
+    if (!referenceNode) {
+      parent.appendChild(newNode);
+      return;
+    }
+    if (referenceNode.parentNode === parent) {
+      parent.insertBefore(newNode, referenceNode);
+      return;
+    }
+    let node = referenceNode;
+    while (node && node.parentNode && node.parentNode !== parent) {
+      node = node.parentNode;
+    }
+    if (node && node.parentNode === parent) parent.insertBefore(newNode, node);
+    else parent.appendChild(newNode);
+  };
+
+  const authInsertRef = () =>
+    headerRight.querySelector(".auth-btn-wrapper") ||
+    headerRight.querySelector("#auth-btn") ||
+    authBtn;
 
   let activeProject = null;
   let allProjects = [];
@@ -679,15 +828,135 @@ function bootProjectManager() {
     match.lastOpenedAt = new Date().toISOString();
 
     if (config && config.toolId === toolId) {
-      config.setInputs(match.config);
-      activeProject = { id: match.id, name: match.name, tags: match.tags || [], folderId: match.folderId || null };
-      localStorage.setItem(`pm_active_id_${config.toolId}`, match.id);
-      updateActiveIndicator();
+      applyProjectLoad(match);
       showToast(`Loaded "${match.name}"`);
       closeDrawer();
     } else {
       window.location.href = `${getToolPath(toolId)}?project=${id}`;
     }
+  };
+
+  /** Dirty / save-status API (wired in CASE B; safe no-ops on homepage). */
+  let isHydrating = false;
+  let lastSavedAt = null;
+  let isDirty = false;
+  let saveStatusEl = null;
+  let saveBtnRef = null;
+  let statusTickTimer = null;
+  let markDirtyImpl = () => {};
+  let markCleanImpl = () => {};
+  let updateActiveIndicatorImpl = () => {};
+  let openSaveModalImpl = null;
+  let openEditDetailsImpl = null;
+
+  const setHydrating = (v) => { isHydrating = !!v; };
+  const markDirty = () => markDirtyImpl();
+  const markClean = () => markCleanImpl();
+  const updateActiveIndicator = () => updateActiveIndicatorImpl();
+
+  const refreshSaveStatusChip = () => {
+    if (!saveStatusEl) return;
+    if (!activeProject || !config) {
+      saveStatusEl.style.display = "none";
+      saveStatusEl.textContent = "";
+      saveStatusEl.classList.remove("is-dirty", "is-clean");
+      return;
+    }
+    saveStatusEl.style.display = "inline-block";
+    if (isDirty) {
+      saveStatusEl.textContent = "Unsaved changes";
+      saveStatusEl.classList.add("is-dirty");
+      saveStatusEl.classList.remove("is-clean");
+      saveStatusEl.title = "Local edits not yet saved to the cloud";
+    } else if (lastSavedAt) {
+      saveStatusEl.textContent = `Saved · ${relativeTime(new Date(lastSavedAt).toISOString())}`;
+      saveStatusEl.classList.add("is-clean");
+      saveStatusEl.classList.remove("is-dirty");
+      saveStatusEl.title = `Last saved ${new Date(lastSavedAt).toLocaleString()}`;
+    } else {
+      saveStatusEl.textContent = "Saved";
+      saveStatusEl.classList.add("is-clean");
+      saveStatusEl.classList.remove("is-dirty");
+    }
+  };
+
+  const applyProjectLoad = (match) => {
+    if (!config || !match) return;
+    setHydrating(true);
+    try {
+      config.setInputs(match.config);
+    } finally {
+      setTimeout(() => setHydrating(false), 0);
+    }
+    activeProject = {
+      id: match.id,
+      name: match.name,
+      tags: match.tags || [],
+      folderId: match.folderId || null,
+      notes: match.notes || ""
+    };
+    localStorage.setItem(`pm_active_id_${config.toolId}`, match.id);
+    lastSavedAt = match.updatedAt ? new Date(match.updatedAt).getTime() : Date.now();
+    markClean();
+    updateActiveIndicator();
+  };
+
+  const injectGuestBanner = () => {
+    if (!config || isHomepage) return;
+    if (localStorage.getItem("et_guest_banner_dismissed") === "1") return;
+    if (document.getElementById("et-guest-banner")) return;
+    if (!fb.isConfigured || !fb.isConfigured()) return;
+
+    const banner = document.createElement("div");
+    banner.id = "et-guest-banner";
+    banner.className = "et-guest-banner";
+    banner.setAttribute("role", "status");
+    banner.innerHTML = `
+      <span><strong>Sign in</strong> to save and sync projects across devices. Export JSON and Share Link still work in this browser.</span>
+      <span class="et-guest-banner-actions">
+        <button type="button" class="et-guest-banner-btn" data-action="signin">Sign In</button>
+        <button type="button" class="et-guest-banner-dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>
+      </span>
+    `;
+    const header = document.querySelector("header");
+    const beta = document.getElementById("tool-beta-banner");
+    if (beta && beta.parentNode) {
+      beta.insertAdjacentElement("afterend", banner);
+    } else if (header && header.parentNode) {
+      header.insertAdjacentElement("afterend", banner);
+    } else {
+      document.body.insertBefore(banner, document.body.firstChild);
+    }
+
+    banner.querySelector('[data-action="signin"]')?.addEventListener("click", () => {
+      document.getElementById("auth-btn")?.click();
+    });
+    banner.querySelector(".et-guest-banner-dismiss")?.addEventListener("click", () => {
+      localStorage.setItem("et_guest_banner_dismissed", "1");
+      banner.remove();
+    });
+  };
+
+  const removeGuestBanner = () => {
+    document.getElementById("et-guest-banner")?.remove();
+  };
+
+  /** Soft upgrade CTA after first guest share/export this session. */
+  window.pmMaybeGuestUpgradeCta = () => {
+    try {
+      if (fb.getUserSync ? fb.getUserSync() : (window.firebase && firebase.auth && firebase.auth().currentUser)) {
+        return;
+      }
+    } catch (_) { /* fall through to guest path */ }
+    // Prefer async user check via auth currentUser
+    const user = (typeof firebase !== "undefined" && firebase.apps && firebase.apps.length && firebase.auth)
+      ? firebase.auth().currentUser
+      : null;
+    if (user) return;
+    if (!fb.isConfigured || !fb.isConfigured()) return;
+    if (sessionStorage.getItem("et_guest_upgrade_cta_shown") === "1") return;
+    sessionStorage.setItem("et_guest_upgrade_cta_shown", "1");
+    showToast("Want this on every device? Sign in to save to the cloud.", true);
   };
 
   const renderProjectsList = (filter = "") => {
@@ -711,7 +980,13 @@ function bootProjectManager() {
     }
 
     if (filtered.length === 0) {
-      drawerList.innerHTML = `<div class="pm-empty-state">No saved projects found${q || pmFilterTool || pmFilterTag || pmFilterFolder ? " matching filters" : ""}.</div>`;
+      const hasFilters = !!(q || pmFilterTool || pmFilterTag || pmFilterFolder);
+      drawerList.innerHTML = hasFilters
+        ? `<div class="pm-empty-state">No saved projects found matching filters.</div>`
+        : `<div class="pm-empty-state">
+            <p style="margin:0 0 8px;font-weight:700;color:var(--text-primary);">No saved projects yet</p>
+            <p style="margin:0;font-size:12px;line-height:1.5;">Use <strong>Save</strong> inside a tool to store designs in the cloud when signed in. As a guest, use <strong>Export JSON</strong> or <strong>Share Link</strong> on each tool — local export still works without an account.</p>
+          </div>`;
       return;
     }
 
@@ -732,14 +1007,21 @@ function bootProjectManager() {
           `<span style="font-size:10px;padding:1px 6px;border-radius:999px;background:var(--bg-tertiary);color:var(--text-muted);margin-right:3px;">${escapeHtml(t)}</span>`
         ).join("");
         const folderName = p.folderId ? (userFolders.find(f => f.id === p.folderId) || {}).name : "";
+        const notesSnip = (p.notes || "").trim()
+          ? `<span class="pm-item-notes" title="${escapeHtml(p.notes)}">${escapeHtml(p.notes.trim())}</span>`
+          : "";
         return `
           <div class="pm-item">
             <div class="pm-item-info" data-id="${p.id}" data-tool="${p.toolId}">
               <span class="pm-item-name">${escapeHtml(p.name)}</span>
               <span class="pm-item-date">${relativeTime(p.lastOpenedAt || p.updatedAt)}${folderName ? " · " + escapeHtml(folderName) : ""}</span>
+              ${notesSnip}
               ${tagsHtml ? `<div style="margin-top:4px;">${tagsHtml}</div>` : ""}
             </div>
             <div class="pm-item-actions">
+              <button class="pm-item-btn pm-item-edit" data-id="${p.id}" title="Edit name, tags, notes" style="margin-right:2px;">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              </button>
               <button class="pm-item-btn pm-item-dup" data-id="${p.id}" title="Duplicate project" style="margin-right:2px;">
                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
               </button>
@@ -765,6 +1047,20 @@ function bootProjectManager() {
     });
 
     // Duplicate
+    drawerList.querySelectorAll(".pm-item-edit").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute("data-id");
+        const proj = allProjects.find(p => p.id === id);
+        if (!proj) return;
+        if (typeof openEditDetailsImpl === "function") {
+          openEditDetailsImpl(proj);
+        } else {
+          showToast("Open this project in its tool to edit details.", true);
+        }
+      });
+    });
+
     drawerList.querySelectorAll(".pm-item-dup").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -883,7 +1179,7 @@ function bootProjectManager() {
       <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
       <span>My Projects</span>
     `;
-    headerRight.insertBefore(myProjectsBtn, authBtn);
+    safeInsertBefore(headerRight, myProjectsBtn, authInsertRef());
 
     myProjectsBtn.addEventListener("click", openDrawer);
 
@@ -915,12 +1211,13 @@ function bootProjectManager() {
   // CASE B: SUBPAGE CALCULATOR INTEGRATION
   // ----------------------------------------------------
   else {
-    // Inject toolbar containing "Open" (opens local drawer!) and "Save"
+    // Inject toolbar containing status chip, "Open", and "Save"
     const toolbar = document.createElement("div");
     toolbar.className = "project-actions-group";
     toolbar.style.display = "none"; // Hidden until logged in
     toolbar.innerHTML = `
       <span class="active-project-indicator" id="pm-active-name"></span>
+      <span class="pm-save-status" id="pm-save-status" aria-live="polite"></span>
       <button class="project-btn" id="pm-open-btn" title="Open My Saved Projects">
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
         <span>Open</span>
@@ -930,34 +1227,43 @@ function bootProjectManager() {
         <span>Save</span>
       </button>
     `;
-    headerRight.insertBefore(toolbar, authBtn);
+    safeInsertBefore(headerRight, toolbar, authInsertRef());
 
     const openBtn = document.getElementById("pm-open-btn");
     const saveBtn = document.getElementById("pm-save-btn");
     const activeNameEl = document.getElementById("pm-active-name");
+    saveStatusEl = document.getElementById("pm-save-status");
+    saveBtnRef = saveBtn;
 
     const updateToolbarVisibility = (user) => {
       if (user && fb.isConfigured()) {
         toolbar.style.display = "flex";
+        removeGuestBanner();
       } else {
         toolbar.style.display = "none";
         activeProject = null;
+        lastSavedAt = null;
         updateActiveIndicator();
+        injectGuestBanner();
       }
     };
 
-    let isDirty = false;
-
-    const markDirty = () => {
+    markDirtyImpl = () => {
+      if (isHydrating) return;
       if (activeProject && !isDirty) {
         isDirty = true;
         saveBtn.classList.add("unsaved");
+        refreshSaveStatusChip();
+      } else if (activeProject && isDirty) {
+        refreshSaveStatusChip();
       }
     };
 
-    const markClean = () => {
+    markCleanImpl = () => {
       isDirty = false;
       saveBtn.classList.remove("unsaved");
+      if (activeProject && !lastSavedAt) lastSavedAt = Date.now();
+      refreshSaveStatusChip();
     };
 
     // Warn user if they navigate away with unsaved changes
@@ -968,7 +1274,7 @@ function bootProjectManager() {
       }
     });
 
-    const updateActiveIndicator = () => {
+    updateActiveIndicatorImpl = () => {
       if (activeProject) {
         activeNameEl.textContent = activeProject.name;
         activeNameEl.style.display = "block";
@@ -977,15 +1283,43 @@ function bootProjectManager() {
         activeNameEl.textContent = "";
         activeNameEl.style.display = "none";
         saveBtn.title = "Save current design";
-        markClean();
+        isDirty = false;
+        saveBtn.classList.remove("unsaved");
+      }
+      refreshSaveStatusChip();
+    };
+
+    if (statusTickTimer) clearInterval(statusTickTimer);
+    statusTickTimer = setInterval(() => {
+      if (activeProject && !isDirty && lastSavedAt) refreshSaveStatusChip();
+    }, 30000);
+
+    openBtn.addEventListener("click", openDrawer);
+
+    const populateFolderSelect = async (folderSelect, selectedId) => {
+      folderSelect.innerHTML = `<option value="">Unfiled</option>`;
+      if (fb.getUserFolders) {
+        const { data } = await fb.getUserFolders();
+        (data || []).forEach(f => {
+          const opt = document.createElement("option");
+          opt.value = f.id;
+          opt.textContent = f.name;
+          if (selectedId && selectedId === f.id) opt.selected = true;
+          folderSelect.appendChild(opt);
+        });
       }
     };
 
-    // Open button click opens drawer directly on this page!
-    openBtn.addEventListener("click", openDrawer);
+    /** Save-as (new project) or edit-details modal. mode: 'save' | 'edit' */
+    const openProjectMetaModal = (opts = {}) => {
+      const mode = opts.mode || "save"; // save | edit
+      const prefillName = opts.name || "";
+      const prefillTags = Array.isArray(opts.tags) ? opts.tags.join(", ") : (opts.tags || "");
+      const prefillFolder = opts.folderId || "";
+      const prefillNotes = opts.notes || "";
+      const projectId = opts.projectId || null;
+      const toolIdForEdit = opts.toolId || (config && config.toolId);
 
-    // Mark project as saved (clean) when first loaded
-    const openSaveModal = (prefill = "") => {
       const overlayModal = document.createElement("div");
       overlayModal.className = "pm-modal-overlay";
       overlayModal.id = "pm-save-modal";
@@ -993,17 +1327,17 @@ function bootProjectManager() {
         <div class="pm-modal-content">
           <button class="pm-modal-close" id="pm-close-save-modal">&times;</button>
           <div class="pm-modal-header">
-            <h3>Save Configuration</h3>
-            <p>Give your current inputs a name to save online</p>
+            <h3>${mode === "edit" ? "Edit Project Details" : "Save Configuration"}</h3>
+            <p>${mode === "edit" ? "Update name, tags, folder, and notes" : "Give your current inputs a name to save online"}</p>
           </div>
           <form id="pm-save-form">
             <div class="pm-form-group">
               <label for="pm-name">Design Name</label>
-              <input type="text" class="pm-form-input" id="pm-name" required placeholder="e.g. Feeder Busbar 200A" value="${prefill}">
+              <input type="text" class="pm-form-input" id="pm-name" required placeholder="e.g. Feeder Busbar 200A" value="${escapeHtml(prefillName)}">
             </div>
             <div class="pm-form-group">
               <label class="pm-form-label" for="pm-tags">Tags (comma-separated, optional)</label>
-              <input type="text" class="pm-form-input" id="pm-tags" placeholder="e.g. site-a, wip, review" value="">
+              <input type="text" class="pm-form-input" id="pm-tags" placeholder="e.g. site-a, wip, review" value="${escapeHtml(prefillTags)}">
             </div>
             <div class="pm-form-group">
               <label class="pm-form-label" for="pm-folder">Folder (optional)</label>
@@ -1011,7 +1345,11 @@ function bootProjectManager() {
                 <option value="">Unfiled</option>
               </select>
             </div>
-            <button type="submit" class="project-btn primary" style="width:100%;justify-content:center;height:42px;">Save Design</button>
+            <div class="pm-form-group">
+              <label class="pm-form-label" for="pm-notes">Notes / assumptions (optional)</label>
+              <textarea class="pm-form-textarea" id="pm-notes" maxlength="2000" placeholder="e.g. Rev B, client ACME, free-air ambient 40°C">${escapeHtml(prefillNotes)}</textarea>
+            </div>
+            <button type="submit" class="project-btn primary" style="width:100%;justify-content:center;height:42px;">${mode === "edit" ? "Update Details" : "Save Design"}</button>
           </form>
         </div>
       `;
@@ -1022,19 +1360,9 @@ function bootProjectManager() {
       const nameInput = document.getElementById("pm-name");
       const tagsInput = document.getElementById("pm-tags");
       const folderSelect = document.getElementById("pm-folder");
+      const notesInput = document.getElementById("pm-notes");
 
-      // Populate folders async
-      (async () => {
-        if (fb.getUserFolders) {
-          const { data } = await fb.getUserFolders();
-          (data || []).forEach(f => {
-            const opt = document.createElement("option");
-            opt.value = f.id;
-            opt.textContent = f.name;
-            folderSelect.appendChild(opt);
-          });
-        }
-      })();
+      populateFolderSelect(folderSelect, prefillFolder);
 
       const closeModal = () => {
         overlayModal.classList.add("pm-fade-out");
@@ -1052,36 +1380,86 @@ function bootProjectManager() {
         if (!name) return;
         const tags = (tagsInput.value || "").split(",").map(t => t.trim().toLowerCase()).filter(Boolean).slice(0, 12);
         const folderId = folderSelect.value || null;
+        const notes = (notesInput.value || "").slice(0, 2000);
 
         const submitBtn = form.querySelector("button[type=submit]");
         submitBtn.disabled = true;
-        submitBtn.textContent = "Saving...";
+        submitBtn.textContent = mode === "edit" ? "Updating..." : "Saving...";
 
         try {
-          const data = config.getInputs();
-          const { id, error } = await fb.saveProject(config.toolId, name, data, null, { tags, folderId });
-          if (error) {
-            showToast("Save failed: " + error.message, false);
+          if (mode === "edit" && projectId) {
+            // Preserve existing config: fetch if needed
+            let cfg = null;
+            if (config && config.toolId === toolIdForEdit && activeProject && activeProject.id === projectId) {
+              cfg = config.getInputs();
+            } else {
+              const existing = allProjects.find(p => p.id === projectId);
+              cfg = existing ? existing.config : null;
+              if (!cfg) {
+                const res = await fb.getProjectById(projectId);
+                cfg = res.data ? res.data.config : null;
+              }
+            }
+            if (!cfg) {
+              showToast("Could not load project config to update.", false);
+              return;
+            }
+            const { error } = await fb.saveProject(toolIdForEdit, name, cfg, projectId, { tags, folderId, notes });
+            if (error) {
+              showToast("Update failed: " + error.message, false);
+            } else {
+              const idx = allProjects.findIndex(p => p.id === projectId);
+              if (idx >= 0) {
+                allProjects[idx] = { ...allProjects[idx], name, tags, folderId, notes, updatedAt: new Date().toISOString() };
+              }
+              if (activeProject && activeProject.id === projectId) {
+                activeProject = { ...activeProject, name, tags, folderId, notes };
+                lastSavedAt = Date.now();
+                markClean();
+                updateActiveIndicator();
+              }
+              showToast(`Updated "${name}"`);
+              renderProjectsList(searchInput.value);
+              closeModal();
+            }
           } else {
-            activeProject = { id, name, tags, folderId };
-            localStorage.setItem(`pm_active_id_${config.toolId}`, id);
-            updateActiveIndicator();
-            markClean();
-            showToast(`Saved "${name}"`);
-            closeModal();
+            const data = config.getInputs();
+            const { id, error } = await fb.saveProject(config.toolId, name, data, null, { tags, folderId, notes });
+            if (error) {
+              showToast("Save failed: " + error.message, false);
+            } else {
+              activeProject = { id, name, tags, folderId, notes };
+              localStorage.setItem(`pm_active_id_${config.toolId}`, id);
+              lastSavedAt = Date.now();
+              updateActiveIndicator();
+              markClean();
+              showToast(`Saved "${name}"`);
+              closeModal();
+            }
           }
         } catch (err) {
           showToast("Save failed: " + (err.message || "Unknown error"), false);
         } finally {
           submitBtn.disabled = false;
-          submitBtn.textContent = "Save Design";
+          submitBtn.textContent = mode === "edit" ? "Update Details" : "Save Design";
         }
       });
 
       nameInput.focus();
     };
 
-    // Save click dispatcher (autosave vs prompts)
+    openSaveModalImpl = (prefill = "") => openProjectMetaModal({ mode: "save", name: prefill });
+    openEditDetailsImpl = (proj) => openProjectMetaModal({
+      mode: "edit",
+      projectId: proj.id,
+      toolId: proj.toolId,
+      name: proj.name || "",
+      tags: proj.tags || [],
+      folderId: proj.folderId || "",
+      notes: proj.notes || ""
+    });
+
+    // Save click dispatcher
     saveBtn.addEventListener("click", async () => {
       if (activeProject) {
         saveBtn.disabled = true;
@@ -1090,40 +1468,53 @@ function bootProjectManager() {
 
         try {
           const data = config.getInputs();
-          const { error } = await fb.saveProject(config.toolId, activeProject.name, data, activeProject.id);
-          
+          const meta = {
+            tags: activeProject.tags || [],
+            folderId: activeProject.folderId || null,
+            notes: activeProject.notes || ""
+          };
+          const { error } = await fb.saveProject(config.toolId, activeProject.name, data, activeProject.id, meta);
+
           if (error) {
-            showToast("Auto-save failed: " + error.message, false);
+            showToast("Save failed: " + error.message, false);
           } else {
+            lastSavedAt = Date.now();
             markClean();
             showToast(`Saved "${activeProject.name}"`);
           }
         } catch (err) {
-          showToast("Auto-save failed: " + (err.message || "Unknown error"), false);
+          showToast("Save failed: " + (err.message || "Unknown error"), false);
         } finally {
           saveBtn.disabled = false;
           saveBtn.innerHTML = originalHtml;
-          // Restore unsaved dot if still dirty
           if (isDirty) saveBtn.classList.add("unsaved");
         }
       } else {
-        openSaveModal();
+        openSaveModalImpl();
       }
     });
 
-    // Listen for input changes to mark dirty
+    // Listen for input changes to mark dirty (skip hydrate)
     document.addEventListener("input", markDirty);
     document.addEventListener("change", markDirty);
 
-    // 60-second periodic background auto-save for active projects
+    // 60-second periodic background auto-save — update chip, no success toast spam
     setInterval(async () => {
       if (activeProject && isDirty && fb.isConfigured()) {
         try {
           const data = config.getInputs();
-          const { error } = await fb.saveProject(config.toolId, activeProject.name, data, activeProject.id);
+          const meta = {
+            tags: activeProject.tags || [],
+            folderId: activeProject.folderId || null,
+            notes: activeProject.notes || ""
+          };
+          const { error } = await fb.saveProject(config.toolId, activeProject.name, data, activeProject.id, meta);
           if (!error) {
+            lastSavedAt = Date.now();
             markClean();
-            showToast(`Auto-saved "${activeProject.name}"`);
+            // Quiet success — status chip only
+          } else {
+            showToast("Auto-save failed: " + error.message, false);
           }
         } catch (_) { /* silent fail — user can still manually save */ }
       }
@@ -1141,26 +1532,29 @@ function bootProjectManager() {
     if (projectIdParam) {
       fb.getProjectById(projectIdParam).then(result => {
         if (result.data) {
-          config.setInputs(result.data.config);
-          activeProject = { id: result.data.id, name: result.data.name };
-          localStorage.setItem(`pm_active_id_${config.toolId}`, result.data.id);
-          updateActiveIndicator();
+          applyProjectLoad(result.data);
           showToast(`Loaded "${result.data.name}"`);
-          // Clean URL parameter to keep fresh page loads clean
           window.history.replaceState({}, document.title, window.location.pathname);
         } else {
           showToast("Failed to load project: " + (result.error ? result.error.message : "Not found"), false);
         }
       });
     } else {
-      // Sync active state from local storage last active indicator
+      // Sync active indicator from last active id (name chip only; config not reloaded)
       const lastActiveId = localStorage.getItem(`pm_active_id_${config.toolId}`);
       if (lastActiveId) {
         fb.getProjects(config.toolId).then(result => {
           const projects = result.data || [];
           const match = projects.find(p => p.id === lastActiveId);
           if (match) {
-            activeProject = { id: match.id, name: match.name };
+            activeProject = {
+              id: match.id,
+              name: match.name,
+              tags: match.tags || [],
+              folderId: match.folderId || null,
+              notes: match.notes || ""
+            };
+            lastSavedAt = match.updatedAt ? new Date(match.updatedAt).getTime() : null;
             updateActiveIndicator();
           } else {
             localStorage.removeItem(`pm_active_id_${config.toolId}`);
@@ -1169,6 +1563,88 @@ function bootProjectManager() {
       }
     }
   }
+
+  // Homepage (or any page without CASE B modal): allow edit details from drawer
+  if (typeof openEditDetailsImpl !== "function" || !openEditDetailsImpl) {
+    openEditDetailsImpl = (proj) => {
+      if (!proj) return;
+      const overlayModal = document.createElement("div");
+      overlayModal.className = "pm-modal-overlay";
+      overlayModal.innerHTML = `
+        <div class="pm-modal-content">
+          <button class="pm-modal-close" id="pm-close-edit-modal">&times;</button>
+          <div class="pm-modal-header">
+            <h3>Edit Project Details</h3>
+            <p>Update name, tags, folder, and notes</p>
+          </div>
+          <form id="pm-edit-form">
+            <div class="pm-form-group">
+              <label for="pm-edit-name">Design Name</label>
+              <input type="text" class="pm-form-input" id="pm-edit-name" required value="${escapeHtml(proj.name || "")}">
+            </div>
+            <div class="pm-form-group">
+              <label class="pm-form-label" for="pm-edit-tags">Tags (comma-separated)</label>
+              <input type="text" class="pm-form-input" id="pm-edit-tags" value="${escapeHtml((proj.tags || []).join(", "))}">
+            </div>
+            <div class="pm-form-group">
+              <label class="pm-form-label" for="pm-edit-folder">Folder</label>
+              <select class="pm-form-input" id="pm-edit-folder" style="height:40px;"><option value="">Unfiled</option></select>
+            </div>
+            <div class="pm-form-group">
+              <label class="pm-form-label" for="pm-edit-notes">Notes / assumptions</label>
+              <textarea class="pm-form-textarea" id="pm-edit-notes" maxlength="2000">${escapeHtml(proj.notes || "")}</textarea>
+            </div>
+            <button type="submit" class="project-btn primary" style="width:100%;justify-content:center;height:42px;">Update Details</button>
+          </form>
+        </div>`;
+      document.body.appendChild(overlayModal);
+      const folderSelect = document.getElementById("pm-edit-folder");
+      (async () => {
+        if (fb.getUserFolders) {
+          const { data } = await fb.getUserFolders();
+          (data || []).forEach(f => {
+            const opt = document.createElement("option");
+            opt.value = f.id;
+            opt.textContent = f.name;
+            if (proj.folderId === f.id) opt.selected = true;
+            folderSelect.appendChild(opt);
+          });
+        }
+      })();
+      const close = () => { overlayModal.remove(); };
+      document.getElementById("pm-close-edit-modal").onclick = close;
+      overlayModal.addEventListener("click", (e) => { if (e.target === overlayModal) close(); });
+      document.getElementById("pm-edit-form").onsubmit = async (e) => {
+        e.preventDefault();
+        const name = document.getElementById("pm-edit-name").value.trim();
+        if (!name) return;
+        const tags = document.getElementById("pm-edit-tags").value.split(",").map(t => t.trim().toLowerCase()).filter(Boolean).slice(0, 12);
+        const folderId = folderSelect.value || null;
+        const notes = (document.getElementById("pm-edit-notes").value || "").slice(0, 2000);
+        const { error } = await fb.saveProject(proj.toolId, name, proj.config, proj.id, { tags, folderId, notes });
+        if (error) {
+          showToast("Update failed: " + error.message, false);
+        } else {
+          const idx = allProjects.findIndex(p => p.id === proj.id);
+          if (idx >= 0) allProjects[idx] = { ...allProjects[idx], name, tags, folderId, notes, updatedAt: new Date().toISOString() };
+          showToast(`Updated "${name}"`);
+          renderProjectsList(searchInput.value);
+          close();
+        }
+      };
+    };
+  }
+
+  // Public API for tools (canvas dirty hooks, status)
+  window.projectManager = {
+    markDirty: () => markDirty(),
+    markClean: () => markClean(),
+    isDirty: () => isDirty,
+    getActiveProject: () => activeProject ? { ...activeProject } : null,
+    getLastSavedAt: () => lastSavedAt,
+    setHydrating: (v) => setHydrating(v),
+    refreshStatus: () => refreshSaveStatusChip()
+  };
 
   // Escaping helper
   function escapeHtml(str) {

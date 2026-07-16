@@ -794,8 +794,30 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ── Simulator Solver Engine ──────────────────────────────────
+  let simAbort = false;
+  let simRunning = false;
+  const simProgressBar = document.getElementById("sim-progress-bar");
+  const simSpinnerText = document.getElementById("sim-spinner-text") || simSpinner?.querySelector("span");
+  const simCancelBtn = document.getElementById("sim-cancel-btn");
+
+  if (simCancelBtn) {
+    simCancelBtn.addEventListener("click", () => {
+      simAbort = true;
+      if (simSpinnerText) simSpinnerText.textContent = "Cancelling…";
+    });
+  }
+
   const runSimulation = () => {
-    // Show loader
+    // Mutex: abort in-flight solve then restart
+    if (simRunning) {
+      simAbort = true;
+      setTimeout(() => runSimulation(), 80);
+      return;
+    }
+    simAbort = false;
+    simRunning = true;
+    if (simProgressBar) simProgressBar.style.width = "0%";
+    if (simSpinnerText) simSpinnerText.textContent = "Running Solver...";
     simSpinner.classList.remove("hidden");
 
     // Throttled in standard browser frame timeout to permit CSS loading state to render
@@ -803,6 +825,45 @@ document.addEventListener("DOMContentLoaded", () => {
       runVoxelSimulation();
     }, 150);
   };
+
+  // Starter design packs (match import/share state shape)
+  const DESIGN_PACKS = {
+    "to220-5w": {
+      heatsink: { width: 40, length: 30, baseHeight: 4, finHeight: 15, finThickness: 1.2, finCount: 8, material: "aluminum" },
+      chips: [{ name: "TO-220", power: 5, x: 0, y: 0, width: 10, length: 15, maxTemp: 125 }],
+      tim: { preset: "paste-std", thickness: 50, k: 5 },
+      environment: { ambient: 25, cooling: "natural", orientation: "vertical" }
+    },
+    "module-45w": {
+      heatsink: { width: 100, length: 80, baseHeight: 8, finHeight: 30, finThickness: 1.5, finCount: 18, material: "aluminum" },
+      chips: [{ name: "Power Module", power: 45, x: 0, y: 0, width: 30, length: 40, maxTemp: 105 }],
+      tim: { preset: "pad-thin", thickness: 200, k: 3 },
+      environment: { ambient: 40, cooling: "forced", orientation: "horizontal", airflow: 25 }
+    },
+    "copper-dense": {
+      heatsink: { width: 60, length: 60, baseHeight: 5, finHeight: 20, finThickness: 0.8, finCount: 28, material: "copper" },
+      chips: [{ name: "Hotspot", power: 20, x: 0, y: 0, width: 12, length: 12, maxTemp: 95 }],
+      tim: { preset: "liquid-metal", thickness: 30, k: 40 },
+      environment: { ambient: 30, cooling: "forced", orientation: "vertical", airflow: 40 }
+    }
+  };
+
+  document.getElementById("load-design-pack-btn")?.addEventListener("click", () => {
+    const id = document.getElementById("design-pack-select")?.value;
+    const pack = DESIGN_PACKS[id];
+    if (!pack) {
+      if (window.showToast) window.showToast("Select a design pack first", false);
+      return;
+    }
+    try {
+      window.projectManagerConfig.setInputs(pack);
+      document.dispatchEvent(new Event("input", { bubbles: true }));
+      if (window.showToast) window.showToast("Design pack loaded");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load pack: " + err.message);
+    }
+  });
 
   // ── HTML5 Canvas Fan Curve Plotter ────────────────────────────
   const drawFanCurve = (operatingFlow, operatingPress) => {
@@ -1877,11 +1938,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const finalizeSimulation = () => {
         updateVisuals();
+        simRunning = false;
+        simAbort = false;
+        if (simProgressBar) simProgressBar.style.width = "100%";
         simSpinner.classList.add("hidden");
         if (window.showToast) window.showToast("Volumetric 3D Finite Difference Simulation complete!");
       };
       
       const solveStep = () => {
+        if (simAbort) {
+          simRunning = false;
+          simSpinner.classList.add("hidden");
+          if (window.showToast) window.showToast("Simulation cancelled");
+          return;
+        }
         if (iter >= maxIter) {
           finalizeSimulation();
           return;
@@ -2096,7 +2166,20 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
         
-        simSpinner.querySelector("span").textContent = `Solving... Iteration ${iter}/${maxIter} (residual: ${maxDiff.toFixed(5)}°C)`;
+        if (simAbort) {
+          simRunning = false;
+          simSpinner.classList.add("hidden");
+          if (window.showToast) window.showToast("Simulation cancelled");
+          return;
+        }
+
+        const pct = Math.min(100, Math.round((iter / maxIter) * 100));
+        if (simProgressBar) simProgressBar.style.width = pct + "%";
+        if (simSpinnerText) {
+          simSpinnerText.textContent = `Solving... Iteration ${iter}/${maxIter} (residual: ${maxDiff.toFixed(5)}°C)`;
+        } else if (simSpinner.querySelector("span")) {
+          simSpinner.querySelector("span").textContent = `Solving... Iteration ${iter}/${maxIter} (residual: ${maxDiff.toFixed(5)}°C)`;
+        }
         
         // Update visuals in real-time
         updateVisuals();
@@ -2115,6 +2198,7 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (err) {
     console.error("Voxel simulation solver error:", err);
     alert("Simulation failed: " + err.message);
+    simRunning = false;
     simSpinner.classList.add("hidden");
   }
 };
@@ -2130,12 +2214,39 @@ document.addEventListener("DOMContentLoaded", () => {
   let loadedFromUrl = false;
   if (designParam) {
     try {
-      const decoded = (window.decodeShareState ? window.decodeShareState(designParam) : JSON.parse(decodeURIComponent(escape(atob(designParam)))));
-      window.projectManagerConfig.setInputs(decoded);
-      loadedFromUrl = true;
+      let decoded = null;
+      if (window.decodeToolShare) {
+        const res = window.decodeToolShare(designParam, "heatsink-simulator");
+        if (!res.ok) {
+          if (window.showToast) window.showToast(res.error || "Invalid share link", false);
+        } else {
+          if (res.warning && window.ToolExports) window.ToolExports.showPhysicsWarning(res.warning);
+          decoded = res.payload;
+        }
+      } else {
+        decoded = (window.decodeShareState ? window.decodeShareState(designParam) : JSON.parse(decodeURIComponent(escape(atob(designParam)))));
+      }
+      if (decoded) {
+        window.projectManagerConfig.setInputs(decoded);
+        loadedFromUrl = true;
+      }
     } catch (err) {
       console.error("Failed to parse design from URL:", err);
     }
+  }
+
+  if (window.ToolExports) {
+    window.ToolExports.register({
+      json: () => window.exportJSON && window.exportJSON(),
+      import: () => document.getElementById("import-file-input")?.click(),
+      markdown: () => {
+        const tj = document.getElementById("res-t-junction")?.textContent || "—";
+        const tb = document.getElementById("res-t-base")?.textContent || "—";
+        return `## Heatsink Simulation\n\n| Metric | Value |\n|---|---|\n| Max junction | ${tj} |\n| Max base | ${tb} |\n`;
+      },
+      hide: ['button[onclick*="exportJSON"]', 'button[onclick*="importJSON"]']
+    });
+    window.ToolExports.mount();
   }
   
   if (!loadedFromUrl) {

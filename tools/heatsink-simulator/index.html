@@ -100,6 +100,22 @@
         <!-- Tab 1: Geometry & Material -->
         <div class="tab-content" id="geometry-tab">
           <article class="config-card">
+            <h2>Design Preset Packs</h2>
+            <div class="form-row" style="align-items:flex-end;gap:8px;">
+              <div class="form-group flex-1">
+                <label for="design-pack-select">Starter configuration</label>
+                <select id="design-pack-select" class="form-select">
+                  <option value="">— Select a pack —</option>
+                  <option value="to220-5w">TO-220 5W natural convection</option>
+                  <option value="module-45w">Module 45W forced air</option>
+                  <option value="copper-dense">Copper dense fins demo</option>
+                </select>
+              </div>
+              <button type="button" id="load-design-pack-btn" class="btn" style="height:40px;white-space:nowrap;">Load pack</button>
+            </div>
+            <p class="text-muted" style="font-size:12px;margin-top:8px;">Loads geometry, TIM, chips, and environment. You can still edit everything after.</p>
+          </article>
+          <article class="config-card">
             <h2>Heatsink Dimensions</h2>
             <div class="form-row">
               <div class="form-group flex-1">
@@ -356,7 +372,11 @@
             <!-- Loading Indicator overlay -->
             <div id="sim-spinner" class="spinner-overlay hidden">
               <i data-lucide="loader" class="spin-icon"></i>
-              <span>Running Solver...</span>
+              <span id="sim-spinner-text">Running Solver...</span>
+              <div class="sim-progress-track" aria-hidden="true">
+                <div id="sim-progress-bar" class="sim-progress-bar" style="width:0%"></div>
+              </div>
+              <button type="button" id="sim-cancel-btn" class="sim-cancel-btn">Cancel</button>
             </div>
           </div>
         </article>
@@ -432,6 +452,7 @@
   <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
   <script src="app.js"></script>

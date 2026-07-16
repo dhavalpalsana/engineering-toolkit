@@ -78,41 +78,42 @@
       <!-- Left Column: Scanning Inputs -->
       <section class="scanner-card main-scan-card">
         <div class="tabs-row">
-          <button class="tab-btn active" data-tab="camera-tab">
+          <button class="tab-btn" data-tab="camera-tab" type="button">
             <i data-lucide="camera"></i> Live Camera
           </button>
-          <button class="tab-btn" data-tab="file-tab">
+          <button class="tab-btn active" data-tab="file-tab" type="button">
             <i data-lucide="image"></i> File / Paste
           </button>
         </div>
 
-        <div class="tab-content" id="camera-tab">
+        <!-- Camera tab is hidden until user opts in — no permission request on load -->
+        <div class="tab-content hidden" id="camera-tab">
           <div class="controls-wrapper">
             <div class="select-group">
               <label for="camera-select">Select Camera Device</label>
               <div class="select-container">
                 <select id="camera-select" class="form-select">
-                  <option value="">Detecting cameras...</option>
+                  <option value="">Start scanner to enable camera</option>
                 </select>
               </div>
             </div>
-            <button id="toggle-camera-btn" class="action-btn">
+            <button id="toggle-camera-btn" class="action-btn" type="button">
               <i data-lucide="play"></i> Start Scanner
             </button>
           </div>
 
           <div class="viewfinder-container">
-            <div id="reader" style="width:100%; max-width:540px; margin:0 auto; overflow:hidden;"></div>
+            <div id="reader" class="hidden" style="width:100%; max-width:540px; margin:0 auto; overflow:hidden;"></div>
             <div id="viewfinder-placeholder" class="viewfinder-placeholder">
               <div class="placeholder-icon">
                 <i data-lucide="camera-off"></i>
               </div>
-              <p>Camera is currently off. Select a device and start scanning.</p>
+              <p>Camera stays off until you start the scanner. Permission is requested only then.</p>
             </div>
           </div>
         </div>
 
-        <div class="tab-content hidden" id="file-tab">
+        <div class="tab-content" id="file-tab">
           <div id="drop-zone" class="drop-zone">
             <div class="drop-zone-content">
               <div class="upload-icon-box">
@@ -127,10 +128,10 @@
               <input type="file" id="file-input" accept="image/*" style="display:none;" />
               <p class="paste-tip">Tip: You can also copy an image and paste it here with <kbd>Ctrl+V</kbd></p>
             </div>
-            <div id="image-preview-container" class="image-preview-container hidden">
-              <img id="image-preview" src="#" alt="Preview of uploaded code file" />
+            <div id="image-preview-container" class="image-preview-container hidden" aria-hidden="true">
+              <img id="image-preview" alt="Preview of uploaded code file" />
               <div class="preview-overlay">
-                <button id="clear-image-btn" class="icon-btn danger-btn" title="Remove image">
+                <button id="clear-image-btn" class="icon-btn danger-btn" type="button" title="Remove image">
                   <i data-lucide="trash-2"></i>
                 </button>
               </div>
@@ -204,6 +205,7 @@
   <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
   <script src="app.js"></script>
