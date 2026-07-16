@@ -1481,7 +1481,6 @@ function renderStationCards() {
       </div>
       
       <div class="station-devices-container">
-        <div style="font-size:10px;color:var(--text-muted);padding:0 4px 6px;" title="${stubGuidanceText()}">${stubGuidanceText()}</div>
         <!-- Render Devices list inside this station -->
         <div id="device-list-${station.id}" style="display: flex; flex-direction: column; gap: 8px;">
           <!-- Populated inside loop -->
