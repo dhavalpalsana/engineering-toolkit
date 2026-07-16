@@ -1477,7 +1477,6 @@ function renderStationCards() {
         <select class="device-input" data-action="edit-station-type" title="Harness location type. Splitter = Splice or Star. Devices are ECUs only." style="max-width:160px;">
           ${typeOptions}
         </select>
-        <span style="font-size:10px;color:var(--text-muted);">Splitter → Splice/Star, not a device</span>
       </div>
       
       <div class="station-devices-container">
