@@ -1481,7 +1481,7 @@ function renderStationCards() {
           <i data-lucide="map-pin" style="width: 14px; height: 14px; color: var(--accent);"></i>
           <input type="text" class="station-name-input" value="${station.name}" data-action="edit-station-name" title="Station name">
           ${isFirst ? `<span class="start-badge">Start</span>` : ''}
-          ${stTerm > 0 ? `<span class="start-badge" style="background:rgba(13,148,136,0.15);color:var(--accent);" title="Bus terminator at this station">${stTerm} Ω</span>` : ''}
+          ${stTerm > 0 ? `<span class="term-badge" title="Bus terminator at this station">${stTerm}&nbsp;Ω</span>` : ''}
         </div>
         
         <button class="btn-delete" data-action="delete-station" title="Delete this entire station & connected devices" style="margin-left: 8px;">
@@ -2447,7 +2447,7 @@ function drawTopologySVG(diagnostics) {
       termLabel.setAttribute('x', x);
       termLabel.setAttribute('y', canH_Y - 26);
       termLabel.setAttribute('text-anchor', 'middle');
-      termLabel.setAttribute('fill', 'var(--accent)');
+      termLabel.setAttribute('fill', '#fb923c'); // match device-node termination mark
       termLabel.setAttribute('font-size', '9px');
       termLabel.setAttribute('font-weight', '800');
       termLabel.textContent = `${station.termination}Ω`;

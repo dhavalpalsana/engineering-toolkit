@@ -494,7 +494,10 @@ select.input-field {
   border: none;
   background: transparent;
   color: var(--text-primary);
-  width: 150px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
   padding: 2px 4px;
   border-radius: var(--r-sm);
   outline: none;
@@ -1109,6 +1112,24 @@ input[type="number"] {
   letter-spacing: 0.5px;
   margin-left: 8px;
   user-select: none;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Bus terminator badge — same amber as canvas node TERM marks (#fb923c) */
+.term-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 99px;
+  margin-left: 6px;
+  user-select: none;
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.14);
+  border: 1px solid rgba(251, 146, 60, 0.45);
+  letter-spacing: 0.02em;
 }
 
 /* Drag and Drop Sorting States */
