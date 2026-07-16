@@ -40,6 +40,7 @@
   <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
 </head>
@@ -253,23 +254,12 @@
             <div id="dbc-parse-results" style="margin-top: 10px; font-size: 12px; max-height: 160px; overflow: auto;"></div>
           </div>
 
-          <!-- Harness exports -->
-          <div class="section-card">
+          <!-- Harness exports moved to header Export ▾ -->
+          <div class="section-card" data-et-export-ui style="display:none;" aria-hidden="true">
             <span class="section-title">Harness Exports</span>
-            <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.4;">
-              Download topology drawing, pin table, or parts list (BOM).
-            </p>
-            <div style="display:flex; flex-direction:column; gap:8px;">
-              <button type="button" id="btn-export-harness-svg" class="btn" style="padding: 8px 12px; font-size: 12px; width: 100%;">
-                <i data-lucide="image" style="width:14px;height:14px;"></i> Export topology SVG
-              </button>
-              <button type="button" id="btn-export-pin-table" class="btn" style="padding: 8px 12px; font-size: 12px; width: 100%;">
-                <i data-lucide="table" style="width:14px;height:14px;"></i> Export pin table CSV
-              </button>
-              <button type="button" id="btn-export-bom" class="btn btn-primary" style="padding: 8px 12px; font-size: 12px; width: 100%;">
-                <i data-lucide="file-spreadsheet" style="width:14px;height:14px;"></i> Export BOM CSV
-              </button>
-            </div>
+            <button type="button" id="btn-export-harness-svg" class="btn"></button>
+            <button type="button" id="btn-export-pin-table" class="btn"></button>
+            <button type="button" id="btn-export-bom" class="btn"></button>
           </div>
         </div>
 
@@ -297,7 +287,7 @@
             </div>
             <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
               <button type="button" id="btn-canopen-auto-ids" class="btn btn-primary" style="padding:6px 12px;font-size:12px;">Auto-assign Node-IDs</button>
-              <button type="button" id="btn-canopen-export" class="btn" style="padding:6px 12px;font-size:12px;">Export Node Map CSV</button>
+              <button type="button" id="btn-canopen-export" data-et-export-ui class="btn" style="display:none;padding:6px 12px;font-size:12px;" aria-hidden="true">Export Node Map CSV</button>
             </div>
           </div>
 

@@ -228,7 +228,7 @@
             </select>
           </div>
           <button type="button" class="btn" style="width:100%;margin-top:8px;font-size:12px;" onclick="applyMccTemplate()">Load Template</button>
-          <button type="button" class="btn" style="width:100%;margin-top:8px;font-size:12px;" onclick="exportPanelScheduleCsv()">Export Panel Schedule CSV</button>
+          <button type="button" data-et-export-ui class="btn" style="display:none;" aria-hidden="true" onclick="exportPanelScheduleCsv()">Export Panel Schedule CSV</button>
         </div>
 
         <div class="panel-section" style="margin-top: 12px;">
@@ -400,6 +400,7 @@
   <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
   

@@ -843,3 +843,14 @@ document.addEventListener("DOMContentLoaded", () => {
     lucide.createIcons();
   }
 });
+
+// Platform export menu (standard JSON/import; tool-specific formats may already live in body UI)
+if (window.ToolExports) {
+  window.ToolExports.register({
+    json: () => window.exportJSON(),
+    import: () => document.getElementById("import-file-input")?.click(),
+    ics: () => document.getElementById("export-ics-btn")?.click(),
+    hide: ["[data-et-export-ui]", "#export-ics-btn"]
+  });
+  window.ToolExports.mount();
+}

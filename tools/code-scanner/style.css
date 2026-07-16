@@ -129,6 +129,11 @@ body::before {
   display: none !important;
 }
 
+/* Generic hide helper used by preview, status, badges, etc. */
+.hidden {
+  display: none !important;
+}
+
 /* Camera controls */
 .controls-wrapper {
   display: flex;
@@ -321,7 +326,7 @@ body::before {
   font-size: 10px;
 }
 
-/* Image preview inside drop-zone */
+/* Image preview inside drop-zone (only after a real file is loaded) */
 .image-preview-container {
   position: absolute;
   inset: 0;
@@ -329,12 +334,22 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
+}
+
+.image-preview-container.hidden {
+  display: none !important;
 }
 
 .image-preview-container img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+.image-preview-container img:not([src]),
+.image-preview-container img[src=""] {
+  display: none;
 }
 
 .preview-overlay {

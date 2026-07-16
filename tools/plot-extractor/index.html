@@ -42,6 +42,7 @@
   <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
 </head>
@@ -312,30 +313,13 @@
         </div>
       </div>
 
-      <!-- Exporters & Actions -->
-      <div class="control-card">
-        <span class="card-title">
-          <i data-lucide="file-output"></i> Export Options
-        </span>
-        <div class="flex flex-col gap-2">
-          <div class="action-button-group">
-            <button id="btn-copy-csv" class="action-btn primary" title="Copy active coordinate table to clipboard as CSV">
-              <i data-lucide="clipboard"></i> Copy Active CSV
-            </button>
-            <button id="btn-download-csv" class="action-btn secondary" title="Download active coordinate table as CSV file">
-              <i data-lucide="download"></i> Save Active CSV
-            </button>
-          </div>
-          <button id="btn-download-combined-csv" class="action-btn secondary" title="Download all series in a single combined CSV file">
-            <i data-lucide="file-spreadsheet"></i> Save Combined CSV
-          </button>
-          <button id="btn-download-plot" class="action-btn secondary" title="Export plot image with data points and curves overlay">
-            <i data-lucide="image"></i> Download Plot with Curves
-          </button>
-          <button id="btn-export-table" class="action-btn secondary" title="Generate lookup table with custom interpolation intervals">
-            <i data-lucide="grid"></i> Generate Lookup Table
-          </button>
-        </div>
+      <!-- Export actions live in header Export ▾; keep hidden buttons for JS hooks -->
+      <div class="control-card" data-et-export-ui style="display:none;" aria-hidden="true">
+        <button id="btn-copy-csv" type="button"></button>
+        <button id="btn-download-csv" type="button"></button>
+        <button id="btn-download-combined-csv" type="button"></button>
+        <button id="btn-download-plot" type="button"></button>
+        <button id="btn-export-table" type="button"></button>
       </div>
 
     </div>

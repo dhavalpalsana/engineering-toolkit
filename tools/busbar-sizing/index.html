@@ -31,6 +31,7 @@
   <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
 
@@ -1410,12 +1411,16 @@ window.projectManagerConfig = {
 window.shareLink = function() {
   try {
     const configData = getInputsConfig();
-    const serialized = (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
+    const serialized = window.encodeToolShare
+      ? window.encodeToolShare("busbar-sizing", configData)
+      : (window.encodeShareState ? window.encodeShareState(configData) : btoa(unescape(encodeURIComponent(JSON.stringify(configData)))));
     const url = new URL(window.location.href);
     url.searchParams.set('design', serialized);
     
     navigator.clipboard.writeText(url.toString()).then(() => {
-      alert("Design link copied to clipboard! You can share this URL with other engineers.");
+      if (window.showToast) window.showToast("Design link copied to clipboard!");
+      else alert("Design link copied to clipboard! You can share this URL with other engineers.");
+      if (window.pmMaybeGuestUpgradeCta) window.pmMaybeGuestUpgradeCta();
     }).catch(() => {
       alert("Could not write to clipboard automatically. Copy URL manually: " + url.toString());
     });
@@ -1423,6 +1428,31 @@ window.shareLink = function() {
     console.error(err);
     alert("Failed to generate share link.");
   }
+};
+
+window.buildBusbarMarkdown = function() {
+  const c = getInputsConfig();
+  return [
+    "## Busbar Capacity Summary",
+    "",
+    "| Parameter | Value |",
+    "|---|---|",
+    `| Material | ${c.material ?? "—"} |`,
+    `| Width | ${c.width ?? "—"} |`,
+    `| Thickness | ${c.thickness ?? "—"} |`,
+    `| Current | ${c.current ?? "—"} |`,
+    "",
+    "_Engineering Toolkit · Busbar Sizing_"
+  ].join("\n");
+};
+
+window.openBusbarReport = function() {
+  if (!window.ToolExports) return;
+  window.ToolExports.openPrintReport({
+    title: "Busbar Capacity Report",
+    metaLines: [`physics v${window.ToolExports.getPhysicsVersion("busbar-sizing")}`],
+    sections: [{ heading: "Configuration", text: window.buildBusbarMarkdown() }]
+  });
 };
 
 window.exportJSON = function() {
@@ -1466,14 +1496,38 @@ const urlParams = new URLSearchParams(window.location.search);
 const design = urlParams.get('design');
 if (design) {
   try {
-    const decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
-    setInputsConfig(decoded);
+    let decoded = null;
+    if (window.decodeToolShare) {
+      const res = window.decodeToolShare(design, "busbar-sizing");
+      if (!res.ok) {
+        if (window.showToast) window.showToast(res.error || "Invalid share link", false);
+      } else {
+        if (res.warning && window.ToolExports) window.ToolExports.showPhysicsWarning(res.warning);
+        decoded = res.payload;
+      }
+    } else {
+      decoded = (window.decodeShareState ? window.decodeShareState(design) : JSON.parse(decodeURIComponent(escape(atob(design)))));
+    }
+    if (decoded) setInputsConfig(decoded);
   } catch (err) {
     console.error("Failed to load design from URL:", err);
   }
 }
 
 calculate();
+
+// Export menu
+if (window.ToolExports) {
+  window.ToolExports.register({
+    json: () => window.exportJSON(),
+    import: () => document.getElementById("import-file-input")?.click(),
+    report: () => window.openBusbarReport(),
+    markdown: () => window.buildBusbarMarkdown(),
+    hide: ['button[onclick*="exportJSON"]', 'button[onclick*="importJSON"]']
+  });
+  window.ToolExports.mount();
+}
+
 if (typeof lucide !== 'undefined') {
   lucide.createIcons();
 }

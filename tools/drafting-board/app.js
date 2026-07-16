@@ -4539,3 +4539,15 @@ document.addEventListener("DOMContentLoaded", () => {
   pushUndo("baseline");
   undoStack.pop(); // don't keep empty baseline as undoable
 });
+
+// Header Export ▾ — SVG, DXF, JSON (+ import)
+if (window.ToolExports) {
+  window.ToolExports.register({
+    json: () => window.exportJSON(),
+    svg: () => window.exportSVGDrawing(),
+    dxf: () => window.exportDXFDrawing(),
+    import: () => document.getElementById("import-file-input")?.click(),
+    hide: ["[data-et-export-ui]"]
+  });
+  window.ToolExports.mount();
+}

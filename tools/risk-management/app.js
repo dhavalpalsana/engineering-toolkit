@@ -1248,14 +1248,57 @@ window.exportJSON = exportJSON;
 window.importJSON = importJSON;
 window.compareRegisters = compareRegisters;
 
+function buildRiskMarkdown() {
+  const top = [...(riskData || [])]
+    .map(r => ({ ...r, score: (typeof computeScore === "function" ? computeScore(r.severity, r.probability) : (r.severity || 0) * (r.probability || 0)) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+  const rows = top.map((r, i) => `| ${i + 1} | ${(r.description || "").replace(/\|/g, "/")} | ${r.score} |`);
+  return [
+    "## Risk Register — Top 5",
+    "",
+    `| # | Description | Score |`,
+    `|---|---|---|`,
+    ...rows,
+    "",
+    `_Total risks: ${(riskData || []).length} · Engineering Toolkit_`
+  ].join("\n");
+}
+
+function openRiskReport() {
+  if (!window.ToolExports) return;
+  window.ToolExports.openPrintReport({
+    title: "Risk Management Report",
+    metaLines: [
+      `Risks: ${(riskData || []).length}`,
+      `physics v${window.ToolExports.getPhysicsVersion("risk-management")}`
+    ],
+    sections: [{ heading: "Top risks", text: buildRiskMarkdown() }]
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // Apply shared URL state before first paint of the register
   try {
     const params = new URLSearchParams(window.location.search);
     const design = params.get("design");
     if (design) {
-      const decode = window.decodeShareState || ((str) => JSON.parse(decodeURIComponent(escape(atob(str)))));
-      const decoded = decode(design);
+      let decoded = null;
+      if (window.decodeToolShare) {
+        const res = window.decodeToolShare(design, "risk-management");
+        // Risk embeds its own v/mode envelope — also accept as legacy payload
+        if (res.ok && res.payload) decoded = res.payload;
+        else if (!res.ok) {
+          // try legacy plain decode
+          try {
+            decoded = (window.decodeShareState || ((str) => JSON.parse(decodeURIComponent(escape(atob(str))))))(design);
+          } catch (_) {}
+        }
+        if (res.warning && window.ToolExports) window.ToolExports.showPhysicsWarning(res.warning);
+      } else {
+        const decode = window.decodeShareState || ((str) => JSON.parse(decodeURIComponent(escape(atob(str)))));
+        decoded = decode(design);
+      }
       if (decoded && Array.isArray(decoded.risks)) {
         riskData = decoded.risks.map(normalizeRisk);
         loadedFromShareLink = true;
@@ -1269,4 +1312,18 @@ document.addEventListener("DOMContentLoaded", () => {
   init();
   if (readOnlyShareMode) applyReadOnlyChrome();
   document.getElementById("compare-registers-btn")?.addEventListener("click", compareRegisters);
+
+  if (window.ToolExports) {
+    window.ToolExports.register({
+      json: () => exportJSON(),
+      import: () => document.getElementById("import-file-input")?.click(),
+      report: () => openRiskReport(),
+      markdown: () => buildRiskMarkdown(),
+      extra: [
+        { id: "matrix-pdf", label: "Risk matrix PDF", run: () => exportRiskMatrixPdf() }
+      ],
+      hide: ["[data-et-export-ui]", "#export-matrix-btn"]
+    });
+    window.ToolExports.mount();
+  }
 });

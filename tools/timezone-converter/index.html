@@ -184,8 +184,8 @@
             <i data-lucide="users"></i> Find Overlap Windows
           </button>
           <div id="meeting-results" class="meeting-results" style="margin-top: 12px; font-size: 12px;"></div>
-          <button type="button" id="export-ics-btn" class="action-btn w-full margin-top-12" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color);">
-            <i data-lucide="calendar-plus"></i> Export Current Time as ICS
+          <button type="button" id="export-ics-btn" data-et-export-ui class="action-btn w-full margin-top-12" style="display:none;" aria-hidden="true">
+            Export Current Time as ICS
           </button>
           <p style="font-size: 11px; color: var(--text-muted); margin: 8px 0 0; line-height: 1.4;">
             ICS uses the reference date/time (anchor) as the event start across all zones.
@@ -251,6 +251,7 @@
   <script src="../../js/tools-data.js"></script>
   <script src="../../js/registry.js"></script>
   <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
   <script src="app.js"></script>

@@ -75,6 +75,38 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ── Tab Management ───────────────────────────────────────────
+  // Default is File / Paste (set in HTML). Camera APIs are only touched after
+  // the user opens Live Camera and clicks Start Scanner.
+  const prepareCameraTabUi = () => {
+    if (typeof Html5Qrcode === "undefined") {
+      setCameraSelectMessage("Scanner library not loaded");
+      setStartButtonState("play", "Start Scanner", true);
+      if (viewfinderPlaceholder.querySelector("p")) {
+        viewfinderPlaceholder.querySelector("p").textContent = "Camera scanning is unavailable right now.";
+      }
+      return;
+    }
+
+    if (!isCameraSupported()) {
+      setCameraSelectMessage("Camera access requires HTTPS");
+      setStartButtonState("play", "Start Scanner", true);
+      if (viewfinderPlaceholder.querySelector("p")) {
+        viewfinderPlaceholder.querySelector("p").textContent = "Open this tool over HTTPS to enable camera access.";
+      }
+      return;
+    }
+
+    // Do NOT call getCameras() / getUserMedia here — that prompts for permission.
+    if (!activeCameraId && !isScanning) {
+      setCameraSelectMessage("Start scanner to enable camera");
+      setStartButtonState("play", "Start Scanner", false);
+      if (viewfinderPlaceholder.querySelector("p")) {
+        viewfinderPlaceholder.querySelector("p").textContent =
+          "Camera stays off until you start the scanner. Permission is requested only then.";
+      }
+    }
+  };
+
   tabButtons.forEach(btn => {
     btn.addEventListener("click", () => {
       const targetTab = btn.getAttribute("data-tab");
@@ -95,6 +127,11 @@ document.addEventListener("DOMContentLoaded", () => {
       // Stop camera if switching away from camera tab
       if (targetTab !== "camera-tab" && isScanning) {
         stopCameraScanner();
+      }
+
+      // When opening Live Camera: only prepare UI, never request permission yet
+      if (targetTab === "camera-tab") {
+        prepareCameraTabUi();
       }
     });
   });
@@ -122,36 +159,6 @@ document.addEventListener("DOMContentLoaded", () => {
       cameraSelect.value = devices[0].id;
     }
     activeCameraId = cameraSelect.value;
-  };
-
-  const initCameras = () => {
-    if (typeof Html5Qrcode === "undefined") {
-      setCameraSelectMessage("Scanner library not loaded");
-      setStartButtonState("play", "Start Scanner", true);
-      viewfinderPlaceholder.querySelector("p").textContent = "Camera scanning is unavailable right now.";
-      return;
-    }
-
-    if (!isCameraSupported()) {
-      setCameraSelectMessage("Camera access requires HTTPS");
-      setStartButtonState("play", "Start Scanner", true);
-      viewfinderPlaceholder.querySelector("p").textContent = "Open this tool over HTTPS to enable camera access.";
-      return;
-    }
-
-    // Try to list cameras without triggering a prompt first.
-    Html5Qrcode.getCameras()
-      .then(devices => {
-        if (devices && devices.length > 0) {
-          populateCamerasDropdown(devices);
-        } else {
-          setCameraSelectMessage("Start scanner to request permission");
-        }
-      })
-      .catch(err => {
-        console.warn("Camera check on load:", err);
-        setCameraSelectMessage("Start scanner to request permission");
-      });
   };
 
   cameraSelect.addEventListener("change", () => {
@@ -292,6 +299,7 @@ document.addEventListener("DOMContentLoaded", () => {
     reader.onload = (e) => {
       imagePreview.src = e.target.result;
       imagePreviewContainer.classList.remove("hidden");
+      imagePreviewContainer.setAttribute("aria-hidden", "false");
     };
     reader.readAsDataURL(file);
 
@@ -351,8 +359,9 @@ document.addEventListener("DOMContentLoaded", () => {
   clearImageBtn.addEventListener("click", (e) => {
     e.stopPropagation(); // Avoid triggering file selection window
     fileInput.value = "";
-    imagePreview.src = "#";
+    imagePreview.removeAttribute("src");
     imagePreviewContainer.classList.add("hidden");
+    imagePreviewContainer.setAttribute("aria-hidden", "true");
     fileStatus.classList.add("hidden");
   });
 
@@ -585,8 +594,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // Run initializations
-  initCameras();
+  // Do not touch the camera on load — default mode is File / Paste.
+  // Camera permission is requested only when the user starts Live Camera scanning.
   
   // Parse shared URL design if present
   const urlParams = new URLSearchParams(window.location.search);
@@ -606,3 +615,13 @@ document.addEventListener("DOMContentLoaded", () => {
     renderHistory();
   }
 });
+
+// Platform export menu (standard JSON/import; tool-specific formats may already live in body UI)
+if (window.ToolExports) {
+  window.ToolExports.register({
+    json: () => window.exportJSON(),
+    import: () => document.getElementById("import-file-input")?.click(),
+    hide: ['button[onclick*="exportJSON"]', 'button[onclick*="importJSON"]']
+  });
+  window.ToolExports.mount();
+}

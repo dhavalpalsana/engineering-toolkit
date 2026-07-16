@@ -3976,3 +3976,20 @@ window.projectManagerConfig = {
     }
   }
 };
+
+// Header Export ▾ — JSON + harness SVG/CSV + CANopen map
+if (window.ToolExports) {
+  window.exportJSON = exportStateJSON;
+  window.ToolExports.register({
+    json: () => exportStateJSON(),
+    import: () => document.getElementById("file-import")?.click(),
+    svg: () => exportHarnessSvg(),
+    extra: [
+      { id: "pin-csv", label: "Pin table CSV", run: () => exportPinTableCsv() },
+      { id: "bom-csv", label: "BOM CSV", run: () => exportHarnessBomCsv() },
+      { id: "canopen-csv", label: "CANopen node map CSV", run: () => exportCanopenNodeMapCsv() }
+    ],
+    hide: ["[data-et-export-ui]", "#btn-export", "#btn-import"]
+  });
+  window.ToolExports.mount();
+}

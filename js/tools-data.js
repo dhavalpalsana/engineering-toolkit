@@ -13,6 +13,7 @@ const TOOLS_DATA = [
     icon: "fishbone",
     path: "./tools/fishbone-diagram/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-03T12:00:00Z"
   },
   {
@@ -23,6 +24,7 @@ const TOOLS_DATA = [
     icon: "zap",
     path: "./tools/wire-gauge/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-04T12:00:00Z"
   },
   {
@@ -33,6 +35,7 @@ const TOOLS_DATA = [
     icon: "refresh-cw",
     path: "./tools/unit-converter/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-05T12:00:00Z"
   },
   {
@@ -43,6 +46,7 @@ const TOOLS_DATA = [
     icon: "busbar",
     path: "./tools/busbar-sizing/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-06T12:00:00Z"
   },
   {
@@ -53,6 +57,7 @@ const TOOLS_DATA = [
     icon: "network",
     path: "./tools/can-bus-designer/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-07T12:00:00Z"
   },
   {
@@ -63,6 +68,7 @@ const TOOLS_DATA = [
     icon: "mosfet",
     path: "./tools/mosfet-power-loss/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-14T16:00:00Z"
   },
   {
@@ -73,6 +79,7 @@ const TOOLS_DATA = [
     icon: "line-chart",
     path: "./tools/plot-extractor/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-08T21:10:00Z"
   },
   {
@@ -83,6 +90,7 @@ const TOOLS_DATA = [
     icon: "scan",
     path: "./tools/code-scanner/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-08T23:40:00Z"
   },
   {
@@ -93,6 +101,7 @@ const TOOLS_DATA = [
     icon: "clock",
     path: "./tools/timezone-converter/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-08T23:50:00Z"
   },
   {
@@ -103,6 +112,7 @@ const TOOLS_DATA = [
     icon: "ruler",
     path: "./tools/drafting-board/index.html",
     status: "beta",
+    physicsVersion: 1,
     releaseDate: "2026-07-10T11:30:00Z"
   },
   {
@@ -113,6 +123,7 @@ const TOOLS_DATA = [
     icon: "grid-3x3",
     path: "./tools/mcc-feeder-designer/index.html",
     status: "beta",
+    physicsVersion: 1,
     releaseDate: "2026-07-10T14:00:00Z"
   },
   {
@@ -123,6 +134,7 @@ const TOOLS_DATA = [
     icon: "activity",
     path: "./tools/beam-calculator/index.html",
     status: "beta",
+    physicsVersion: 1,
     releaseDate: "2026-07-09T22:00:00Z"
   },
   {
@@ -133,6 +145,7 @@ const TOOLS_DATA = [
     icon: "thermometer",
     path: "./tools/heatsink-simulator/index.html",
     status: "active",
+    physicsVersion: 1,
     releaseDate: "2026-07-09T03:00:00Z"
   },
   {
@@ -143,6 +156,7 @@ const TOOLS_DATA = [
     icon: "wrench",
     path: "./tools/bolt-torque/index.html",
     status: "coming-soon",
+    physicsVersion: 1,
     releaseDate: "2026-07-02T12:00:00Z"
   },
   {
@@ -153,6 +167,7 @@ const TOOLS_DATA = [
     icon: "droplet",
     path: "./tools/pressure-drop/index.html",
     status: "coming-soon",
+    physicsVersion: 1,
     releaseDate: "2026-07-01T12:00:00Z"
   },
   {
@@ -163,6 +178,7 @@ const TOOLS_DATA = [
     icon: "shield-alert",
     path: "./tools/risk-management/index.html",
     status: "beta",
+    physicsVersion: 1,
     releaseDate: "2026-07-14T12:00:00Z"
   }
 
