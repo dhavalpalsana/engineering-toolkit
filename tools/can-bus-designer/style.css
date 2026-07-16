@@ -530,16 +530,65 @@ select.input-field {
 }
 
 .device-row {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 28px;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
   border-bottom: 1px dashed var(--border-color);
 }
 
 .device-row:last-child {
   border-bottom: none;
+}
+
+.device-row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.device-row-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-left: 16px; /* align under name, past grip */
+}
+
+.device-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.device-field-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 28px;
+}
+
+.device-field-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.device-field-hint {
+  font-size: 9px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.device-field .device-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-field .custom-term-input {
+  max-width: 72px;
 }
 
 .device-input {

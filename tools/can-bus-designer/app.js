@@ -1550,32 +1550,36 @@ function renderStationCards() {
       devRow.dataset.deviceId = device.id;
 
       devRow.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 4px; cursor: grab;">
-          <i data-lucide="grip-vertical" style="width: 12px; height: 12px; color: var(--text-muted); margin-right: -4px;"></i>
-          <input type="text" class="device-input" value="${device.name}" data-action="edit-device-name" title="Device name">
-        </div>
-        <div style="display: flex; align-items: center; gap: 4px;">
-          <input type="number" class="device-input" value="${fromMeters(device.stubLength).toFixed(currentUnit === 'm' ? 2 : currentUnit === 'mm' ? 0 : 1)}" data-action="edit-device-stub" min="0" step="any" title="Stub from station/splice in ${currentUnit}. Max recommended ≈ ${formatLength(stubMax)}">
-          <span style="font-size: 11px; color: var(--text-muted);">${currentUnit}</span>
-          <span style="font-size:9px;color:${device.stubLength > stubMax ? 'var(--error)' : 'var(--text-muted)'};" title="${stubGuidanceText()}">max ${formatLength(stubMax)}</span>
-        </div>
-        <div>
-          <select class="device-input" data-action="edit-device-term" title="Device termination">
-            <option value="0" ${device.termination === 0 ? 'selected' : ''}>None</option>
-            <option value="120" ${device.termination === 120 ? 'selected' : ''}>120 Ω</option>
-            <option value="custom" ${device.termination !== 0 && device.termination !== 120 ? 'selected' : ''}>Custom...</option>
-          </select>
-          <input type="number" class="device-input custom-term-input" value="${device.termination}" data-action="edit-device-term-val" min="1" max="1000" style="display: ${device.termination !== 0 && device.termination !== 120 ? 'block' : 'none'}; margin-top: 4px;" title="Custom resistance in Ohms">
-        </div>
-        <div style="display: flex; align-items: center; justify-content: center;">
+        <div class="device-row-top">
+          <div class="device-name-group" style="display: flex; align-items: center; gap: 4px; cursor: grab; flex: 1; min-width: 0;">
+            <i data-lucide="grip-vertical" style="width: 12px; height: 12px; color: var(--text-muted); flex-shrink: 0;"></i>
+            <input type="text" class="device-input" value="${device.name}" data-action="edit-device-name" title="Device name" style="flex: 1; min-width: 0;">
+          </div>
           <button class="btn-delete" data-action="delete-device" title="Remove this device from star splice">
             <i data-lucide="trash" style="width: 12px; height: 12px;"></i>
           </button>
         </div>
+        <div class="device-row-bottom">
+          <div class="device-field">
+            <span class="device-field-label">Stub</span>
+            <input type="number" class="device-input" value="${fromMeters(device.stubLength).toFixed(currentUnit === 'm' ? 2 : currentUnit === 'mm' ? 0 : 1)}" data-action="edit-device-stub" min="0" step="any" title="Stub from station/splice in ${currentUnit}. Max recommended ≈ ${formatLength(stubMax)}">
+            <span class="device-field-unit">${currentUnit}</span>
+            <span class="device-field-hint" style="color:${device.stubLength > stubMax ? 'var(--error)' : 'var(--text-muted)'};" title="${stubGuidanceText()}">max ${formatLength(stubMax)}</span>
+          </div>
+          <div class="device-field">
+            <span class="device-field-label">Term</span>
+            <select class="device-input" data-action="edit-device-term" title="Device termination">
+              <option value="0" ${device.termination === 0 ? 'selected' : ''}>None</option>
+              <option value="120" ${device.termination === 120 ? 'selected' : ''}>120 Ω</option>
+              <option value="custom" ${device.termination !== 0 && device.termination !== 120 ? 'selected' : ''}>Custom...</option>
+            </select>
+            <input type="number" class="device-input custom-term-input" value="${device.termination}" data-action="edit-device-term-val" min="1" max="1000" style="display: ${device.termination !== 0 && device.termination !== 120 ? 'block' : 'none'};" title="Custom resistance in Ohms">
+          </div>
+        </div>
       `;
 
       // Drag-and-drop for Devices inside this row
-      const devGrip = devRow.querySelector('div:first-child');
+      const devGrip = devRow.querySelector('.device-name-group');
       devGrip.addEventListener('mousedown', () => {
         devRow.setAttribute('draggable', 'true');
       });
