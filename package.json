@@ -5,7 +5,7 @@
   "description": "Static multi-tool engineering calculators — CI checks and smoke tests",
   "scripts": {
     "check": "node scripts/check-site.mjs",
-    "test": "node --test 'js/**/*.test.js' 'tools/**/js/*.test.js'",
+    "test": "node scripts/run-tests.mjs",
     "smoke": "node scripts/smoke-tools.mjs",
     "verify": "npm run check && npm run test && npm run smoke"
   },
