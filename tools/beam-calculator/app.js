@@ -436,6 +436,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Core FEA Solver ---
 
   function runAnalyticalSolver() {
+    if (typeof BeamFea !== "undefined" && BeamFea.solveBeam) {
+      const sec0 = getSectionProperties();
+      return BeamFea.solveBeam({
+        L,
+        E,
+        density,
+        selfWeightEnabled,
+        section: sec0,
+        supports,
+        loads,
+        Ne: 100
+      });
+    }
     const sec = getSectionProperties();
     const EI = (E * 1e6) * sec.Iz; // GPa to kN/m² * m⁴ = kN·m²
     

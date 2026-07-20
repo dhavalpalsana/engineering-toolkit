@@ -40,6 +40,10 @@ const REQUIRED_SCRIPTS = [
 const NO_EXPORT_REGISTER = new Set(["unit-converter"]);
 const NO_PM_CONFIG = new Set(["unit-converter"]); // still may load PM for auth only
 
+// Standard packaging: tools/<id>/{index.html, app.js, style.css}
+// style.css may be deferred for a few tools that still embed CSS in HTML (warn only).
+const PACKAGING_CSS_WARN_OK = new Set(["fishbone-diagram", "wire-gauge"]);
+
 let failures = 0;
 let warnings = 0;
 
@@ -153,20 +157,40 @@ for (const tool of live) {
   const html = readText(idx);
   const rel = path.relative(ROOT, idx);
   const label = tool.id;
+  const dir = toolDirOnDisk(ROOT, label);
 
-  // Required shared scripts (unit-converter may omit some — still expect theme/header or tool-exports)
+  // Packaging scaffold: index.html + app.js + style.css
+  const appJsPath = path.join(dir, "app.js");
+  const stylePath = path.join(dir, "style.css");
+  if (!fileExists(appJsPath)) {
+    fail(`${label}: missing app.js (standard package is index.html + app.js + style.css)`);
+  }
+  if (!fileExists(stylePath)) {
+    if (PACKAGING_CSS_WARN_OK.has(label)) {
+      warn(`${label}: missing style.css (CSS still embedded in HTML — migrate when touching the tool)`);
+    } else {
+      fail(`${label}: missing style.css (standard package is index.html + app.js + style.css)`);
+    }
+  }
+
+  // Theme stack
+  for (const sheet of ["theme.css", "header.css", "tool-shell.css"]) {
+    if (!html.includes(sheet)) {
+      fail(`${label}: missing stylesheet "${sheet}" in ${rel}`);
+    }
+  }
+  if (fileExists(stylePath) && !html.includes("style.css") && !html.includes("./style.css")) {
+    // allow href="style.css"
+    if (!/href=["'][^"']*style\.css["']/.test(html)) {
+      warn(`${label}: style.css exists but is not linked from index.html`);
+    }
+  }
+
+  // Required shared scripts
   for (const script of REQUIRED_SCRIPTS) {
     if (!html.includes(script)) {
-      // unit-converter is a special single-file tool; still needs tool-exports if we inject it
       if (label === "unit-converter" && script === "tool-exports.js") {
-        // optional for unit-converter
-        continue;
-      }
-      if (label === "unit-converter" && (script === "tools-data.js" || script === "project-manager.js")) {
-        // unit-converter loads auth stack differently — warn only if tool-shell missing
-        if (script === "tool-shell.js" && !html.includes("tool-shell.js")) {
-          warn(`${label}: missing ${script}`);
-        }
+        // optional for unit-converter (no cloud export menu)
         continue;
       }
       fail(`${label}: missing script include "${script}" in ${rel}`);
@@ -179,7 +203,7 @@ for (const tool of live) {
     "tool-exports.js",
     "project-manager.js"
   ]);
-  if (!order.ok && label !== "unit-converter") {
+  if (!order.ok) {
     if (order.missing) {
       // already reported missing
     } else if (order.order) {
@@ -210,18 +234,57 @@ for (const tool of live) {
 
   // projectManagerConfig for tools that save projects
   if (!NO_PM_CONFIG.has(label)) {
-    const appJs = path.join(toolDirOnDisk(ROOT, label), "app.js");
+    const appJs = path.join(dir, "app.js");
     const sources = [html];
     if (fileExists(appJs)) sources.push(readText(appJs));
     const joined = sources.join("\n");
     if (!joined.includes("projectManagerConfig")) {
       fail(`${label}: no projectManagerConfig`);
     } else if (!joined.includes(`toolId: "${label}"`) && !joined.includes(`toolId: '${label}'`)) {
-      // busbar might use toolId: "busbar-sizing"
       if (!new RegExp(`toolId:\\s*["']${label}["']`).test(joined)) {
         fail(`${label}: projectManagerConfig.toolId does not match folder id`);
       }
     }
+  }
+
+  // Physics golden modules: if tools/<id>/js/*.js pure engines exist (non-test), expect a sibling *.test.js
+  const jsDir = path.join(dir, "js");
+  if (fs.existsSync(jsDir)) {
+    for (const ent of fs.readdirSync(jsDir, { withFileTypes: true })) {
+      if (!ent.isFile() || !ent.name.endsWith(".js") || ent.name.endsWith(".test.js")) continue;
+      const base = ent.name.replace(/\.js$/, "");
+      const testPath = path.join(jsDir, `${base}.test.js`);
+      // drafting solver/dxf use non-node:test runners still named *.test.js
+      if (!fileExists(testPath)) {
+        // allow db.js, renderer.js etc. without tests
+        const src = readText(path.join(jsDir, ent.name));
+        const looksPure =
+          src.includes("module.exports") ||
+          /root\.\w+\s*=\s*factory/.test(src) ||
+          src.includes("physicsVersion");
+        if (looksPure && /Physics|Fea|Scoring|Convert|solve|runCalc/.test(src + ent.name)) {
+          warn(`${label}: pure module js/${ent.name} has no ${base}.test.js golden tests`);
+        }
+      }
+    }
+  }
+}
+
+// ── 2b. Site version file ─────────────────────────────────────
+section("Versioning");
+const versionPath = path.join(ROOT, "version.json");
+if (!fileExists(versionPath)) {
+  fail("version.json missing at repo root");
+} else {
+  try {
+    const v = JSON.parse(readText(versionPath));
+    if (v.version == null || String(v.version).trim() === "") {
+      fail("version.json missing non-empty \"version\" field");
+    } else {
+      ok(`version.json → ${v.version}`);
+    }
+  } catch (e) {
+    fail(`version.json invalid JSON: ${e.message}`);
   }
 }
 
