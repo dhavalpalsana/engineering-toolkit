@@ -9,21 +9,27 @@
  *  - Queue bug/suggest clicks until project-manager modals are ready
  *
  * ── New tool checklist ──────────────────────────────────────────────
- * 1. Register in js/tools-data.js (id, name, status, icon, path).
- * 2. In tools/<id>/index.html link ../../css/tool-shell.css (+ theme/header).
- * 3. Script load order (end of body):
+ * 1. Register in js/tools-data.js (id, name, status, icon, path, physicsVersion).
+ * 2. Scaffold: tools/<id>/{index.html, app.js, style.css}
+ *    Optional pure engine: tools/<id>/js/*.js (+ *.test.js golden cases).
+ * 3. CSS: theme.css → header.css → tool-shell.css → style.css (no Tailwind CDN).
+ * 4. Script load order:
  *      firebase-app/auth/firestore CDN
  *      → ../../js/firebase.js
  *      → ../../js/auth-ui.js
  *      → ../../js/tools-data.js
- *      → ../../js/registry.js   (optional; needed for hub icons on tool pages)
+ *      → ../../js/registry.js   (optional; hub icons)
  *      → ../../js/tool-shell.js
+ *      → ../../js/tool-exports.js
  *      → ../../js/project-manager.js
- *      → ../../js/analytics.js  (optional; privacy-safe counters)
+ *      → ../../js/analytics.js  (privacy-safe counters only)
+ *      → js/<physics>.js       (optional pure modules)
  *      → app.js
- * 4. Before PM/app if needed: window.projectManagerConfig = { toolId: "<id>", ... }
- *    or window.toolShellConfig = { toolId: "<id>" } (URL path also works).
- * 5. Header should use .hdr-icon so logo sync matches the hub card.
+ * 5. window.projectManagerConfig = { toolId, getInputs, setInputs } (unless exempt).
+ * 6. ToolExports.register(...) for export/import menu (unless exempt).
+ * 7. Standardized header with #auth-btn and .hdr-icon.
+ * 8. Golden tests for any non-trivial physics; bump physicsVersion on formula changes.
+ * Footer shows build (version.json) + physicsVersion for support.
  *
  * Optional config (set before this script runs, or anytime before DOMContentLoaded):
  *   window.toolShellConfig = {
@@ -39,6 +45,7 @@
   const FOOTER_HTML = `
     <div class="tool-footer-content">
       <p>&copy; ${new Date().getFullYear()} Engineering Toolkit. Open-source GPLv3.</p>
+      <p class="tool-footer-version" data-shell-version hidden></p>
       <div class="tool-footer-links">
         <a href="https://buymeacoffee.com/dhavalpalsana" target="_blank" rel="noopener" class="coffee-link">☕ Buy me a coffee</a>
         <span class="divider">|</span>
@@ -50,6 +57,9 @@
       </div>
     </div>
   `;
+
+  /** Cached site version from /version.json (build id). */
+  let cachedSiteVersion = null;
 
   /** Pending shell actions if PM modals are not registered yet. */
   let pendingAction = null; // { type: 'bug'|'suggest', eventLike }
@@ -147,9 +157,69 @@
     });
   }
 
+  function versionJsonUrl() {
+    // Tool pages live under /tools/<id>/; hub is at root.
+    const path = (window.location && window.location.pathname) || "";
+    if (path.includes("/tools/")) return "../../version.json";
+    return "./version.json";
+  }
+
+  function formatVersionLine(siteVersion, tool) {
+    const parts = [];
+    if (siteVersion) parts.push(`build ${siteVersion}`);
+    if (tool && tool.physicsVersion != null) {
+      parts.push(`physics v${tool.physicsVersion}`);
+    }
+    if (tool && tool.id) parts.push(tool.id);
+    return parts.length ? parts.join(" · ") : "";
+  }
+
+  function applyVersionToFooter(footer, tool) {
+    if (!footer) return;
+    let el = footer.querySelector("[data-shell-version]");
+    if (!el) {
+      el = document.createElement("p");
+      el.className = "tool-footer-version";
+      el.setAttribute("data-shell-version", "");
+      const firstP = footer.querySelector(".tool-footer-content p");
+      if (firstP && firstP.parentNode) {
+        firstP.insertAdjacentElement("afterend", el);
+      } else {
+        footer.appendChild(el);
+      }
+    }
+    const line = formatVersionLine(cachedSiteVersion, tool);
+    if (line) {
+      el.textContent = line;
+      el.hidden = false;
+      el.title = "Report this version when filing bugs or comparing calculation results";
+    }
+  }
+
+  function loadSiteVersion(footer, tool) {
+    applyVersionToFooter(footer, tool);
+    if (cachedSiteVersion != null) return;
+    const url = versionJsonUrl();
+    // Prefer fetch; fall back silently if offline / file://
+    if (typeof fetch !== "function") return;
+    fetch(url, { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.version != null) {
+          cachedSiteVersion = String(data.version);
+          window.ET_SITE_VERSION = cachedSiteVersion;
+          applyVersionToFooter(footer, tool);
+        }
+      })
+      .catch(() => { /* offline / blocked — leave physicsVersion only */ });
+  }
+
   function ensureFooter() {
     const cfg = getConfig();
     if (cfg.showFooter === false) return;
+
+    const toolId = detectToolId();
+    const tool = getToolMeta(toolId);
 
     let footer = document.querySelector("footer.tool-footer");
     if (!footer) {
@@ -159,7 +229,12 @@
       document.body.appendChild(footer);
     } else if (!footer.querySelector(".tool-footer-links")) {
       footer.innerHTML = FOOTER_HTML;
+    } else if (!footer.querySelector("[data-shell-version]")) {
+      // Enhance existing static footers with version line
+      applyVersionToFooter(footer, tool);
     }
+
+    loadSiteVersion(footer, tool);
 
     footer.querySelectorAll("[data-shell-action]").forEach((el) => {
       // Avoid double-binding on re-boot

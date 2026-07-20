@@ -121,6 +121,15 @@ footer.tool-footer .tool-footer-content p {
   margin: 0 0 8px;
 }
 
+footer.tool-footer .tool-footer-version {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+
 footer.tool-footer .tool-footer-links {
   display: flex;
   flex-wrap: wrap;

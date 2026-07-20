@@ -43,42 +43,86 @@ The toolkit runs entirely client-side as a static site with optional user authen
 ```
 engineering-toolkit/
 ├── index.html                # Hub / dashboard
+├── version.json              # Site build id (shown in tool footers)
 ├── css/
-│   ├── style.css             # Shared global design system (tokens, components)
-│   └── theme.css             # Shared design tokens
+│   ├── theme.css             # Shared design tokens
+│   ├── header.css            # Standard tool header
+│   ├── tool-shell.css        # Beta banner + shared footer
+│   └── style.css             # Hub styles
 ├── js/
-│   ├── firebase.js           # Firebase app init & Firestore CRUD operations
-│   ├── auth-ui.js            # Injected sign-in/up modal & styling
-│   ├── project-manager.js    # Slide-out saved project list drawer
-│   ├── tools-data.js         # Single source of truth for tool registry
-│   └── app.js                # Dashboard search and filtering
-├── tools/                    # Tool subdirectories (HTML, Local CSS, JS)
-│   ├── beam-calculator/
-│   ├── busbar-sizing/
-│   ├── can-bus-designer/
-│   ├── code-scanner/
-│   ├── drafting-board/
-│   ├── fishbone-diagram/
-│   ├── heatsink-simulator/
-│   ├── mcc-feeder-designer/
-│   ├── mosfet-power-loss/
-│   ├── plot-extractor/
-│   ├── risk-management/
-│   ├── timezone-converter/
-│   ├── unit-converter/
-│   └── wire-gauge/
+│   ├── firebase.js           # Firebase app init & Firestore CRUD
+│   ├── auth-ui.js            # Sign-in modal
+│   ├── tools-data.js         # Tool registry (id, status, physicsVersion)
+│   ├── tool-shell.js         # Shared chrome + version line
+│   ├── tool-exports.js       # Export / import / share menu
+│   ├── project-manager.js    # Projects drawer + cloud sync
+│   ├── analytics.js          # Privacy-safe usage counters
+│   └── app.js                # Hub search and filtering
+├── tools/<tool-id>/          # Standard package per tool:
+│   ├── index.html            # Markup + script/CSS includes
+│   ├── app.js                # UI + orchestration
+│   ├── style.css             # Tool-local styles (tokens only)
+│   └── js/                   # Optional pure engines + *.test.js goldens
+├── scripts/                  # check-site, smoke tests
 ├── robots.txt
 └── sitemap.xml
 ```
 
 ### Adding a New Tool
-1. **Create the directory** under `tools/<tool-id>/index.html`.
-2. **Register the tool** in `js/tools-data.js`.
-3. **Integrate Unified Styling**:
-   - Link global styles: `../../css/theme.css` and `../../css/header.css`.
-   - Implement the standardized header template (see `.agents/AGENTS.md`).
-   - Wrap tool layout in `.container` with local bounds.
-   - Register save/load hooks with `window.projectManagerConfig` for Firestore sync.
+1. **Scaffold** `tools/<tool-id>/{index.html, app.js, style.css}`.
+2. **Register** in `js/tools-data.js` with a `physicsVersion` (integer; bump when formulas change).
+3. **Shared CSS**: `theme.css` → `header.css` → `tool-shell.css` → `style.css`.
+4. **Shared scripts** (order): Firebase → `firebase.js` → `auth-ui.js` → `tools-data.js` → `tool-shell.js` → `tool-exports.js` → `project-manager.js` → `analytics.js` → optional `js/physics.js` → `app.js`.
+5. **Wire** `window.projectManagerConfig` and `ToolExports.register` (see `.agents/AGENTS.md`).
+6. **Golden tests**: put pure calculation code under `tools/<id>/js/` and add `*.test.js` cases with known answers.
+
+```bash
+npm run check   # registry, packaging, script order, syntax
+npm test        # unit + golden physics tests
+npm run smoke   # Playwright hub + every live tool
+npm run verify  # all of the above
+```
+
+---
+
+## 🔬 Golden physics tests
+
+CI does more than “page loads.” Pure engines under `tools/*/js/` are covered by fixed cases (hand calcs / standard tables):
+
+| Tool | Module | Examples |
+|------|--------|----------|
+| Beam FEA | `beam-calculator/js/fea.js` | Simply-supported mid-load vs \(PL/4\), \(PL^3/48EI\) |
+| Busbar | `busbar-sizing/js/physics.js` | DC \(R\), IEC short-circuit \(k/\sqrt{t}\), multi-bar \(K_N\) |
+| CAN | `can-bus-designer/js/physics.js` | Termination, stubs, timing budget |
+| Wire thermal | `wire-gauge/js/physics.js` | \(\rho(T)\), thermal iteration, DC drop |
+| MOSFET | `mosfet-power-loss/js/physics.js` | Conduction / switching / Coss losses |
+| Heatsink helpers | `heatsink-simulator/js/physics.js` | \(D_h\), Darcy \(\Delta p\), film \(\rho\) |
+| Risk | `risk-management/js/scoring.js` | 5×5 matrix thresholds, residual score |
+| Units | `unit-converter/js/convert.js` | Temperature + NIST-style factors |
+| Drafting | `solver.js` / `dxf.js` | Constraints + DXF round-trip |
+
+When you change a formula, **update the golden test** and **increment `physicsVersion`** in `tools-data.js` for that tool so share links and support reports stay coherent.
+
+---
+
+## 📊 Analytics privacy
+
+`js/analytics.js` writes **aggregate counters only** (no third-party cookies).
+
+**Never sent:** emails, project names, drawing / risk / CAN / beam payloads, share URLs, free-text form fields.
+
+**Allowed:** `toolId`, event name (`hub_view`, `tool_open`, `tool_engaged`, `tool_exit_*`, `bug_report_open`, `pm_open`, `share_copy`), anonymous session id (local only), coarse duration buckets.
+
+Data lands on Firestore `tool_stats/{toolId}` as incrementing fields. See the header comment in `js/analytics.js` for the full event list.
+
+---
+
+## 🏷️ Versioning
+
+- **`version.json`** — site build id (deploy / support).
+- **`physicsVersion`** per tool in `tools-data.js` — calculation engine revision.
+
+Tool footers (via `tool-shell.js`) show both, e.g. `build 1783458900 · physics v1 · can-bus-designer`. Quote that line when reporting a bug or comparing numeric results.
 
 ---
 
@@ -88,6 +132,7 @@ No build system required. Run entirely static:
 ```bash
 # Start local server to avoid browser file:// origin CORS quirks
 python -m http.server 8000
+# or: npx serve .
 
 # Open http://localhost:8000 in your browser
 ```

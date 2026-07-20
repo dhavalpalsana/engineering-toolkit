@@ -86,26 +86,59 @@ For tools supporting import/export, buttons in the `.hdr-right` toolbar must use
 
 ---
 
-## 4. Shared Tool Shell (Header / Footer / Beta Banner)
-Every tool page should load the shared chrome stack after Firebase helpers:
+## 4. Tool packaging scaffold (required)
 
+Every live tool directory must follow:
+
+```
+tools/<tool-id>/
+  index.html      # markup + includes only (no large inline <style>/<script>)
+  app.js          # UI orchestration, DOM, PM/export hooks
+  style.css       # tool-local layout (CSS variables from theme.css only)
+  js/             # optional pure engines (UMD, browser + Node)
+    physics.js
+    physics.test.js   # golden cases — required for non-trivial math
+```
+
+`scripts/check-site.mjs` enforces `app.js`, script/CSS order, and warns when pure modules lack tests. Prefer extracting calculation code into `js/` so CI can run golden tests without a browser.
+
+### CSS link order
 ```html
 <link rel="stylesheet" href="../../css/theme.css">
 <link rel="stylesheet" href="../../css/header.css">
 <link rel="stylesheet" href="../../css/tool-shell.css">
-...
+<link rel="stylesheet" href="style.css">
+```
+
+### Script load order
+```html
+<script src="…firebase-app/auth/firestore…"></script>
 <script src="../../js/firebase.js"></script>
 <script src="../../js/auth-ui.js"></script>
 <script src="../../js/tools-data.js"></script>
+<script src="../../js/registry.js"></script>      <!-- optional -->
 <script src="../../js/tool-shell.js"></script>
+<script src="../../js/tool-exports.js"></script>
 <script src="../../js/project-manager.js"></script>
+<script src="../../js/analytics.js"></script>
+<script src="js/physics.js"></script>             <!-- optional pure engine -->
+<script src="app.js"></script>
 ```
+
+## 4b. Shared Tool Shell (Header / Footer / Beta Banner)
 
 * **`tool-shell.js`** auto-detects `toolId` from the URL (or `projectManagerConfig` / `toolShellConfig`) and:
   * Injects a **Beta** banner when `status === "beta"` in `tools-data.js` (one-click Report a Bug; dismissible for the session).
   * Ensures a standardized **footer** (coffee / suggest / bug / GitHub).
+  * Surfaces **`version.json` build id** + **`physicsVersion`** for support.
 * Optional: `window.ToolShell.renderHeader(container, { title, subtitle, iconHtml, showShare, showExport, showImport })` for greenfield tools.
 * Prefer keeping existing static `<header>` markup (AGENTS §2) and letting the shell enhance chrome, rather than regenerating headers on every page.
+
+## 4c. Golden tests & physicsVersion
+* Put formulas in pure UMD modules under `tools/<id>/js/` (see `can-bus-designer/js/physics.js`).
+* Add 5–20 fixed cases with known answers in `*.test.js` (`node:test` + `node:assert/strict`).
+* When formulas change: update goldens **and** bump `physicsVersion` in `tools-data.js`.
+* Analytics must never receive project payloads (see `js/analytics.js` header).
 
 ## 5. Auth & Project Manager Integration
 * Ensure the page imports Firebase scripts and the shared helpers (see §4 for full order).

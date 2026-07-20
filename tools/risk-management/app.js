@@ -30,7 +30,9 @@ const PROBABILITY_DEFINITIONS = {
 
 // Shared risk-score thresholds (table badges + heatmap cells)
 // CRITICAL ≥ 16, HIGH ≥ 12, MEDIUM ≥ 6, else LOW
-const RISK_THRESHOLDS = { critical: 16, high: 12, medium: 6 };
+const RISK_THRESHOLDS = (typeof RiskScoring !== "undefined" && RiskScoring.RISK_THRESHOLDS)
+  ? RiskScoring.RISK_THRESHOLDS
+  : { critical: 16, high: 12, medium: 6 };
 
 // ----- State -----
 let riskData = [];
@@ -210,23 +212,27 @@ async function replaceRiskData(risks) {
 }
 
 function hasResidual(r) {
+  if (typeof RiskScoring !== "undefined") return RiskScoring.hasResidual(r);
   const s = parseInt(r.residualSeverity, 10);
   const p = parseInt(r.residualProbability, 10);
   return !!(s && p);
 }
 
 function residualScore(r) {
+  if (typeof RiskScoring !== "undefined") return RiskScoring.residualScore(r);
   if (!hasResidual(r)) return null;
   return parseInt(r.residualSeverity, 10) * parseInt(r.residualProbability, 10);
 }
 
 /** Score used for matrix / ranking when residual mode is on. */
 function effectiveScore(r, mode) {
+  if (typeof RiskScoring !== "undefined") return RiskScoring.effectiveScore(r, mode);
   if (mode === "residual" && hasResidual(r)) return residualScore(r);
   return computeScore(r.severity, r.probability);
 }
 
 function parseJiraKey(url) {
+  if (typeof RiskScoring !== "undefined") return RiskScoring.parseJiraKey(url);
   if (!url) return null;
   const m = String(url).match(/\b([A-Z][A-Z0-9]+-\d+)\b/);
   return m ? m[1] : null;
@@ -261,12 +267,14 @@ function normalizeRisk(r) {
 
 // ----- Utility -----
 function computeScore(severity, probability) {
+  if (typeof RiskScoring !== "undefined") return RiskScoring.computeScore(severity, probability);
   const s = parseInt(severity) || 0;
   const p = parseInt(probability) || 0;
   return s * p;
 }
 
 function determineLevel(score) {
+  if (typeof RiskScoring !== "undefined") return RiskScoring.determineLevel(score);
   if (score >= RISK_THRESHOLDS.critical) {
     return { level: "CRITICAL", color: "#e11d48", cssClass: "badge-critical" };
   }
@@ -280,6 +288,7 @@ function determineLevel(score) {
 }
 
 function getCellLevel(score) {
+  if (typeof RiskScoring !== "undefined") return RiskScoring.getCellLevel(score);
   if (score >= RISK_THRESHOLDS.critical) return "level-critical";
   if (score >= RISK_THRESHOLDS.high) return "level-high";
   if (score >= RISK_THRESHOLDS.medium) return "level-medium";

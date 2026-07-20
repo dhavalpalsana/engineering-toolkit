@@ -235,38 +235,19 @@ function recalculateAll() {
     if (inputVsd) m.vsd = parseFloat(inputVsd.value) || 0;
     if (inputCoss) m.coss = parseFloat(inputCoss.value) || 0;
 
-    // Unit conversions
-    const rdson_ohm = m.rdson / 1000.0;
-    const qg_c = m.qg / 1e9;
-    const tr_s = m.tr / 1e9;
-    const tf_s = m.tf / 1e9;
-    const qrr_c = m.qrr / 1e9;
-    const coss_f = m.coss / 1e12;
-    const tdead_s = tdead / 1e9;
-    const fsw_hz = fsw * 1000.0;
-    const duty_frac = duty / 100.0;
-
-    // Loss Calculations
-    // 1. Conduction loss
-    const p_cond = iload * iload * rdson_ohm * duty_frac;
-
-    // 2. Switching loss (Turn-on & Turn-off linear approximation)
-    const p_sw = 0.5 * vbus * iload * (tr_s + tf_s) * fsw_hz;
-
-    // 3. Dead Time loss (2 switch events per cycle)
-    const p_dead = 2.0 * iload * m.vsd * tdead_s * fsw_hz;
-
-    // 4. Reverse Recovery loss
-    const p_rr = qrr_c * vbus * fsw_hz;
-
-    // 5. Gate Drive loss
-    const p_gate = qg_c * vgate * fsw_hz;
-
-    // 6. Coss loss
-    const p_coss = 0.5 * coss_f * vbus * vbus * fsw_hz;
-
-    // Total Loss
-    const p_total = p_cond + p_sw + p_dead + p_rr + p_gate + p_coss;
+    const losses = (typeof MosfetPhysics !== "undefined")
+      ? MosfetPhysics.calculateLosses(
+          { vbus, iload, fsw, vgate, tdead, duty },
+          { rdson: m.rdson, qg: m.qg, tr: m.tr, tf: m.tf, qrr: m.qrr, vsd: m.vsd, coss: m.coss }
+        )
+      : null;
+    const p_cond = losses ? losses.p_cond : (iload * iload * (m.rdson / 1000.0) * (duty / 100.0));
+    const p_sw = losses ? losses.p_sw : 0.5 * vbus * iload * ((m.tr + m.tf) / 1e9) * (fsw * 1000.0);
+    const p_dead = losses ? losses.p_dead : 2.0 * iload * m.vsd * (tdead / 1e9) * (fsw * 1000.0);
+    const p_rr = losses ? losses.p_rr : (m.qrr / 1e9) * vbus * (fsw * 1000.0);
+    const p_gate = losses ? losses.p_gate : (m.qg / 1e9) * vgate * (fsw * 1000.0);
+    const p_coss = losses ? losses.p_coss : 0.5 * (m.coss / 1e12) * vbus * vbus * (fsw * 1000.0);
+    const p_total = losses ? losses.p_total : (p_cond + p_sw + p_dead + p_rr + p_gate + p_coss);
 
     // Update result elements in DOM
     const totalNode = document.getElementById(`total-loss-${m.id}`);
