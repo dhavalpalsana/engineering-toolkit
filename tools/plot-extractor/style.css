@@ -87,7 +87,7 @@ main {
   height: 16px;
 }
 
-/* Live mode chip */
+/* Live mode chip (clickable → opens panel) */
 .mode-badge {
   display: inline-flex;
   align-items: center;
@@ -101,6 +101,30 @@ main {
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
   text-transform: uppercase;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  line-height: 1.2;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.mode-badge:hover {
+  box-shadow: var(--shadow-sm);
+  filter: brightness(0.98);
+}
+
+.mode-badge:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+@keyframes mode-badge-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45); }
+  40% { transform: scale(1.06); box-shadow: 0 0 0 8px rgba(13, 148, 136, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); }
+}
+
+.mode-badge.mode-pulse {
+  animation: mode-badge-pulse 0.85s ease-out 1;
 }
 
 .mode-badge-dot {
@@ -150,6 +174,18 @@ main {
 .mode-badge.mode-fit .mode-badge-dot { background: var(--text-muted); }
 
 .mode-badge.mode-ready .mode-badge-dot { background: var(--text-muted); }
+
+.mode-badge.mode-points-ready {
+  background: var(--color-success-bg);
+  border-color: color-mix(in srgb, var(--color-success) 45%, var(--border-color));
+  color: #047857;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.mode-badge.mode-points-ready .mode-badge-dot {
+  background: var(--color-success);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+}
 
 .workspace-toolbar {
   display: flex;

@@ -93,6 +93,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let historyStack = [];
   let historyPointer = -1;
   let activePanel = "setup"; // setup | series | autotrace | image | measure | fit
+  /** Until this timestamp, mode badge shows “Points ready” flash. */
+  let pointsReadyFlashUntil = 0;
+  let pointsReadyFlashTimer = null;
   
   // Calibration Handles (in image pixel space)
   let calibrationPoints = {
@@ -191,17 +194,70 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll();
   }
 
+  function hasDigitizedPoints() {
+    return seriesList.some((s) => s.points && s.points.length > 0);
+  }
+
+  function flashPointsReady() {
+    if (!hasDigitizedPoints()) return;
+    pointsReadyFlashUntil = Date.now() + 2400;
+    if (pointsReadyFlashTimer) clearTimeout(pointsReadyFlashTimer);
+    updateModeBadge();
+    pointsReadyFlashTimer = setTimeout(() => {
+      pointsReadyFlashTimer = null;
+      updateModeBadge();
+    }, 2500);
+  }
+
+  function pulseModeBadge() {
+    const badge = document.getElementById("canvas-mode-badge");
+    if (!badge) return;
+    badge.classList.remove("mode-pulse");
+    // reflow so re-adding restarts animation
+    void badge.offsetWidth;
+    badge.classList.add("mode-pulse");
+    setTimeout(() => badge.classList.remove("mode-pulse"), 900);
+  }
+
+  /** Map mode badge key → sidebar panel id. */
+  function panelForModeKey(key) {
+    switch (key) {
+      case "calibrating": return "setup";
+      case "digitizing":
+      case "points-ready": return "series";
+      case "autotrace":
+      case "masking": return "autotrace";
+      case "image": return "image";
+      case "measure": return "measure";
+      case "fit": return "fit";
+      case "ready":
+      default: return imageLoaded ? (hasDigitizedPoints() ? "series" : "setup") : "setup";
+    }
+  }
+
   function getModePresentation() {
     const maskTool = (document.getElementById("mask-tool") || {}).value;
     const measureMode = (document.getElementById("measure-mode") || {}).value;
+
+    // Temporary export cue
+    if (imageLoaded && hasDigitizedPoints() && Date.now() < pointsReadyFlashUntil) {
+      return {
+        key: "points-ready",
+        label: "Points ready",
+        hint: "Data is ready — use the header Export menu for CSV / JSON / image.",
+        panel: "series"
+      };
+    }
+
     if (!imageLoaded) {
-      return { key: "ready", label: "Ready", hint: "Upload or paste a plot image to begin." };
+      return { key: "ready", label: "Ready", hint: "Upload or paste a plot image to begin.", panel: "setup" };
     }
     switch (activePanel) {
       case "setup":
         return {
           key: "calibrating",
           label: "Calibrating",
+          panel: "setup",
           hint: isTimeScale()
             ? "Drag X1/X2 to time ticks · enter times · set Y1/Y2. Or use Detect axes."
             : "Drag red markers to tick marks, enter values, or use Detect axes."
@@ -210,25 +266,31 @@ document.addEventListener("DOMContentLoaded", () => {
         return {
           key: "digitizing",
           label: isDiscreteMode() ? "Digitizing bars" : "Digitizing",
+          panel: "series",
           hint: isDiscreteMode()
             ? "Click bar tops · edit labels in the table · double-click to delete."
             : "Click the plot to add points · drag to adjust · double-click to delete."
         };
       case "autotrace":
         if (maskTool && maskTool !== "off") {
-          return { key: "masking", label: "Painting mask", hint: "Paint include/exclude regions, then sample color and Run." };
+          return { key: "masking", label: "Painting mask", panel: "autotrace", hint: "Paint include/exclude regions, then sample color and Run." };
         }
-        return { key: "autotrace", label: "Autotrace", hint: "Sample a curve color (optional mask), then Run autotrace." };
+        return { key: "autotrace", label: "Autotrace", panel: "autotrace", hint: "Sample a curve color (optional mask), then Run autotrace." };
       case "image":
-        return { key: "image", label: "Image prep", hint: "Rotate, flip, filter, crop (Shift+drag). Reset to original undoes prep." };
+        return {
+          key: "image",
+          label: "Image prep",
+          panel: "image",
+          hint: "Rotate, flip, filter, crop (Shift+drag). Reset markers or reset image below."
+        };
       case "measure":
-        if (measureMode === "angle") return { key: "measure", label: "Measuring angle", hint: "Click 3 points (vertex in the middle)." };
-        if (measureMode === "area") return { key: "measure", label: "Measuring area", hint: "Click polygon vertices · Enter to close." };
-        return { key: "measure", label: "Measuring distance", hint: "Click two points to measure distance in data units." };
+        if (measureMode === "angle") return { key: "measure", label: "Measuring angle", panel: "measure", hint: "Click 3 points (vertex in the middle)." };
+        if (measureMode === "area") return { key: "measure", label: "Measuring area", panel: "measure", hint: "Click polygon vertices · Enter to close." };
+        return { key: "measure", label: "Measuring distance", panel: "measure", hint: "Click two points to measure distance in data units." };
       case "fit":
-        return { key: "fit", label: "Curve fit", hint: "Choose a model for the active series · export from the header menu." };
+        return { key: "fit", label: "Curve fit", panel: "fit", hint: "Choose a model for the active series · export from the header menu." };
       default:
-        return { key: "ready", label: "Ready", hint: helperText ? helperText.textContent : "" };
+        return { key: "ready", label: "Ready", panel: "setup", hint: helperText ? helperText.textContent : "" };
     }
   }
 
@@ -240,13 +302,26 @@ document.addEventListener("DOMContentLoaded", () => {
     if (label) label.textContent = pres.label;
     if (badge) {
       badge.dataset.mode = pres.key;
-      badge.className = "mode-badge mode-" + pres.key;
+      badge.dataset.panel = pres.panel || panelForModeKey(pres.key);
+      const pulsing = badge.classList.contains("mode-pulse");
+      badge.className = "mode-badge mode-" + pres.key + (pulsing ? " mode-pulse" : "");
+      badge.title = "Click to open “" + (pres.panel || panelForModeKey(pres.key)) + "” panel";
     }
     if (title) title.textContent = imageLoaded ? "Plot canvas" : "Canvas";
     if (helperText && pres.hint) helperText.textContent = pres.hint;
   }
 
   setupExclusiveAccordions();
+
+  // Mode badge → open matching panel
+  const modeBadgeEl = document.getElementById("canvas-mode-badge");
+  if (modeBadgeEl) {
+    modeBadgeEl.addEventListener("click", () => {
+      const pres = getModePresentation();
+      const panel = pres.panel || panelForModeKey(pres.key) || modeBadgeEl.dataset.panel || "setup";
+      openPanel(panel);
+    });
+  }
 
   function setAxisDetectStatus(msg, isError) {
     if (!axisDetectStatus) return;
@@ -331,6 +406,7 @@ document.addEventListener("DOMContentLoaded", () => {
     triggerProjectChange();
     renderAll();
     updateHelperBanner();
+    pulseModeBadge();
   }
 
   if (btnDetectAxes) {
@@ -440,13 +516,40 @@ document.addEventListener("DOMContentLoaded", () => {
     img.src = dataUrl;
   }
 
-  /** Restore image as first loaded (undoes prep edits; keeps series/cal if still valid). */
+  function defaultCalibrationMarkers(w, h) {
+    return {
+      x1: { px: Math.round(w * 0.15), py: Math.round(h * 0.85) },
+      x2: { px: Math.round(w * 0.85), py: Math.round(h * 0.85) },
+      y1: { px: Math.round(w * 0.15), py: Math.round(h * 0.85) },
+      y2: { px: Math.round(w * 0.15), py: Math.round(h * 0.15) }
+    };
+  }
+
+  /** Reset X1/X2/Y1/Y2 to default corners of the current image (values unchanged). */
+  function resetMarkersOnly() {
+    if (!imageLoaded || !imgWidth || !imgHeight) {
+      alert("Load a plot image first.");
+      return;
+    }
+    if (!confirm("Reset axis markers to default corners of the current image? Entered X/Y values are kept.")) {
+      return;
+    }
+    pushHistory();
+    calibrationPoints = defaultCalibrationMarkers(imgWidth, imgHeight);
+    openPanel("setup");
+    triggerProjectChange();
+    renderAll();
+    updateHelperBanner();
+    pulseModeBadge();
+  }
+
+  /** Restore image as first loaded (undoes prep edits). */
   function resetToOriginalImage() {
     if (!originalImageBackup || !originalImageBackup.dataUrl) {
       alert("No original image stored yet. Load or paste a plot first.");
       return;
     }
-    if (!confirm("Reset image to the original upload? Prep edits (rotate, crop, filters) will be undone. Digitized points stay, but may no longer align if the image geometry changed.")) {
+    if (!confirm("Reset image to the original upload? Prep edits (rotate, crop, filters) will be undone. Digitized points stay, but may no longer align if the image geometry changed. Markers reset to default corners.")) {
       return;
     }
     pushHistory();
@@ -458,22 +561,23 @@ document.addEventListener("DOMContentLoaded", () => {
     dropzone.style.display = "none";
     canvasWrapper.style.display = "block";
     imageActions.style.display = "flex";
-    // Reset markers to default frame on restored size
-    calibrationPoints.x1 = { px: Math.round(imgWidth * 0.15), py: Math.round(imgHeight * 0.85) };
-    calibrationPoints.x2 = { px: Math.round(imgWidth * 0.85), py: Math.round(imgHeight * 0.85) };
-    calibrationPoints.y1 = { px: Math.round(imgWidth * 0.15), py: Math.round(imgHeight * 0.85) };
-    calibrationPoints.y2 = { px: Math.round(imgWidth * 0.15), py: Math.round(imgHeight * 0.15) };
+    calibrationPoints = defaultCalibrationMarkers(imgWidth, imgHeight);
     triggerProjectChange();
     setTimeout(() => {
       resizeCanvas();
       renderAll();
       updateHelperBanner();
+      pulseModeBadge();
     }, 40);
   }
 
   const btnImgResetOriginal = document.getElementById("btn-img-reset-original");
   if (btnImgResetOriginal) {
     btnImgResetOriginal.addEventListener("click", resetToOriginalImage);
+  }
+  const btnImgResetMarkers = document.getElementById("btn-img-reset-markers");
+  if (btnImgResetMarkers) {
+    btnImgResetMarkers.addEventListener("click", resetMarkersOnly);
   }
   
   function resizeCanvas() {
@@ -794,6 +898,7 @@ document.addEventListener("DOMContentLoaded", () => {
         triggerProjectChange();
         renderAll();
         updatePointsTable();
+        flashPointsReady();
       }
     }
   });
@@ -2590,7 +2695,8 @@ document.addEventListener("DOMContentLoaded", () => {
         triggerProjectChange();
         updateSeriesUI();
         populatePointsTable();
-        setTimeout(() => { resizeCanvas(); renderAll(); }, 50);
+        flashPointsReady();
+        setTimeout(() => { resizeCanvas(); renderAll(); updateModeBadge(); }, 50);
       }
     });
   }

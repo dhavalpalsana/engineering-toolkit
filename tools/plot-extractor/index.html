@@ -102,10 +102,10 @@
             <i data-lucide="image"></i>
             <span id="workspace-mode-title">Canvas</span>
           </div>
-          <div id="canvas-mode-badge" class="mode-badge" title="Current interaction mode">
+          <button type="button" id="canvas-mode-badge" class="mode-badge" title="Click to open the matching sidebar panel">
             <span class="mode-badge-dot"></span>
             <span id="canvas-mode-label">Ready</span>
-          </div>
+          </button>
         </div>
         <div id="image-actions" class="workspace-toolbar" style="display: none;">
           <div class="toolbar-group" title="Zoom">
@@ -425,9 +425,11 @@
             <button type="button" id="btn-img-scale" class="action-btn secondary" style="align-self:end;">Apply</button>
           </div>
           <p class="hint-text">Crop: hold <kbd>Shift</kbd> and drag on the canvas</p>
+          <button type="button" id="btn-img-crop-apply" class="action-btn secondary" disabled>Apply crop</button>
+          <div class="section-label">Reset</div>
           <div class="btn-row">
-            <button type="button" id="btn-img-crop-apply" class="action-btn secondary" disabled>Apply crop</button>
-            <button type="button" id="btn-img-reset-original" class="action-btn secondary" title="Restore the image as first loaded (undoes prep edits)">Reset to original</button>
+            <button type="button" id="btn-img-reset-markers" class="action-btn secondary" title="Reset X1/X2/Y1/Y2 to default corners of the current image">Reset markers only</button>
+            <button type="button" id="btn-img-reset-original" class="action-btn secondary" title="Restore the image as first loaded (undoes prep edits)">Reset image</button>
           </div>
         </div>
       </details>
