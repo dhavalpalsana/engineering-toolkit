@@ -174,6 +174,40 @@
     return out;
   }
 
+  /**
+   * Flatten transparency (and optionally full canvas) onto a solid background.
+   * Useful for PNGs with alpha — digitizing/autotrace behave better on opaque images.
+   * @param {ImageData} src
+   * @param {{r:number,g:number,b:number}} color 0–255
+   * @param {{mode?: 'transparent'|'all'}} opts
+   *   transparent — only composite pixels with alpha &lt; 255
+   *   all — paint entire canvas with bg then draw source over it (same as transparent for opaque)
+   */
+  function fillBackground(src, color, opts) {
+    opts = opts || {};
+    const mode = opts.mode || "transparent";
+    const br = color.r | 0, bg = color.g | 0, bb = color.b | 0;
+    const out = createImageData(src.width, src.height);
+    const d = src.data;
+    const o = out.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const a = d[i + 3] / 255;
+      if (mode === "all" || a < 1) {
+        // Standard "over" composite: src over solid background
+        o[i] = Math.round(d[i] * a + br * (1 - a));
+        o[i + 1] = Math.round(d[i + 1] * a + bg * (1 - a));
+        o[i + 2] = Math.round(d[i + 2] * a + bb * (1 - a));
+        o[i + 3] = 255;
+      } else {
+        o[i] = d[i];
+        o[i + 1] = d[i + 1];
+        o[i + 2] = d[i + 2];
+        o[i + 3] = 255;
+      }
+    }
+    return out;
+  }
+
   /** Map a point after crop offset removal, then optional scale. */
   function mapPointAfterCrop(px, py, offset) {
     return { px: px - offset.x, py: py - offset.y };
@@ -204,6 +238,7 @@
     contrast,
     threshold,
     blur,
+    fillBackground,
     mapPointAfterCrop,
     mapPointAfterFlipH,
     mapPointAfterFlipV,

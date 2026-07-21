@@ -415,6 +415,27 @@
             <button type="button" id="btn-img-contrast" class="chip-btn">Contrast+</button>
             <button type="button" id="btn-img-threshold" class="chip-btn">Threshold</button>
           </div>
+          <div class="section-label">Background (PNG / alpha)</div>
+          <div class="form-row" style="align-items:end;">
+            <div class="input-group">
+              <label for="img-bg-color">Fill color</label>
+              <input type="color" id="img-bg-color" value="#ffffff" title="Background color for transparent areas" />
+            </div>
+            <div class="input-group">
+              <label for="img-bg-mode">Apply to</label>
+              <select id="img-bg-mode">
+                <option value="transparent">Transparent only</option>
+                <option value="all">Entire image (flatten)</option>
+              </select>
+            </div>
+          </div>
+          <div class="chip-grid">
+            <button type="button" class="chip-btn" data-bg-preset="#ffffff" title="White">White</button>
+            <button type="button" class="chip-btn" data-bg-preset="#000000" title="Black">Black</button>
+            <button type="button" class="chip-btn" data-bg-preset="#f1f5f9" title="Light gray">Gray</button>
+            <button type="button" id="btn-img-bg-apply" class="chip-btn chip-btn-accent">Apply background</button>
+          </div>
+          <p class="hint-text">Flattens transparent PNG pixels onto a solid color so axes/autotrace see a real background.</p>
           <div class="form-row">
             <div class="input-group">
               <label for="img-scale">Resample</label>

@@ -880,6 +880,23 @@ kbd {
   background: var(--accent-primary-glow);
 }
 
+.chip-btn-accent {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-primary-glow);
+}
+
+.chip-btn-accent:hover {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+#img-bg-color {
+  height: 36px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
 .color-swatch {
   width: 28px;
   height: 28px;

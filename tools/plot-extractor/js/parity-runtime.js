@@ -417,6 +417,35 @@
       bind("btn-img-threshold", () => onFilter((id) => PIP.threshold(id, 128)));
       bind("btn-img-scale", onScale);
       bind("btn-img-crop-apply", applyCrop);
+
+      function parseHexColor(hex) {
+        const h = String(hex || "#ffffff").replace("#", "");
+        if (h.length !== 6) return { r: 255, g: 255, b: 255 };
+        return {
+          r: parseInt(h.slice(0, 2), 16),
+          g: parseInt(h.slice(2, 4), 16),
+          b: parseInt(h.slice(4, 6), 16)
+        };
+      }
+
+      function applyBackgroundFill() {
+        if (!PIP || !PIP.fillBackground) return;
+        const colorEl = $("img-bg-color");
+        const modeEl = $("img-bg-mode");
+        const color = parseHexColor(colorEl ? colorEl.value : "#ffffff");
+        const mode = modeEl ? modeEl.value : "transparent";
+        onFilter((id) => PIP.fillBackground(id, color, { mode }));
+      }
+
+      bind("btn-img-bg-apply", applyBackgroundFill);
+      document.querySelectorAll("[data-bg-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const hex = btn.getAttribute("data-bg-preset");
+          const colorEl = $("img-bg-color");
+          if (colorEl && hex) colorEl.value = hex;
+          applyBackgroundFill();
+        });
+      });
       bind("btn-mask-clear", () => {
         const m = ensureMask();
         if (m && Mask) { Mask.clear(m, false); api.renderAll(); }

@@ -35,4 +35,19 @@ describe("image pipeline", () => {
     const g = I.grayscale(src);
     assert.ok(g.data[0] > 50 && g.data[0] === g.data[1]);
   });
+
+  it("fillBackground composites transparent onto white", () => {
+    const src = I.createImageData(2, 1);
+    // pixel 0: red semi-transparent
+    src.data[0] = 255; src.data[1] = 0; src.data[2] = 0; src.data[3] = 128;
+    // pixel 1: fully transparent
+    src.data[4] = 0; src.data[5] = 0; src.data[6] = 0; src.data[7] = 0;
+    const out = I.fillBackground(src, { r: 255, g: 255, b: 255 }, { mode: "transparent" });
+    assert.equal(out.data[3], 255);
+    assert.equal(out.data[7], 255);
+    // fully transparent → pure white
+    assert.equal(out.data[4], 255);
+    assert.equal(out.data[5], 255);
+    assert.equal(out.data[6], 255);
+  });
 });

@@ -1213,10 +1213,36 @@ document.addEventListener("DOMContentLoaded", () => {
   function drawLoupe() {
     const mouseScreenX = lastMousePos.x * imgScale;
     const mouseScreenY = lastMousePos.y * imgScale;
-    
-    // Draw circular magnifier offset to top-right of cursor to prevent finger/mouse occlusion
-    const loupeX = mouseScreenX + 60;
-    const loupeY = mouseScreenY - 60;
+    const gap = 56;
+    const pad = loupeRadius + 6;
+    const labelSpace = hoverInfo ? 22 : 0;
+
+    // Prefer top-right of cursor; flip when that would clip off the canvas
+    let loupeX = mouseScreenX + gap;
+    let loupeY = mouseScreenY - gap;
+
+    if (loupeX + loupeRadius > canvas.width - 4) {
+      loupeX = mouseScreenX - gap; // flip to left
+    }
+    if (loupeX - loupeRadius < 4) {
+      loupeX = mouseScreenX + gap;
+    }
+    if (loupeY - loupeRadius < 4) {
+      loupeY = mouseScreenY + gap; // flip below
+    }
+    if (loupeY + loupeRadius + labelSpace > canvas.height - 4) {
+      loupeY = mouseScreenY - gap; // keep above if possible
+    }
+
+    // Final clamp so circle (+ label) always stays inside the canvas
+    loupeX = Math.max(pad, Math.min(canvas.width - pad, loupeX));
+    loupeY = Math.max(pad, Math.min(canvas.height - pad - (labelSpace ? 8 : 0), loupeY));
+
+    // Prefer label below loupe; flip above if near bottom
+    let labelBelow = true;
+    if (loupeY + loupeRadius + 20 > canvas.height - 2) {
+      labelBelow = false;
+    }
     
     ctx.save();
     
@@ -1263,14 +1289,22 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.arc(loupeX, loupeY, 2, 0, 2 * Math.PI);
     ctx.fill();
     
-    // Floating tooltip near magnifier
+    // Floating tooltip near magnifier (flips above when near bottom edge)
     if (hoverInfo) {
-      ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
       ctx.font = "bold 9px var(--font-sans)";
       const labelW = ctx.measureText(hoverInfo.label).width;
-      ctx.fillRect(loupeX - labelW/2 - 6, loupeY + loupeRadius + 4, labelW + 12, 16);
+      const boxW = labelW + 12;
+      const boxH = 16;
+      let boxX = loupeX - boxW / 2;
+      boxX = Math.max(2, Math.min(canvas.width - boxW - 2, boxX));
+      let boxY = labelBelow
+        ? loupeY + loupeRadius + 4
+        : loupeY - loupeRadius - boxH - 4;
+      boxY = Math.max(2, Math.min(canvas.height - boxH - 2, boxY));
+      ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
+      ctx.fillRect(boxX, boxY, boxW, boxH);
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(hoverInfo.label, loupeX - labelW/2, loupeY + loupeRadius + 15);
+      ctx.fillText(hoverInfo.label, boxX + 6, boxY + 11);
     }
   }
   
