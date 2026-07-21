@@ -35,6 +35,7 @@ The toolkit runs entirely client-side as a static site with optional user authen
 | [**MCC Feeder & Starter Designer**](tools/mcc-feeder-designer/) | Electrical / Control | Design Motor Control Center Single Line Diagrams. Drag & drop DOL starters, VFDs, soft starters, and cables with real-time sizing calculations. |
 | [**MOSFET Power Loss Calculator**](tools/mosfet-power-loss/) | Electrical / Thermo | Physics-based semiconductor power loss modeler. Calculate and compare conduction, switching, gate charge, dead-time, and Coss losses side-by-side for multiple devices. |
 | [**Risk Management Dashboard**](tools/risk-management/) | Management / Quality | Capture, score, and visualise project risks with heat-map, category filters, top-5 view, and weekly trend charts. Cloud sync for signed-in users. |
+| [**True Rent vs Buy Calculator**](tools/rent-vs-buy/) | Personal Finance (US) | Apples-to-apples wealth model: opportunity cost, PMI, maintenance, tax shield, selling costs, break-even, sensitivity, and year-by-year ledger (**beta**). |
 
 ---
 
