@@ -86,10 +86,13 @@ document.addEventListener("DOMContentLoaded", () => {
   let imgHeight = 0;
   let imgScale = 1.0;
   let compressedImgData = null; // Stored as base64 string for saving
+  /** Snapshot of image as first loaded (before prep edits). */
+  let originalImageBackup = null; // { dataUrl, width, height }
   let zoomFactor = 1.0;
   let legendVisible = true;
   let historyStack = [];
   let historyPointer = -1;
+  let activePanel = "setup"; // setup | series | autotrace | image | measure | fit
   
   // Calibration Handles (in image pixel space)
   let calibrationPoints = {
@@ -128,11 +131,122 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // Initialize lucide icons (sidebar accordions included)
   if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
-  document.querySelectorAll("details.accordion").forEach((d) => {
-    d.addEventListener("toggle", () => {
-      if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+
+  /**
+   * Exclusive accordion: only one sidebar panel open at a time.
+   * Opening a panel drives canvas interaction mode.
+   */
+  function setupExclusiveAccordions() {
+    const panels = Array.from(document.querySelectorAll("aside.sidebar-panel details.accordion"));
+    panels.forEach((panel) => {
+      panel.addEventListener("toggle", () => {
+        if (panel.open) {
+          panels.forEach((other) => {
+            if (other !== panel && other.open) other.open = false;
+          });
+          activePanel = panel.getAttribute("data-panel") || "setup";
+          applyPanelMode(activePanel);
+        } else {
+          // Keep at least one open (prefer setup)
+          const anyOpen = panels.some((p) => p.open);
+          if (!anyOpen) {
+            const setup = panels.find((p) => p.getAttribute("data-panel") === "setup") || panels[0];
+            if (setup) setup.open = true;
+          }
+        }
+        if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+        updateModeBadge();
+      });
     });
-  });
+  }
+
+  function openPanel(name) {
+    const panels = document.querySelectorAll("aside.sidebar-panel details.accordion");
+    panels.forEach((p) => {
+      p.open = p.getAttribute("data-panel") === name;
+    });
+    activePanel = name;
+    applyPanelMode(name);
+    updateModeBadge();
+  }
+
+  function applyPanelMode(panel) {
+    selectedDataPoint = null;
+    if (panel === "setup") {
+      currentMode = "calibrate";
+      if (modeBtnCalibrate) modeBtnCalibrate.classList.add("active");
+    } else if (panel === "series") {
+      currentMode = "digitize";
+      if (modeBtnCalibrate) modeBtnCalibrate.classList.remove("active");
+    } else if (panel === "measure") {
+      currentMode = "pan"; // measure handled by parity pointer hooks
+      if (modeBtnCalibrate) modeBtnCalibrate.classList.remove("active");
+      const mm = document.getElementById("measure-mode");
+      if (mm && mm.value === "off") mm.value = "distance";
+    } else if (panel === "autotrace" || panel === "image" || panel === "fit") {
+      currentMode = "pan";
+      if (modeBtnCalibrate) modeBtnCalibrate.classList.remove("active");
+    }
+    updateHelperBanner();
+    renderAll();
+  }
+
+  function getModePresentation() {
+    const maskTool = (document.getElementById("mask-tool") || {}).value;
+    const measureMode = (document.getElementById("measure-mode") || {}).value;
+    if (!imageLoaded) {
+      return { key: "ready", label: "Ready", hint: "Upload or paste a plot image to begin." };
+    }
+    switch (activePanel) {
+      case "setup":
+        return {
+          key: "calibrating",
+          label: "Calibrating",
+          hint: isTimeScale()
+            ? "Drag X1/X2 to time ticks · enter times · set Y1/Y2. Or use Detect axes."
+            : "Drag red markers to tick marks, enter values, or use Detect axes."
+        };
+      case "series":
+        return {
+          key: "digitizing",
+          label: isDiscreteMode() ? "Digitizing bars" : "Digitizing",
+          hint: isDiscreteMode()
+            ? "Click bar tops · edit labels in the table · double-click to delete."
+            : "Click the plot to add points · drag to adjust · double-click to delete."
+        };
+      case "autotrace":
+        if (maskTool && maskTool !== "off") {
+          return { key: "masking", label: "Painting mask", hint: "Paint include/exclude regions, then sample color and Run." };
+        }
+        return { key: "autotrace", label: "Autotrace", hint: "Sample a curve color (optional mask), then Run autotrace." };
+      case "image":
+        return { key: "image", label: "Image prep", hint: "Rotate, flip, filter, crop (Shift+drag). Reset to original undoes prep." };
+      case "measure":
+        if (measureMode === "angle") return { key: "measure", label: "Measuring angle", hint: "Click 3 points (vertex in the middle)." };
+        if (measureMode === "area") return { key: "measure", label: "Measuring area", hint: "Click polygon vertices · Enter to close." };
+        return { key: "measure", label: "Measuring distance", hint: "Click two points to measure distance in data units." };
+      case "fit":
+        return { key: "fit", label: "Curve fit", hint: "Choose a model for the active series · export from the header menu." };
+      default:
+        return { key: "ready", label: "Ready", hint: helperText ? helperText.textContent : "" };
+    }
+  }
+
+  function updateModeBadge() {
+    const badge = document.getElementById("canvas-mode-badge");
+    const label = document.getElementById("canvas-mode-label");
+    const title = document.getElementById("workspace-mode-title");
+    const pres = getModePresentation();
+    if (label) label.textContent = pres.label;
+    if (badge) {
+      badge.dataset.mode = pres.key;
+      badge.className = "mode-badge mode-" + pres.key;
+    }
+    if (title) title.textContent = imageLoaded ? "Plot canvas" : "Canvas";
+    if (helperText && pres.hint) helperText.textContent = pres.hint;
+  }
+
+  setupExclusiveAccordions();
 
   function setAxisDetectStatus(msg, isError) {
     if (!axisDetectStatus) return;
@@ -206,19 +320,14 @@ document.addEventListener("DOMContentLoaded", () => {
       y2: { ...result.calibrationPoints.y2 }
     };
 
-    // Enter calibrate mode so guides are visible
-    currentMode = "calibrate";
-    if (modeBtnCalibrate) modeBtnCalibrate.classList.add("active");
+    // Stay in setup / calibrate so guides are visible
+    openPanel("setup");
     selectedDataPoint = null;
 
     setAxisDetectStatus(
       "Axes placed (confidence ~" + confPct + "%). Check markers, then enter X1/X2/Y1/Y2 values.",
       false
     );
-    if (helperText) {
-      helperText.textContent =
-        "Auto axes placed — drag markers if needed, then type the tick values in Setup.";
-    }
     triggerProjectChange();
     renderAll();
     updateHelperBanner();
@@ -296,6 +405,12 @@ document.addEventListener("DOMContentLoaded", () => {
       
       compressedImgData = compCanvas.toDataURL("image/jpeg", 0.85);
       plotImg.src = compressedImgData;
+      // Remember pristine load for "Reset to original"
+      originalImageBackup = {
+        dataUrl: compressedImgData,
+        width: w,
+        height: h
+      };
       
       imgWidth = w;
       imgHeight = h;
@@ -318,10 +433,47 @@ document.addEventListener("DOMContentLoaded", () => {
       updateUndoRedoButtons();
       
       resizeCanvas();
+      openPanel("setup");
       updateHelperBanner();
       renderAll();
     };
     img.src = dataUrl;
+  }
+
+  /** Restore image as first loaded (undoes prep edits; keeps series/cal if still valid). */
+  function resetToOriginalImage() {
+    if (!originalImageBackup || !originalImageBackup.dataUrl) {
+      alert("No original image stored yet. Load or paste a plot first.");
+      return;
+    }
+    if (!confirm("Reset image to the original upload? Prep edits (rotate, crop, filters) will be undone. Digitized points stay, but may no longer align if the image geometry changed.")) {
+      return;
+    }
+    pushHistory();
+    compressedImgData = originalImageBackup.dataUrl;
+    imgWidth = originalImageBackup.width;
+    imgHeight = originalImageBackup.height;
+    plotImg.src = compressedImgData;
+    imageLoaded = true;
+    dropzone.style.display = "none";
+    canvasWrapper.style.display = "block";
+    imageActions.style.display = "flex";
+    // Reset markers to default frame on restored size
+    calibrationPoints.x1 = { px: Math.round(imgWidth * 0.15), py: Math.round(imgHeight * 0.85) };
+    calibrationPoints.x2 = { px: Math.round(imgWidth * 0.85), py: Math.round(imgHeight * 0.85) };
+    calibrationPoints.y1 = { px: Math.round(imgWidth * 0.15), py: Math.round(imgHeight * 0.85) };
+    calibrationPoints.y2 = { px: Math.round(imgWidth * 0.15), py: Math.round(imgHeight * 0.15) };
+    triggerProjectChange();
+    setTimeout(() => {
+      resizeCanvas();
+      renderAll();
+      updateHelperBanner();
+    }, 40);
+  }
+
+  const btnImgResetOriginal = document.getElementById("btn-img-reset-original");
+  if (btnImgResetOriginal) {
+    btnImgResetOriginal.addEventListener("click", resetToOriginalImage);
   }
   
   function resizeCanvas() {
@@ -355,6 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function clearImage() {
     imageLoaded = false;
     compressedImgData = null;
+    originalImageBackup = null;
     zoomFactor = 1.0;
     zoomSlider.value = 1.0;
     zoomLabel.textContent = "100%";
@@ -377,19 +530,15 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll();
   }
   
-  // ── Mode Toggles ─────────────────────────────────────────────
-  modeBtnCalibrate.addEventListener("click", () => {
-    if (currentMode === "calibrate") {
-      currentMode = "pan";
-      modeBtnCalibrate.classList.remove("active");
-    } else {
-      currentMode = "calibrate";
-      modeBtnCalibrate.classList.add("active");
-    }
-    selectedDataPoint = null;
-    updateSeriesUI();
-    updateHelperBanner();
-    renderAll();
+  // Calibrate button removed — Setup panel drives calibrate mode.
+  if (modeBtnCalibrate) {
+    modeBtnCalibrate.addEventListener("click", () => openPanel("setup"));
+  }
+
+  // Measure / mask tool changes update mode badge
+  ["measure-mode", "mask-tool"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", () => updateModeBadge());
   });
   
   function isTimeScale() {
@@ -513,42 +662,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function syncWorkflowRail() {
-    document.querySelectorAll(".workflow-step").forEach((el) => {
-      const step = el.getAttribute("data-step");
-      let on = false;
-      if (!imageLoaded) on = step === "1";
-      else if (currentMode === "calibrate") on = step === "1";
-      else if (currentMode === "digitize" || currentMode === "pan") on = step === "2";
-      else on = step === "2";
-      // step 3 is always soft-highlighted when we have points
-      if (step === "3") {
-        const hasPts = seriesList.some((s) => s.points && s.points.length);
-        on = hasPts;
-      }
-      el.classList.toggle("is-active", on);
-    });
-  }
-
   function updateHelperBanner() {
-    syncWorkflowRail();
-    if (!imageLoaded) {
-      helperText.textContent = "Drop or paste a plot image, then calibrate axes (step 1).";
-      return;
-    }
-    if (currentMode === "calibrate") {
-      helperText.textContent = isTimeScale()
-        ? "Drag X1/X2 to time ticks · enter times (0, 2min, 1:30, or ISO) · set Y1/Y2 on the value axis."
-        : "Drag the red X1/X2/Y1/Y2 markers to tick marks, then enter their values in Setup.";
-    } else if (currentMode === "digitize") {
-      const activeSeries = seriesList.find(s => s.id === activeSeriesId);
-      const name = activeSeries ? activeSeries.name : "active series";
-      helperText.textContent = isDiscreteMode()
-        ? `Click bar tops for “${name}”. Edit labels in the table. Pencil icon toggles digitize mode.`
-        : `Click the plot to add points to “${name}”. Drag to adjust · double-click to delete.`;
-    } else if (currentMode === "pan") {
-      helperText.textContent = "Pan: drag the canvas. Click a series pencil to digitize, or Calibrate axes to adjust markers.";
-    }
+    updateModeBadge();
   }
   
   // ── Math Calculations: Image Pixel Space ⇄ Calibrated Math Space ────
@@ -1568,21 +1683,14 @@ document.addEventListener("DOMContentLoaded", () => {
     seriesContainer.querySelectorAll(".series-activate-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.id;
-        if (activeSeriesId === id && currentMode === "digitize") {
-          // Toggle off to pan mode
-          currentMode = "pan";
-        } else {
-          activeSeriesId = id;
-          currentMode = "digitize";
-          modeBtnCalibrate.classList.remove("active");
-          
-          // Sync Curve Fitting dropdown with newly selected series fit type
-          const activeSeries = seriesList.find(s => s.id === activeSeriesId);
-          if (activeSeries) {
-            selectFitType.value = activeSeries.fitType || "none";
-          }
+        activeSeriesId = id;
+        openPanel("series");
+        currentMode = "digitize";
+        if (modeBtnCalibrate) modeBtnCalibrate.classList.remove("active");
+        const activeSeries = seriesList.find(s => s.id === activeSeriesId);
+        if (activeSeries) {
+          selectFitType.value = activeSeries.fitType || "none";
         }
-        
         triggerProjectChange();
         renderAll();
         updateSeriesUI();
@@ -1993,6 +2101,13 @@ document.addEventListener("DOMContentLoaded", () => {
       imgWidth = state.imgWidth || 1000;
       imgHeight = state.imgHeight || 1000;
       imageLoaded = true;
+      if (!originalImageBackup) {
+        originalImageBackup = {
+          dataUrl: compressedImgData,
+          width: imgWidth,
+          height: imgHeight
+        };
+      }
       dropzone.style.display = "none";
       canvasWrapper.style.display = "block";
       imageActions.style.display = "flex";
@@ -2458,6 +2573,7 @@ document.addEventListener("DOMContentLoaded", () => {
         populatePointsTable();
       },
       replaceImage: (dataUrl, w, h) => {
+        // Prep edits — do not overwrite originalImageBackup
         compressedImgData = dataUrl;
         plotImg.src = dataUrl;
         imgWidth = w;
@@ -2466,8 +2582,10 @@ document.addEventListener("DOMContentLoaded", () => {
         dropzone.style.display = "none";
         canvasWrapper.style.display = "block";
         imageActions.style.display = "flex";
-        setTimeout(() => { resizeCanvas(); renderAll(); }, 50);
+        setTimeout(() => { resizeCanvas(); renderAll(); updateModeBadge(); }, 50);
       },
+      openPanel,
+      updateModeBadge,
       afterImageEdit: () => {
         triggerProjectChange();
         updateSeriesUI();

@@ -63,6 +63,14 @@ main {
   background: var(--bg-secondary);
 }
 
+.workspace-title-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .workspace-title {
   font-size: 13px;
   font-weight: 700;
@@ -78,6 +86,70 @@ main {
   width: 16px;
   height: 16px;
 }
+
+/* Live mode chip */
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  text-transform: uppercase;
+}
+
+.mode-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.mode-badge.mode-calibrating {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #1d4ed8;
+}
+.mode-badge.mode-calibrating .mode-badge-dot { background: #2563eb; }
+
+.mode-badge.mode-digitizing,
+.mode-badge.mode-autotrace {
+  background: var(--accent-primary-glow);
+  border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--border-color));
+  color: var(--accent-primary);
+}
+.mode-badge.mode-digitizing .mode-badge-dot,
+.mode-badge.mode-autotrace .mode-badge-dot { background: var(--accent-primary); }
+
+.mode-badge.mode-masking {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.35);
+  color: #7c3aed;
+}
+.mode-badge.mode-masking .mode-badge-dot { background: #a855f7; }
+
+.mode-badge.mode-measure {
+  background: var(--color-warning-bg);
+  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--border-color));
+  color: #b45309;
+}
+.mode-badge.mode-measure .mode-badge-dot { background: var(--color-warning); }
+
+.mode-badge.mode-image,
+.mode-badge.mode-fit {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+.mode-badge.mode-image .mode-badge-dot,
+.mode-badge.mode-fit .mode-badge-dot { background: var(--text-muted); }
+
+.mode-badge.mode-ready .mode-badge-dot { background: var(--text-muted); }
 
 .workspace-toolbar {
   display: flex;
@@ -351,54 +423,6 @@ kbd {
 .sidebar-panel::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 99px;
-}
-
-/* Workflow rail */
-.workflow-rail {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
-  padding: 4px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  flex-shrink: 0;
-}
-
-.workflow-step {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 6px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  user-select: none;
-}
-
-.workflow-step.is-active {
-  background: var(--accent-primary-glow);
-  color: var(--accent-primary);
-}
-
-.workflow-num {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
-}
-
-.workflow-step.is-active .workflow-num {
-  background: var(--accent-primary);
-  color: #fff;
 }
 
 /* Accordion cards */

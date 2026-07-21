@@ -97,9 +97,15 @@
     <!-- Left: canvas -->
     <div class="workspace-card">
       <div class="workspace-header">
-        <div class="workspace-title">
-          <i data-lucide="image"></i>
-          <span id="workspace-mode-title">Canvas</span>
+        <div class="workspace-title-block">
+          <div class="workspace-title">
+            <i data-lucide="image"></i>
+            <span id="workspace-mode-title">Canvas</span>
+          </div>
+          <div id="canvas-mode-badge" class="mode-badge" title="Current interaction mode">
+            <span class="mode-badge-dot"></span>
+            <span id="canvas-mode-label">Ready</span>
+          </div>
         </div>
         <div id="image-actions" class="workspace-toolbar" style="display: none;">
           <div class="toolbar-group" title="Zoom">
@@ -145,29 +151,20 @@
       </div>
     </div>
 
-    <!-- Right: progressive sidebar -->
+    <!-- Right: progressive sidebar (one section open at a time) -->
     <aside class="sidebar-panel" aria-label="Digitizer controls">
-      <div class="workflow-rail" role="list">
-        <div class="workflow-step is-active" data-step="1"><span class="workflow-num">1</span><span>Setup</span></div>
-        <div class="workflow-step" data-step="2"><span class="workflow-num">2</span><span>Digitize</span></div>
-        <div class="workflow-step" data-step="3"><span class="workflow-num">3</span><span>Export</span></div>
-      </div>
-
-      <!-- 1. Setup -->
-      <details class="control-card accordion" open>
+      <!-- 1. Setup — open by default → calibrating mode -->
+      <details class="control-card accordion" data-panel="setup" open>
         <summary class="card-title">
           <span class="card-title-left"><i data-lucide="settings-2"></i> Setup &amp; calibration</span>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </summary>
         <div class="card-body">
-          <div class="btn-row">
-            <button type="button" class="active mode-cal-btn" id="mode-btn-calibrate" title="Drag axis markers on the canvas" style="flex:1;">
-              <i data-lucide="compass"></i> Calibrate
-            </button>
-            <button type="button" class="action-btn primary" id="btn-detect-axes" title="Detect plot frame and place axis markers" style="flex:1;">
-              <i data-lucide="scan"></i> Detect axes
-            </button>
-          </div>
+          <button type="button" class="action-btn primary" id="btn-detect-axes" title="Detect plot frame and place axis markers" style="width:100%;">
+            <i data-lucide="scan"></i> Detect axes
+          </button>
+          <!-- Kept for legacy JS; not shown — opening this panel enters calibrate mode -->
+          <button type="button" id="mode-btn-calibrate" class="active" hidden aria-hidden="true" tabindex="-1"></button>
           <p id="axis-detect-status" class="hint-text" style="display:none;" role="status"></p>
 
           <div id="calibration-settings" class="stack-sm">
@@ -308,7 +305,7 @@
       </details>
 
       <!-- 2. Digitize -->
-      <details class="control-card accordion" open>
+      <details class="control-card accordion" data-panel="series">
         <summary class="card-title">
           <span class="card-title-left"><i data-lucide="layers"></i> Series &amp; points</span>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -346,7 +343,7 @@
       </details>
 
       <!-- Autotrace (collapsed) -->
-      <details class="control-card accordion" id="autotrace-card">
+      <details class="control-card accordion" id="autotrace-card" data-panel="autotrace">
         <summary class="card-title">
           <span class="card-title-left"><i data-lucide="wand-2"></i> Autotrace</span>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -405,7 +402,7 @@
       </details>
 
       <!-- Image prep (collapsed) -->
-      <details class="control-card accordion" id="image-edit-card">
+      <details class="control-card accordion" id="image-edit-card" data-panel="image">
         <summary class="card-title">
           <span class="card-title-left"><i data-lucide="image"></i> Image prep</span>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -428,12 +425,15 @@
             <button type="button" id="btn-img-scale" class="action-btn secondary" style="align-self:end;">Apply</button>
           </div>
           <p class="hint-text">Crop: hold <kbd>Shift</kbd> and drag on the canvas</p>
-          <button type="button" id="btn-img-crop-apply" class="action-btn secondary" disabled>Apply crop</button>
+          <div class="btn-row">
+            <button type="button" id="btn-img-crop-apply" class="action-btn secondary" disabled>Apply crop</button>
+            <button type="button" id="btn-img-reset-original" class="action-btn secondary" title="Restore the image as first loaded (undoes prep edits)">Reset to original</button>
+          </div>
         </div>
       </details>
 
       <!-- Measure (collapsed) -->
-      <details class="control-card accordion" id="measure-card">
+      <details class="control-card accordion" id="measure-card" data-panel="measure">
         <summary class="card-title">
           <span class="card-title-left"><i data-lucide="ruler"></i> Measurements</span>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
@@ -454,7 +454,7 @@
       </details>
 
       <!-- Fit (collapsed) -->
-      <details class="control-card accordion" id="regression-card">
+      <details class="control-card accordion" id="regression-card" data-panel="fit">
         <summary class="card-title">
           <span class="card-title-left"><i data-lucide="trending-up"></i> Curve fit</span>
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
