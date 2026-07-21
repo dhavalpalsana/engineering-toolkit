@@ -176,13 +176,12 @@
                 <option value="ternary">Ternary</option>
                 <option value="pie">Pie / doughnut</option>
                 <option value="map">Map (geo)</option>
-                <option value="measure">Measurements only</option>
               </select>
             </div>
 
-            <div class="form-row">
+            <div id="axis-scale-row" class="form-row">
               <div class="input-group">
-                <label for="scale-x">X scale</label>
+                <label for="scale-x" id="label-scale-x">X scale</label>
                 <select id="scale-x">
                   <option value="linear">Linear</option>
                   <option value="log">Log₁₀</option>
@@ -193,7 +192,7 @@
                 </select>
               </div>
               <div class="input-group">
-                <label for="scale-y">Y scale</label>
+                <label for="scale-y" id="label-scale-y">Y scale</label>
                 <select id="scale-y">
                   <option value="linear">Linear</option>
                   <option value="log">Log₁₀</option>
@@ -212,12 +211,13 @@
                   <option value="mercator">Web Mercator</option>
                 </select>
               </div>
+              <p class="hint-text">X1/X2 = lon range · Y1/Y2 = lat range (use lon/lat scales).</p>
             </div>
 
             <div id="polar-options" class="callout-panel" style="display:none;">
               <div class="form-row">
                 <div class="input-group">
-                  <label for="polar-rmax">r max</label>
+                  <label for="polar-rmax">r max (data)</label>
                   <input type="number" id="polar-rmax" value="1" step="any" />
                 </div>
                 <div class="input-group">
@@ -225,7 +225,25 @@
                   <input type="number" id="polar-theta0" value="0" step="any" />
                 </div>
               </div>
-              <p class="hint-text">X1 = origin · X2 = r_max on the 0° ray</p>
+              <p class="hint-text"><strong>X1</strong> = origin · <strong>X2</strong> = point at r_max on the 0° ray (right = 0° before θ₀).</p>
+            </div>
+
+            <div id="ternary-options" class="callout-panel" style="display:none;">
+              <p class="hint-text"><strong>X1</strong> = vertex A · <strong>X2</strong> = vertex B · <strong>Y2</strong> = vertex C. Digitized points export as a, b, c (sum ≈ 1).</p>
+            </div>
+
+            <div id="pie-options" class="callout-panel" style="display:none;">
+              <div class="form-row">
+                <div class="input-group">
+                  <label for="pie-total">Total value</label>
+                  <input type="number" id="pie-total" value="100" step="any" />
+                </div>
+                <div class="input-group">
+                  <label for="pie-start">Start angle (°)</label>
+                  <input type="number" id="pie-start" value="0" step="any" />
+                </div>
+              </div>
+              <p class="hint-text"><strong>X1</strong> = center · <strong>X2</strong> = rim on start ray. Click wedge edges; table shows angle &amp; share.</p>
             </div>
 
             <div id="time-axis-options" class="callout-panel" style="display: none;">

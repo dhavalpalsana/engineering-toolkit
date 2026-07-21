@@ -367,10 +367,7 @@
 
     function updateParityUI() {
       const kind = chartKind();
-      const polar = $("polar-options");
-      const map = $("map-options");
-      if (polar) polar.style.display = kind === "polar" ? "flex" : "none";
-      if (map) map.style.display = kind === "map" ? "flex" : "none";
+      // Chart-kind option panels are driven by app.js updateChartModeUI
       const discrete = kind === "discrete" || kind === "histogram";
       api.onChartKindChanged && api.onChartKindChanged(kind, discrete);
       if (api.updateModeBadge) api.updateModeBadge();
