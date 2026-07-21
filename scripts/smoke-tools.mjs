@@ -282,6 +282,72 @@ async function main() {
         }
       }
 
+      // Tool-specific: rent-vs-buy modes, dual inputs, buckets, story
+      if (tool.id === "rent-vs-buy") {
+        const storyCount = await page.locator("#verdict-story li").count();
+        if (storyCount < 3) {
+          console.error(`✗ rent-vs-buy: expected story bullets, got ${storyCount}`);
+          failures += 1;
+          continue;
+        }
+        // Dual %/$ for down payment
+        const dualPct = page.locator('.dual-field[data-dual="downPayment"] .seg-btn[data-dual-mode="amount"]');
+        if ((await dualPct.count()) === 0) {
+          console.error("✗ rent-vs-buy: down payment $ toggle missing");
+          failures += 1;
+          continue;
+        }
+        await dualPct.first().click();
+        await page.waitForTimeout(150);
+        const amountVisible = await page.locator("#downPaymentAmount:not([hidden])").count();
+        if (amountVisible !== 1) {
+          console.error("✗ rent-vs-buy: down payment amount input not shown after $ toggle");
+          failures += 1;
+          continue;
+        }
+        // Own mode
+        await page.locator("#mode-own").click();
+        await page.waitForTimeout(250);
+        const ownCard = await page.locator("#card-own:not([hidden])").count();
+        const buyCardHidden = await page.locator("#card-buy[hidden]").count();
+        if (ownCard !== 1 || buyCardHidden !== 1) {
+          console.error(`✗ rent-vs-buy: own mode panels (own=${ownCard}, buyHidden=${buyCardHidden})`);
+          failures += 1;
+          continue;
+        }
+        const ownStory = await page.locator("#verdict-story li").count();
+        if (ownStory < 2) {
+          console.error("✗ rent-vs-buy: own mode story empty");
+          failures += 1;
+          continue;
+        }
+        // Back to buy + enable asset buckets
+        await page.locator("#mode-buy").click();
+        await page.waitForTimeout(150);
+        await page.locator("#assets-advanced").evaluate((el) => {
+          el.open = true;
+        });
+        await page.locator("#useAssetBuckets").check();
+        await page.waitForTimeout(250);
+        const bal = await page.locator('#buckets-tbody input[data-f="balance"]').first().inputValue();
+        if (!bal || Number(bal) <= 0) {
+          console.error(`✗ rent-vs-buy: buckets not prefilled (bal=${bal})`);
+          failures += 1;
+          continue;
+        }
+        const funding = (await page.locator("#funding-readout").innerText()).trim();
+        if (!funding || (!/Fully funded/i.test(funding) && !/Shortfall/i.test(funding))) {
+          console.error(`✗ rent-vs-buy: unexpected funding readout "${funding}"`);
+          failures += 1;
+          continue;
+        }
+        if (pageErrors.length) {
+          console.error(`✗ rent-vs-buy: pageerror after interactions — ${pageErrors[0]}`);
+          failures += 1;
+          continue;
+        }
+      }
+
       console.log(`✓ ${tool.id}`);
     } catch (e) {
       console.error(`✗ ${tool.id}: ${e.message || e}`);
