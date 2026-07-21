@@ -1,10 +1,12 @@
 /**
  * Plot Data Extractor — App Logic
- * Precision axes calibration, logarithmic scaling, magnifier loupe, curve fitting,
- * multi-series management, clipboard paste, and Firebase Project Manager synchronization.
+ * Precision axes calibration, linear/log/time scales, discrete bar mode,
+ * magnifier loupe, curve fitting, multi-series, clipboard paste, Project Manager sync.
  */
 
 document.addEventListener("DOMContentLoaded", () => {
+  const PM = typeof PlotMath !== "undefined" ? PlotMath : null;
+
   // Select DOM Elements
   const dropzone = document.getElementById("image-dropzone");
   const fileInput = document.getElementById("file-upload-input");
@@ -15,15 +17,26 @@ document.addEventListener("DOMContentLoaded", () => {
   const canvas = document.getElementById("interaction-canvas");
   const ctx = canvas.getContext("2d");
   
-  const modeBtnCalibrate = document.getElementById("mode-btn-calibrate");
+  const btnDetectAxes = document.getElementById("btn-detect-axes");
+  const axisDetectStatus = document.getElementById("axis-detect-status");
   
   const inputCalX1 = document.getElementById("cal-x1");
   const inputCalX2 = document.getElementById("cal-x2");
   const inputCalY1 = document.getElementById("cal-y1");
   const inputCalY2 = document.getElementById("cal-y2");
+  const labelCalX1 = document.getElementById("label-cal-x1");
+  const labelCalX2 = document.getElementById("label-cal-x2");
   
   const selectScaleX = document.getElementById("scale-x");
   const selectScaleY = document.getElementById("scale-y");
+  const selectChartKind = document.getElementById("chart-kind");
+  const timeAxisOptions = document.getElementById("time-axis-options");
+  const selectTimeUnit = document.getElementById("time-unit");
+  const selectTimeExport = document.getElementById("time-export");
+  const calHelpText = document.getElementById("cal-help-text");
+  const regressionCard = document.getElementById("regression-card");
+  const pointsTableHead = document.getElementById("points-table-head");
+  const pointsTableHint = document.getElementById("points-table-hint");
   
   const seriesContainer = document.getElementById("series-list-container");
   const btnAddSeries = document.getElementById("btn-add-series");
@@ -70,10 +83,18 @@ document.addEventListener("DOMContentLoaded", () => {
   let imgHeight = 0;
   let imgScale = 1.0;
   let compressedImgData = null; // Stored as base64 string for saving
+  /** Snapshot of image as first loaded (before prep edits). */
+  let originalImageBackup = null; // { dataUrl, width, height }
   let zoomFactor = 1.0;
   let legendVisible = true;
   let historyStack = [];
   let historyPointer = -1;
+  let activePanel = "setup"; // setup | series | autotrace | image | measure | fit | idle
+  /** Until this timestamp, mode badge shows “Points ready” flash. */
+  let pointsReadyFlashUntil = 0;
+  let pointsReadyFlashTimer = null;
+  /** Skip toggle side-effects while programmatically opening/closing panels. */
+  let suppressPanelToggle = false;
   
   // Calibration Handles (in image pixel space)
   let calibrationPoints = {
@@ -110,8 +131,311 @@ document.addEventListener("DOMContentLoaded", () => {
   const loupeRadius = 45;
   const loupeZoom = 3.5;
   
-  // Initialize lucide icons
-  lucide.createIcons();
+  // Initialize lucide icons (sidebar accordions included)
+  if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+
+  /**
+   * Exclusive accordion: at most one sidebar panel open.
+   * All panels may be collapsed (no force-reopen — that caused UI jitter).
+   * Opening a panel drives canvas interaction mode.
+   */
+  function setupExclusiveAccordions() {
+    const panels = Array.from(document.querySelectorAll("aside.sidebar-panel details.accordion"));
+    panels.forEach((panel) => {
+      panel.addEventListener("toggle", () => {
+        if (suppressPanelToggle) return;
+        if (panel.open) {
+          // Close siblings silently (no re-entrant applyPanelMode)
+          suppressPanelToggle = true;
+          panels.forEach((other) => {
+            if (other !== panel && other.open) other.open = false;
+          });
+          suppressPanelToggle = false;
+          activePanel = panel.getAttribute("data-panel") || "setup";
+          applyPanelMode(activePanel);
+        } else {
+          // Fully collapsed is allowed — idle/pan canvas
+          const stillOpen = panels.find((p) => p.open);
+          if (stillOpen) {
+            activePanel = stillOpen.getAttribute("data-panel") || activePanel;
+          } else {
+            activePanel = "idle";
+            applyPanelMode("idle");
+          }
+        }
+        if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+        updateModeBadge();
+      });
+    });
+  }
+
+  function openPanel(name) {
+    const panels = document.querySelectorAll("aside.sidebar-panel details.accordion");
+    suppressPanelToggle = true;
+    panels.forEach((p) => {
+      p.open = p.getAttribute("data-panel") === name;
+    });
+    suppressPanelToggle = false;
+    activePanel = name;
+    applyPanelMode(name);
+    updateModeBadge();
+  }
+
+  function applyPanelMode(panel) {
+    selectedDataPoint = null;
+
+    // Clear sticky tools from other panels so they don't capture clicks on Setup / Series
+    const maskTool = document.getElementById("mask-tool");
+    const measureModeEl = document.getElementById("measure-mode");
+    if (panel !== "autotrace" && maskTool) maskTool.value = "off";
+    if (panel !== "measure" && measureModeEl) measureModeEl.value = "off";
+    if (window.__plotParity && typeof window.__plotParity.onPanelEnter === "function") {
+      window.__plotParity.onPanelEnter(panel);
+    }
+
+    if (panel === "setup") {
+      currentMode = "calibrate";
+    } else if (panel === "series") {
+      currentMode = "digitize";
+    } else if (panel === "measure") {
+      currentMode = "pan"; // measure handled by parity pointer hooks
+      if (measureModeEl && measureModeEl.value === "off") measureModeEl.value = "distance";
+    } else if (panel === "autotrace" || panel === "image" || panel === "fit") {
+      currentMode = "pan";
+    } else {
+      // idle / collapsed — pan only, no special tool
+      currentMode = "pan";
+    }
+    updateHelperBanner();
+    renderAll();
+  }
+
+  function hasDigitizedPoints() {
+    return seriesList.some((s) => s.points && s.points.length > 0);
+  }
+
+  function flashPointsReady() {
+    if (!hasDigitizedPoints()) return;
+    pointsReadyFlashUntil = Date.now() + 2400;
+    if (pointsReadyFlashTimer) clearTimeout(pointsReadyFlashTimer);
+    updateModeBadge();
+    pointsReadyFlashTimer = setTimeout(() => {
+      pointsReadyFlashTimer = null;
+      updateModeBadge();
+    }, 2500);
+  }
+
+  function pulseModeBadge() {
+    const badge = document.getElementById("canvas-mode-badge");
+    if (!badge) return;
+    badge.classList.remove("mode-pulse");
+    // reflow so re-adding restarts animation
+    void badge.offsetWidth;
+    badge.classList.add("mode-pulse");
+    setTimeout(() => badge.classList.remove("mode-pulse"), 900);
+  }
+
+  /** Map mode badge key → sidebar panel id. */
+  function panelForModeKey(key) {
+    switch (key) {
+      case "calibrating": return "setup";
+      case "digitizing":
+      case "points-ready": return "series";
+      case "autotrace":
+      case "masking": return "autotrace";
+      case "image": return "image";
+      case "measure": return "measure";
+      case "fit": return "fit";
+      case "ready":
+      default: return imageLoaded ? (hasDigitizedPoints() ? "series" : "setup") : "setup";
+    }
+  }
+
+  function getModePresentation() {
+    const maskTool = (document.getElementById("mask-tool") || {}).value;
+    const measureMode = (document.getElementById("measure-mode") || {}).value;
+
+    // Temporary export cue
+    if (imageLoaded && hasDigitizedPoints() && Date.now() < pointsReadyFlashUntil) {
+      return {
+        key: "points-ready",
+        label: "Points ready",
+        hint: "Data is ready — use the header Export menu for CSV / JSON / image.",
+        panel: "series"
+      };
+    }
+
+    if (!imageLoaded) {
+      return { key: "ready", label: "Ready", hint: "Upload or paste a plot image to begin.", panel: "setup" };
+    }
+    switch (activePanel) {
+      case "setup":
+        return {
+          key: "calibrating",
+          label: "Calibrating",
+          panel: "setup",
+          hint: isTimeScale()
+            ? "Drag X1/X2 to time ticks · enter times · set Y1/Y2. Or use Detect axes."
+            : "Drag red markers to tick marks, enter values, or use Detect axes."
+        };
+      case "series":
+        return {
+          key: "digitizing",
+          label: isDiscreteMode() ? "Digitizing bars" : "Digitizing",
+          panel: "series",
+          hint: isDiscreteMode()
+            ? "Click bar tops · edit labels in the table · double-click to delete."
+            : "Click the plot to add points · drag to adjust · double-click to delete."
+        };
+      case "autotrace":
+        if (maskTool && maskTool !== "off") {
+          return { key: "masking", label: "Painting mask", panel: "autotrace", hint: "Paint include/exclude regions, set trace color, then Run." };
+        }
+        return { key: "autotrace", label: "Autotrace", panel: "autotrace", hint: "Pick trace color (palette) or eyedropper on the plot, optional mask, then Run." };
+      case "image":
+        return {
+          key: "image",
+          label: "Image prep",
+          panel: "image",
+          hint: "Rotate, flip, filter, crop (Shift+drag). Reset markers or reset image below."
+        };
+      case "measure":
+        if (measureMode === "angle") return { key: "measure", label: "Measuring angle", panel: "measure", hint: "Click 3 points (vertex in the middle)." };
+        if (measureMode === "area") return { key: "measure", label: "Measuring area", panel: "measure", hint: "Click polygon vertices · Enter to close." };
+        return { key: "measure", label: "Measuring distance", panel: "measure", hint: "Click two points to measure distance in data units." };
+      case "fit":
+        return { key: "fit", label: "Curve fit", panel: "fit", hint: "Choose a model for the active series · export from the header menu." };
+      case "idle":
+        return {
+          key: "idle",
+          label: "Idle",
+          panel: "setup",
+          hint: "Open a sidebar section to calibrate, digitize, autotrace, or measure. Export is in the header."
+        };
+      default:
+        return { key: "ready", label: "Ready", panel: "setup", hint: helperText ? helperText.textContent : "" };
+    }
+  }
+
+  function updateModeBadge() {
+    const badge = document.getElementById("canvas-mode-badge");
+    const label = document.getElementById("canvas-mode-label");
+    const title = document.getElementById("workspace-mode-title");
+    const pres = getModePresentation();
+    if (label) label.textContent = pres.label;
+    if (badge) {
+      badge.dataset.mode = pres.key;
+      badge.dataset.panel = pres.panel || panelForModeKey(pres.key);
+      const pulsing = badge.classList.contains("mode-pulse");
+      badge.className = "mode-badge mode-" + pres.key + (pulsing ? " mode-pulse" : "");
+      badge.title = "Click to open “" + (pres.panel || panelForModeKey(pres.key)) + "” panel";
+    }
+    if (title) title.textContent = imageLoaded ? "Plot canvas" : "Canvas";
+    if (helperText && pres.hint) helperText.textContent = pres.hint;
+  }
+
+  setupExclusiveAccordions();
+
+  // Mode badge → open matching panel
+  const modeBadgeEl = document.getElementById("canvas-mode-badge");
+  if (modeBadgeEl) {
+    modeBadgeEl.addEventListener("click", () => {
+      const pres = getModePresentation();
+      const panel = pres.panel || panelForModeKey(pres.key) || modeBadgeEl.dataset.panel || "setup";
+      openPanel(panel);
+    });
+  }
+
+  function setAxisDetectStatus(msg, isError) {
+    if (!axisDetectStatus) return;
+    if (!msg) {
+      axisDetectStatus.style.display = "none";
+      axisDetectStatus.textContent = "";
+      return;
+    }
+    axisDetectStatus.style.display = "block";
+    axisDetectStatus.textContent = msg;
+    axisDetectStatus.style.color = isError ? "var(--color-error)" : "var(--text-muted)";
+  }
+
+  /** Capture current plot pixels for CV helpers. */
+  function capturePlotImageData() {
+    if (!imageLoaded || !plotImg.naturalWidth) return null;
+    const c = document.createElement("canvas");
+    c.width = plotImg.naturalWidth || imgWidth;
+    c.height = plotImg.naturalHeight || imgHeight;
+    const cx = c.getContext("2d");
+    try {
+      cx.drawImage(plotImg, 0, 0);
+      return cx.getImageData(0, 0, c.width, c.height);
+    } catch (err) {
+      console.warn("capturePlotImageData failed", err);
+      return null;
+    }
+  }
+
+  /**
+   * Auto-detect axis frame and place X1/X2/Y1/Y2 markers (geometry only — values stay user-entered).
+   */
+  function runAutoAxisDetect() {
+    if (!imageLoaded) {
+      setAxisDetectStatus("Load a plot image first.", true);
+      return;
+    }
+    if (typeof PlotAxisDetect === "undefined" || !PlotAxisDetect.detectAxes) {
+      setAxisDetectStatus("Axis detector not loaded.", true);
+      return;
+    }
+    const idata = capturePlotImageData();
+    if (!idata) {
+      setAxisDetectStatus("Could not read image pixels (try reloading the image).", true);
+      return;
+    }
+
+    const result = PlotAxisDetect.detectAxes(idata);
+    if (!result.ok || !result.calibrationPoints) {
+      setAxisDetectStatus(result.error || "Detection failed.", true);
+      return;
+    }
+
+    // Soft confirm when confidence is low
+    const confPct = Math.round((result.confidence || 0) * 100);
+    if ((result.confidence || 0) < 0.35) {
+      const proceed = confirm(
+        "Axis detection confidence is low (" + confPct + "%). Apply markers anyway? You can drag them to fix."
+      );
+      if (!proceed) {
+        setAxisDetectStatus("Detection cancelled — adjust image prep or place markers manually.", false);
+        return;
+      }
+    }
+
+    pushHistory();
+    calibrationPoints = {
+      x1: { ...result.calibrationPoints.x1 },
+      x2: { ...result.calibrationPoints.x2 },
+      y1: { ...result.calibrationPoints.y1 },
+      y2: { ...result.calibrationPoints.y2 }
+    };
+
+    // Stay in setup / calibrate so guides are visible
+    openPanel("setup");
+    selectedDataPoint = null;
+
+    setAxisDetectStatus(
+      "Axes placed (confidence ~" + confPct + "%). Check markers, then enter X1/X2/Y1/Y2 values.",
+      false
+    );
+    triggerProjectChange();
+    renderAll();
+    updateHelperBanner();
+    pulseModeBadge();
+  }
+
+  if (btnDetectAxes) {
+    btnDetectAxes.addEventListener("click", runAutoAxisDetect);
+  }
+
   
   // ── Drag & Drop, Select Image Handlers ───────────────────────
   if (btnLoadExample) {
@@ -180,6 +504,12 @@ document.addEventListener("DOMContentLoaded", () => {
       
       compressedImgData = compCanvas.toDataURL("image/jpeg", 0.85);
       plotImg.src = compressedImgData;
+      // Remember pristine load for "Reset to original"
+      originalImageBackup = {
+        dataUrl: compressedImgData,
+        width: w,
+        height: h
+      };
       
       imgWidth = w;
       imgHeight = h;
@@ -202,10 +532,75 @@ document.addEventListener("DOMContentLoaded", () => {
       updateUndoRedoButtons();
       
       resizeCanvas();
+      openPanel("setup");
       updateHelperBanner();
       renderAll();
     };
     img.src = dataUrl;
+  }
+
+  function defaultCalibrationMarkers(w, h) {
+    return {
+      x1: { px: Math.round(w * 0.15), py: Math.round(h * 0.85) },
+      x2: { px: Math.round(w * 0.85), py: Math.round(h * 0.85) },
+      y1: { px: Math.round(w * 0.15), py: Math.round(h * 0.85) },
+      y2: { px: Math.round(w * 0.15), py: Math.round(h * 0.15) }
+    };
+  }
+
+  /** Reset X1/X2/Y1/Y2 to default corners of the current image (values unchanged). */
+  function resetMarkersOnly() {
+    if (!imageLoaded || !imgWidth || !imgHeight) {
+      alert("Load a plot image first.");
+      return;
+    }
+    if (!confirm("Reset axis markers to default corners of the current image? Entered X/Y values are kept.")) {
+      return;
+    }
+    pushHistory();
+    calibrationPoints = defaultCalibrationMarkers(imgWidth, imgHeight);
+    openPanel("setup");
+    triggerProjectChange();
+    renderAll();
+    updateHelperBanner();
+    pulseModeBadge();
+  }
+
+  /** Restore image as first loaded (undoes prep edits). */
+  function resetToOriginalImage() {
+    if (!originalImageBackup || !originalImageBackup.dataUrl) {
+      alert("No original image stored yet. Load or paste a plot first.");
+      return;
+    }
+    if (!confirm("Reset image to the original upload? Prep edits (rotate, crop, filters) will be undone. Digitized points stay, but may no longer align if the image geometry changed. Markers reset to default corners.")) {
+      return;
+    }
+    pushHistory();
+    compressedImgData = originalImageBackup.dataUrl;
+    imgWidth = originalImageBackup.width;
+    imgHeight = originalImageBackup.height;
+    plotImg.src = compressedImgData;
+    imageLoaded = true;
+    dropzone.style.display = "none";
+    canvasWrapper.style.display = "block";
+    imageActions.style.display = "flex";
+    calibrationPoints = defaultCalibrationMarkers(imgWidth, imgHeight);
+    triggerProjectChange();
+    setTimeout(() => {
+      resizeCanvas();
+      renderAll();
+      updateHelperBanner();
+      pulseModeBadge();
+    }, 40);
+  }
+
+  const btnImgResetOriginal = document.getElementById("btn-img-reset-original");
+  if (btnImgResetOriginal) {
+    btnImgResetOriginal.addEventListener("click", resetToOriginalImage);
+  }
+  const btnImgResetMarkers = document.getElementById("btn-img-reset-markers");
+  if (btnImgResetMarkers) {
+    btnImgResetMarkers.addEventListener("click", resetMarkersOnly);
   }
   
   function resizeCanvas() {
@@ -239,6 +634,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function clearImage() {
     imageLoaded = false;
     compressedImgData = null;
+    originalImageBackup = null;
     zoomFactor = 1.0;
     zoomSlider.value = 1.0;
     zoomLabel.textContent = "100%";
@@ -261,112 +657,408 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll();
   }
   
-  // ── Mode Toggles ─────────────────────────────────────────────
-  modeBtnCalibrate.addEventListener("click", () => {
-    if (currentMode === "calibrate") {
-      currentMode = "pan";
-      modeBtnCalibrate.classList.remove("active");
-    } else {
-      currentMode = "calibrate";
-      modeBtnCalibrate.classList.add("active");
-    }
-    selectedDataPoint = null;
-    updateSeriesUI();
-    updateHelperBanner();
-    renderAll();
+  // Measure / mask tool changes update mode badge
+  ["measure-mode", "mask-tool"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", () => updateModeBadge());
   });
   
+  function isTimeScale() {
+    return selectScaleX && selectScaleX.value === "time";
+  }
+
+  function getChartKind() {
+    return (selectChartKind && selectChartKind.value) || "continuous";
+  }
+
+  function isDiscreteMode() {
+    if (window.__plotParity && window.__plotParity.isDiscreteKind) {
+      return window.__plotParity.isDiscreteKind();
+    }
+    const k = getChartKind();
+    return k === "discrete" || k === "histogram";
+  }
+
+  function isNonCartesianKind() {
+    const k = getChartKind();
+    return k === "polar" || k === "ternary" || k === "pie" || k === "map";
+  }
+
+  /** Build projection context for PlotProjection (polar / ternary / pie / map / xy). */
+  function getProjectionContext() {
+    const { x1Val, x2Val, y1Val, y2Val } = getAxisCalValues();
+    const kind = getChartKind();
+    const mapProj = (document.getElementById("map-projection") || {}).value || "linear";
+    const polarR = parseFloat((document.getElementById("polar-rmax") || {}).value);
+    const polarTh = parseFloat((document.getElementById("polar-theta0") || {}).value);
+    const pieTotal = parseFloat((document.getElementById("pie-total") || {}).value);
+    const pieStart = parseFloat((document.getElementById("pie-start") || {}).value);
+    return {
+      cal: {
+        ...calibrationPoints,
+        origin: calibrationPoints.x1,
+        rMax: calibrationPoints.x2,
+        rim: calibrationPoints.x2,
+        A: calibrationPoints.x1,
+        B: calibrationPoints.x2,
+        C: calibrationPoints.y2
+      },
+      scales: {
+        x: selectScaleX ? selectScaleX.value : "linear",
+        y: selectScaleY ? selectScaleY.value : "linear"
+      },
+      values: {
+        x1Val, x2Val, y1Val, y2Val,
+        rMax: Number.isFinite(polarR) ? polarR : 1,
+        theta0Deg: Number.isFinite(polarTh) ? polarTh : 0,
+        total: Number.isFinite(pieTotal) ? pieTotal : 100,
+        startDeg: Number.isFinite(pieStart) ? pieStart : 0
+      },
+      mapProjection: mapProj,
+      kind
+    };
+  }
+
+  /** Normalize projection output to always include display x,y plus extras. */
+  function normalizeMathResult(raw, kind) {
+    if (!raw) return { x: NaN, y: NaN, kind };
+    const out = { ...raw, kind: kind || getChartKind() };
+    if (out.x == null && out.lon != null) out.x = out.lon;
+    if (out.y == null && out.lat != null) out.y = out.lat;
+    if (out.x == null && out.r != null) {
+      // polar already sets x,y cartesian; ensure
+      out.x = out.r * Math.cos((out.thetaRad != null ? out.thetaRad : 0));
+      out.y = out.r * Math.sin((out.thetaRad != null ? out.thetaRad : 0));
+    }
+    if (out.x == null && out.a != null) {
+      // ternary uses a,b,c — map b→x, c→y for generic paths
+      out.x = out.b;
+      out.y = out.c;
+    }
+    if (out.x == null && out.fraction != null) {
+      out.x = out.theta != null ? out.theta : out.fraction * 360;
+      out.y = out.percent != null ? out.percent : out.fraction * 100;
+    }
+    return out;
+  }
+
+  function getTimeUnit() {
+    return (selectTimeUnit && selectTimeUnit.value) || "s";
+  }
+
+  /** Parse X calibration field → seconds (time) or numeric (linear/log). */
+  function parseCalXValue(raw) {
+    if (isTimeScale() && PM) {
+      const parsed = PM.parseTimeToSeconds(raw, getTimeUnit());
+      if (parsed) return parsed.seconds;
+      return 0;
+    }
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function getAxisCalValues() {
+    return {
+      x1Val: parseCalXValue(inputCalX1.value),
+      x2Val: parseCalXValue(inputCalX2.value),
+      y1Val: parseFloat(inputCalY1.value) || 0,
+      y2Val: parseFloat(inputCalY2.value) || 10
+    };
+  }
+
+  function calUsesAbsoluteTime() {
+    if (!isTimeScale() || !PM) return false;
+    const a = PM.parseTimeToSeconds(inputCalX1.value, getTimeUnit());
+    const b = PM.parseTimeToSeconds(inputCalX2.value, getTimeUnit());
+    return !!(a && b && a.absolute && b.absolute);
+  }
+
+  function formatXValue(x, forCsv) {
+    if (!isTimeScale() || !PM) {
+      if (!Number.isFinite(x)) return "—";
+      if (forCsv) return String(x);
+      return Math.abs(x) >= 1e4 || (Math.abs(x) > 0 && Math.abs(x) < 1e-3)
+        ? x.toExponential(4)
+        : parseFloat(x.toFixed(4)).toString();
+    }
+    const exportMode = (selectTimeExport && selectTimeExport.value) || "elapsed";
+    if (exportMode === "iso" && calUsesAbsoluteTime()) {
+      return PM.formatAbsolute(x);
+    }
+    if (exportMode === "seconds") {
+      return forCsv ? String(x) : parseFloat(x.toFixed(4)).toString();
+    }
+    const origin = parseCalXValue(inputCalX1.value);
+    return PM.formatElapsed(x - origin, getTimeUnit());
+  }
+
+  function formatYValue(y) {
+    if (!Number.isFinite(y)) return "—";
+    return parseFloat(Number(y).toFixed(4)).toString();
+  }
+
+  function formatHoverLabel(math) {
+    const kind = math.kind || getChartKind();
+    if (isDiscreteMode()) return `y=${formatYValue(math.y)}`;
+    if (kind === "polar") {
+      return `r=${formatYValue(math.r)} θ=${formatYValue(math.theta)}°`;
+    }
+    if (kind === "ternary") {
+      return `A=${formatYValue(math.a)} B=${formatYValue(math.b)} C=${formatYValue(math.c)}`;
+    }
+    if (kind === "pie") {
+      return `θ=${formatYValue(math.theta)}° · ${formatYValue(math.percent)}%`;
+    }
+    if (kind === "map") {
+      return `lon=${formatYValue(math.lon != null ? math.lon : math.x)} lat=${formatYValue(math.lat != null ? math.lat : math.y)}`;
+    }
+    return `(${formatXValue(math.x, false)}, ${formatYValue(math.y)})`;
+  }
+
+  function updateChartModeUI() {
+    const time = isTimeScale();
+    const discrete = isDiscreteMode();
+    const kind = getChartKind();
+
+    const polarOpts = document.getElementById("polar-options");
+    const mapOpts = document.getElementById("map-options");
+    const ternaryOpts = document.getElementById("ternary-options");
+    const pieOpts = document.getElementById("pie-options");
+    const axisScaleRow = document.getElementById("axis-scale-row");
+
+    if (polarOpts) polarOpts.style.display = kind === "polar" ? "flex" : "none";
+    if (mapOpts) mapOpts.style.display = kind === "map" ? "flex" : "none";
+    if (ternaryOpts) ternaryOpts.style.display = kind === "ternary" ? "flex" : "none";
+    if (pieOpts) pieOpts.style.display = kind === "pie" ? "flex" : "none";
+    if (timeAxisOptions) {
+      timeAxisOptions.style.display = (time && (kind === "continuous" || kind === "map")) ? "flex" : "none";
+    }
+    // Scales mainly for XY / map; hide for polar/ternary/pie (geometry-driven)
+    if (axisScaleRow) {
+      axisScaleRow.style.display = (kind === "polar" || kind === "ternary" || kind === "pie") ? "none" : "";
+    }
+
+    // Marker field labels by chart kind
+    if (labelCalX1 && labelCalX2) {
+      if (kind === "polar") {
+        labelCalX1.textContent = "Origin (X1)";
+        labelCalX2.textContent = "r_max point (X2)";
+      } else if (kind === "ternary") {
+        labelCalX1.textContent = "Vertex A (X1)";
+        labelCalX2.textContent = "Vertex B (X2)";
+      } else if (kind === "pie") {
+        labelCalX1.textContent = "Center (X1)";
+        labelCalX2.textContent = "Rim (X2)";
+      } else if (kind === "map") {
+        labelCalX1.textContent = "Lon 1 (X1)";
+        labelCalX2.textContent = "Lon 2 (X2)";
+      } else if (time) {
+        labelCalX1.textContent = "X1 Time (left/origin)";
+        labelCalX2.textContent = "X2 Time (right)";
+      } else {
+        labelCalX1.textContent = "X1 value";
+        labelCalX2.textContent = "X2 value";
+      }
+    }
+    const ly1 = document.querySelector('label[for="cal-y1"]');
+    const ly2 = document.querySelector('label[for="cal-y2"]');
+    if (ly1 && ly2) {
+      if (kind === "ternary") {
+        ly1.textContent = "Y1 (unused)";
+        ly2.textContent = "Vertex C (Y2)";
+      } else if (kind === "polar" || kind === "pie") {
+        ly1.textContent = "Y1 (optional)";
+        ly2.textContent = "Y2 (optional)";
+      } else if (kind === "map") {
+        ly1.textContent = "Lat 1 (Y1)";
+        ly2.textContent = "Lat 2 (Y2)";
+      } else {
+        ly1.textContent = "Y1 value";
+        ly2.textContent = "Y2 value";
+      }
+    }
+
+    if (calHelpText) {
+      if (kind === "polar") {
+        calHelpText.innerHTML = "<strong>Polar:</strong> place <strong>X1</strong> at the origin and <strong>X2</strong> at r_max on the 0° ray. Set r max &amp; θ₀, then digitize points (r, θ).";
+      } else if (kind === "ternary") {
+        calHelpText.innerHTML = "<strong>Ternary:</strong> place <strong>X1/X2/Y2</strong> on vertices A, B, C. Clicks export composition (a, b, c).";
+      } else if (kind === "pie") {
+        calHelpText.innerHTML = "<strong>Pie:</strong> <strong>X1</strong> = center, <strong>X2</strong> = rim. Click along the rim at wedge boundaries.";
+      } else if (kind === "map") {
+        calHelpText.innerHTML = "<strong>Map:</strong> set lon (X) and lat (Y) at the four cal markers; choose linear or Mercator.";
+      } else if (discrete) {
+        calHelpText.innerHTML = "<strong>Bar / histogram:</strong> calibrate Y (and X span). Click each bar <em>top</em>; edit category labels in the table.";
+      } else if (time) {
+        calHelpText.innerHTML = "<strong>Time series:</strong> Place X1/X2 on known time ticks. Values may be relative (<code>0</code>, <code>2min</code>, <code>1:30</code>) or absolute ISO.";
+      } else {
+        calHelpText.innerHTML = "<strong>How to calibrate:</strong> Drag markers to tick marks, enter values, or use Detect axes.";
+      }
+    }
+
+    // Fit only for continuous XY-like paths
+    const fitOk = kind === "continuous" || kind === "map";
+    if (regressionCard) {
+      regressionCard.hidden = !fitOk || discrete;
+      if ((!fitOk || discrete) && selectFitType) {
+        selectFitType.value = "none";
+        const active = seriesList.find((s) => s.id === activeSeriesId);
+        if (active) active.fitType = "none";
+        if (fitStatsBox) fitStatsBox.style.display = "none";
+      }
+    }
+
+    if (pointsTableHead) {
+      if (discrete) {
+        pointsTableHead.innerHTML = `
+          <th>Category</th>
+          <th>Y (value)</th>
+          <th style="width: 40px; text-align: center;">Action</th>`;
+      } else if (kind === "polar") {
+        pointsTableHead.innerHTML = `
+          <th>r</th>
+          <th>θ (°)</th>
+          <th style="width: 40px; text-align: center;">Action</th>`;
+      } else if (kind === "ternary") {
+        pointsTableHead.innerHTML = `
+          <th>A</th>
+          <th>B</th>
+          <th>C</th>
+          <th style="width: 40px; text-align: center;">Action</th>`;
+      } else if (kind === "pie") {
+        pointsTableHead.innerHTML = `
+          <th>θ (°)</th>
+          <th>%</th>
+          <th style="width: 40px; text-align: center;">Action</th>`;
+      } else if (kind === "map") {
+        pointsTableHead.innerHTML = `
+          <th>Lon</th>
+          <th>Lat</th>
+          <th style="width: 40px; text-align: center;">Action</th>`;
+      } else {
+        const xLabel = time ? `Time (${getTimeUnit()})` : "X";
+        pointsTableHead.innerHTML = `
+          <th>${xLabel}</th>
+          <th>Y</th>
+          <th style="width: 40px; text-align: center;">Action</th>`;
+      }
+    }
+    if (pointsTableHint) {
+      if (discrete) {
+        pointsTableHint.textContent = "Click bar tops. Edit category labels in the table. Double-click a marker to delete.";
+      } else if (kind === "polar") {
+        pointsTableHint.textContent = "Click on the polar plot. Table shows r and θ. Double-click to delete.";
+      } else if (kind === "ternary") {
+        pointsTableHint.textContent = "Click inside the triangle. Table shows A, B, C fractions.";
+      } else if (kind === "pie") {
+        pointsTableHint.textContent = "Click wedge boundaries on the rim. Table shows angle and percent.";
+      } else if (kind === "map") {
+        pointsTableHint.textContent = "Click map locations. Table shows longitude and latitude.";
+      } else {
+        pointsTableHint.textContent = "Double-click a point to delete. Drag to fine-tune.";
+      }
+    }
+  }
+
   function updateHelperBanner() {
-    if (!imageLoaded) {
-      helperText.textContent = "Start by dragging or pasting a plot image to begin.";
-      return;
-    }
-    if (currentMode === "calibrate") {
-      helperText.textContent = "Drag calibration points (X1, X2, Y1, Y2) to known axis lines and input their values in the sidebar.";
-    } else if (currentMode === "digitize") {
-      const activeSeries = seriesList.find(s => s.id === activeSeriesId);
-      const name = activeSeries ? activeSeries.name : "active series";
-      helperText.textContent = `Digitizing "${name}": Click canvas to add points. Drag points to adjust. Double-click to delete.`;
-    } else if (currentMode === "pan") {
-      helperText.textContent = "Pan Mode: Click and drag anywhere on the canvas to pan. Click Calibrate or a series pencil to edit.";
-    }
+    updateModeBadge();
   }
   
   // ── Math Calculations: Image Pixel Space ⇄ Calibrated Math Space ────
   function toMathCoords(px, py) {
-    const scaleX = selectScaleX.value;
-    const scaleY = selectScaleY.value;
-    
-    const x1Val = parseFloat(inputCalX1.value) || 0;
-    const x2Val = parseFloat(inputCalX2.value) || 10;
-    const y1Val = parseFloat(inputCalY1.value) || 0;
-    const y2Val = parseFloat(inputCalY2.value) || 10;
-    
+    const kind = getChartKind();
+    const ctx = getProjectionContext();
+    const Proj = typeof PlotProjection !== "undefined" ? PlotProjection : null;
+
+    if (Proj && Proj.pixelToData) {
+      const mapKind =
+        kind === "continuous" || kind === "discrete" || kind === "histogram"
+          ? "xy"
+          : kind;
+      const raw = Proj.pixelToData(mapKind, px, py, ctx);
+      return normalizeMathResult(raw, kind);
+    }
+
+    // Fallback XY
+    if (PM) {
+      return normalizeMathResult(PM.pixelToMath({
+        px, py,
+        cal: calibrationPoints,
+        scaleX: ctx.scales.x,
+        scaleY: ctx.scales.y,
+        x1Val: ctx.values.x1Val,
+        x2Val: ctx.values.x2Val,
+        y1Val: ctx.values.y1Val,
+        y2Val: ctx.values.y2Val
+      }), kind);
+    }
+
     const cal = calibrationPoints;
-    let x, y;
-    
-    // X scale conversion
-    if (scaleX === "log") {
-      const logX1 = Math.log10(x1Val);
-      const logX2 = Math.log10(x2Val);
-      const frac = (px - cal.x1.px) / (cal.x2.px - cal.x1.px);
-      x = Math.pow(10, logX1 + frac * (logX2 - logX1));
-    } else {
-      const frac = (px - cal.x1.px) / (cal.x2.px - cal.x1.px);
-      x = x1Val + frac * (x2Val - x1Val);
-    }
-    
-    // Y scale conversion
-    if (scaleY === "log") {
-      const logY1 = Math.log10(y1Val);
-      const logY2 = Math.log10(y2Val);
-      const frac = (py - cal.y1.py) / (cal.y2.py - cal.y1.py);
-      y = Math.pow(10, logY1 + frac * (logY2 - logY1));
-    } else {
-      const frac = (py - cal.y1.py) / (cal.y2.py - cal.y1.py);
-      y = y1Val + frac * (y2Val - y1Val);
-    }
-    
-    return { x, y };
+    const { x1Val, x2Val, y1Val, y2Val } = ctx.values;
+    const fracX = (px - cal.x1.px) / (cal.x2.px - cal.x1.px || 1);
+    const fracY = (py - cal.y1.py) / (cal.y2.py - cal.y1.py || 1);
+    return {
+      x: x1Val + fracX * (x2Val - x1Val),
+      y: y1Val + fracY * (y2Val - y1Val),
+      kind
+    };
   }
   
-  function toPixelCoords(x, y) {
-    const scaleX = selectScaleX.value;
-    const scaleY = selectScaleY.value;
-    
-    const x1Val = parseFloat(inputCalX1.value) || 0;
-    const x2Val = parseFloat(inputCalX2.value) || 10;
-    const y1Val = parseFloat(inputCalY1.value) || 0;
-    const y2Val = parseFloat(inputCalY2.value) || 10;
-    
+  /**
+   * Convert math-space values back to pixels.
+   * Accepts either (x, y) numbers or a data object for polar/ternary/pie/map.
+   */
+  function toPixelCoords(xOrData, yMaybe) {
+    const kind = getChartKind();
+    const ctx = getProjectionContext();
+    const Proj = typeof PlotProjection !== "undefined" ? PlotProjection : null;
+
+    let data;
+    if (xOrData != null && typeof xOrData === "object") {
+      data = xOrData;
+    } else {
+      data = { x: xOrData, y: yMaybe };
+      if (kind === "polar") {
+        data = { r: xOrData, theta: yMaybe, thetaRad: (Number(yMaybe) || 0) * Math.PI / 180 };
+      } else if (kind === "map") {
+        data = { lon: xOrData, lat: yMaybe, x: xOrData, y: yMaybe };
+      } else if (kind === "pie") {
+        data = { theta: xOrData, percent: yMaybe, fraction: (Number(yMaybe) || 0) / 100 };
+      } else if (kind === "ternary") {
+        // expect object path for ternary edits
+        data = { a: xOrData, b: yMaybe, c: 1 - (Number(xOrData) || 0) - (Number(yMaybe) || 0) };
+      }
+    }
+
+    if (Proj && Proj.dataToPixel) {
+      const mapKind =
+        kind === "continuous" || kind === "discrete" || kind === "histogram"
+          ? "xy"
+          : kind;
+      return Proj.dataToPixel(mapKind, data, ctx);
+    }
+
+    if (PM) {
+      return PM.mathToPixel({
+        x: data.x, y: data.y,
+        cal: calibrationPoints,
+        scaleX: ctx.scales.x,
+        scaleY: ctx.scales.y,
+        x1Val: ctx.values.x1Val,
+        x2Val: ctx.values.x2Val,
+        y1Val: ctx.values.y1Val,
+        y2Val: ctx.values.y2Val
+      });
+    }
+
     const cal = calibrationPoints;
-    let px, py;
-    
-    // X math to pixel
-    if (scaleX === "log") {
-      const logX = Math.log10(x);
-      const logX1 = Math.log10(x1Val);
-      const logX2 = Math.log10(x2Val);
-      const frac = (logX - logX1) / (logX2 - logX1);
-      px = cal.x1.px + frac * (cal.x2.px - cal.x1.px);
-    } else {
-      const frac = (x - x1Val) / (x2Val - x1Val);
-      px = cal.x1.px + frac * (cal.x2.px - cal.x1.px);
-    }
-    
-    // Y math to pixel
-    if (scaleY === "log") {
-      const logY = Math.log10(y);
-      const logY1 = Math.log10(y1Val);
-      const logY2 = Math.log10(y2Val);
-      const frac = (logY - logY1) / (logY2 - logY1);
-      py = cal.y1.py + frac * (cal.y2.py - cal.y1.py);
-    } else {
-      const frac = (y - y1Val) / (y2Val - y1Val);
-      py = cal.y1.py + frac * (cal.y2.py - cal.y1.py);
-    }
-    
-    return { px, py };
+    const { x1Val, x2Val, y1Val, y2Val } = ctx.values;
+    const fracX = (data.x - x1Val) / (x2Val - x1Val || 1);
+    const fracY = (data.y - y1Val) / (y2Val - y1Val || 1);
+    return {
+      px: cal.x1.px + fracX * (cal.x2.px - cal.x1.px),
+      py: cal.y1.py + fracY * (cal.y2.py - cal.y1.py)
+    };
   }
   
   // ── Drag & Click Canvas Handlers ─────────────────────────────
@@ -380,6 +1072,12 @@ document.addEventListener("DOMContentLoaded", () => {
   
   canvas.addEventListener("mousedown", (e) => {
     if (!imageLoaded) return;
+
+    const earlyPos = getMouseCoordinates(e);
+    if (window.__plotParity && window.__plotParity.onPointerDown(earlyPos, e)) {
+      e.preventDefault();
+      return;
+    }
     
     if (currentMode === "pan") {
       isPanning = true;
@@ -391,7 +1089,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     
-    const pos = getMouseCoordinates(e);
+    const pos = earlyPos;
     const clickThreshold = 10 / imgScale; // 10 display pixels
     
     if (currentMode === "calibrate") {
@@ -432,12 +1130,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (activeSeriesObj) {
         pushHistory(); // snapshot before mutation
         const newPt = { px: Math.round(pos.x), py: Math.round(pos.y) };
+        if (isDiscreteMode()) {
+          const idx = activeSeriesObj.points.length;
+          newPt.label = (PM && PM.defaultBarLabel)
+            ? PM.defaultBarLabel(idx)
+            : ("Bar " + (idx + 1));
+        }
         activeSeriesObj.points.push(newPt);
         activeSeriesObj.points.sort((a, b) => a.px - b.px);
         selectedDataPoint = newPt; // Select newly added point
         triggerProjectChange();
         renderAll();
         updatePointsTable();
+        flashPointsReady();
       }
     }
   });
@@ -454,6 +1159,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     const pos = getMouseCoordinates(e);
+    if (window.__plotParity && window.__plotParity.onPointerMove(pos, e)) {
+      lastMousePos = pos;
+      mouseOnCanvas = true;
+      return;
+    }
     lastMousePos = pos;
     mouseOnCanvas = true;
     
@@ -473,7 +1183,7 @@ document.addEventListener("DOMContentLoaded", () => {
         hoverInfo = {
           x: pos.x,
           y: pos.y,
-          label: `(${mathCoords.x.toFixed(2)}, ${mathCoords.y.toFixed(2)})`
+          label: formatHoverLabel(mathCoords)
         };
       }
       triggerProjectChange();
@@ -500,10 +1210,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (Math.hypot(pos.x - pt.px, pos.y - pt.py) < clickThreshold) {
               canvas.style.cursor = "grab";
               const mathCoords = toMathCoords(pt.px, pt.py);
+              const prefix = (isDiscreteMode() && pt.label) ? (pt.label + " ") : "";
               hoverInfo = {
                 x: pt.px,
                 y: pt.py,
-                label: `(${mathCoords.x.toFixed(2)}, ${mathCoords.y.toFixed(2)})`
+                label: prefix + formatHoverLabel(mathCoords)
               };
               found = true;
               break;
@@ -521,6 +1232,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   
   canvas.addEventListener("mouseup", () => {
+    if (window.__plotParity && window.__plotParity.onPointerUp) {
+      window.__plotParity.onPointerUp();
+    }
     const wasDraggingPoint = isDragging && dragTarget && typeof dragTarget === "object";
     isDragging = false;
     isPanning = false;
@@ -568,17 +1282,54 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     updateCanvasLegend();
     if (!imageLoaded) return;
+
+    if (window.__plotParity && window.__plotParity.drawOverlay) {
+      window.__plotParity.drawOverlay(ctx, imgScale);
+    }
     
     // Draw regression curve if selected
     drawRegressionCurve();
     
-    // Draw all data series lines & points
+    // Draw all data series (curve lines or discrete bar stems)
     seriesList.forEach(series => {
       const isActive = series.id === activeSeriesId;
       ctx.lineWidth = isActive ? 2.5 : 1.5;
       ctx.strokeStyle = series.color;
       ctx.fillStyle = series.color;
+      const baselinePy = calibrationPoints.y1.py * imgScale;
       
+      if (isDiscreteMode()) {
+        // Stems from Y1 baseline to bar top + square marker
+        series.points.forEach(pt => {
+          const x = pt.px * imgScale;
+          const y = pt.py * imgScale;
+          ctx.beginPath();
+          ctx.moveTo(x, baselinePy);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+          const s = isActive ? 5 : 4;
+          ctx.fillRect(x - s, y - s, s * 2, s * 2);
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(x - s, y - s, s * 2, s * 2);
+          ctx.strokeStyle = series.color;
+          ctx.fillStyle = series.color;
+          if (pt.label && isActive) {
+            ctx.font = "bold 10px var(--font-sans)";
+            ctx.fillStyle = series.color;
+            const tw = ctx.measureText(pt.label).width;
+            ctx.fillText(pt.label, x - tw / 2, y - 10);
+          }
+          if (pt === selectedDataPoint) {
+            ctx.beginPath();
+            ctx.arc(x, y, 9, 0, 2 * Math.PI);
+            ctx.strokeStyle = "#f43f5e";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.strokeStyle = series.color;
+          }
+        });
+      } else {
       // Draw path connections
       if (series.points.length > 1) {
         ctx.beginPath();
@@ -607,6 +1358,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ctx.stroke();
         }
       });
+      } // end continuous series draw
     });
     
     // Draw calibration points unconditionally (softer style when locked)
@@ -715,10 +1467,36 @@ document.addEventListener("DOMContentLoaded", () => {
   function drawLoupe() {
     const mouseScreenX = lastMousePos.x * imgScale;
     const mouseScreenY = lastMousePos.y * imgScale;
-    
-    // Draw circular magnifier offset to top-right of cursor to prevent finger/mouse occlusion
-    const loupeX = mouseScreenX + 60;
-    const loupeY = mouseScreenY - 60;
+    const gap = 56;
+    const pad = loupeRadius + 6;
+    const labelSpace = hoverInfo ? 22 : 0;
+
+    // Prefer top-right of cursor; flip when that would clip off the canvas
+    let loupeX = mouseScreenX + gap;
+    let loupeY = mouseScreenY - gap;
+
+    if (loupeX + loupeRadius > canvas.width - 4) {
+      loupeX = mouseScreenX - gap; // flip to left
+    }
+    if (loupeX - loupeRadius < 4) {
+      loupeX = mouseScreenX + gap;
+    }
+    if (loupeY - loupeRadius < 4) {
+      loupeY = mouseScreenY + gap; // flip below
+    }
+    if (loupeY + loupeRadius + labelSpace > canvas.height - 4) {
+      loupeY = mouseScreenY - gap; // keep above if possible
+    }
+
+    // Final clamp so circle (+ label) always stays inside the canvas
+    loupeX = Math.max(pad, Math.min(canvas.width - pad, loupeX));
+    loupeY = Math.max(pad, Math.min(canvas.height - pad - (labelSpace ? 8 : 0), loupeY));
+
+    // Prefer label below loupe; flip above if near bottom
+    let labelBelow = true;
+    if (loupeY + loupeRadius + 20 > canvas.height - 2) {
+      labelBelow = false;
+    }
     
     ctx.save();
     
@@ -765,45 +1543,106 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.arc(loupeX, loupeY, 2, 0, 2 * Math.PI);
     ctx.fill();
     
-    // Floating tooltip near magnifier
+    // Floating tooltip near magnifier (flips above when near bottom edge)
     if (hoverInfo) {
-      ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
       ctx.font = "bold 9px var(--font-sans)";
       const labelW = ctx.measureText(hoverInfo.label).width;
-      ctx.fillRect(loupeX - labelW/2 - 6, loupeY + loupeRadius + 4, labelW + 12, 16);
+      const boxW = labelW + 12;
+      const boxH = 16;
+      let boxX = loupeX - boxW / 2;
+      boxX = Math.max(2, Math.min(canvas.width - boxW - 2, boxX));
+      let boxY = labelBelow
+        ? loupeY + loupeRadius + 4
+        : loupeY - loupeRadius - boxH - 4;
+      boxY = Math.max(2, Math.min(canvas.height - boxH - 2, boxY));
+      ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
+      ctx.fillRect(boxX, boxY, boxW, boxH);
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(hoverInfo.label, loupeX - labelW/2, loupeY + loupeRadius + 15);
+      ctx.fillText(hoverInfo.label, boxX + 6, boxY + 11);
     }
   }
   
   // ── Table Builder ────────────────────────────────────────────
   function populatePointsTable() {
     const activeSeries = seriesList.find(s => s.id === activeSeriesId);
-    if (document.activeElement && document.activeElement.classList.contains("coord-cell")) {
+    if (document.activeElement && (
+      document.activeElement.classList.contains("coord-cell") ||
+      document.activeElement.classList.contains("label-cell")
+    )) {
       return;
     }
+    const kind = getChartKind();
+    const colSpan = kind === "ternary" ? 4 : 3;
     if (!activeSeries || activeSeries.points.length === 0) {
       pointsTableBody.innerHTML = `
         <tr>
-          <td colspan="3" style="text-align: center; color: var(--text-muted); font-family: var(--font-sans); padding: 20px 0;">No points digitized yet. Click inside plot in Digitize mode.</td>
+          <td colspan="${colSpan}" class="table-empty">No points digitized yet. Open Series &amp; points and click the plot.</td>
         </tr>
       `;
       return;
     }
+
+    const discrete = isDiscreteMode();
+    const delBtn = (i) => `
+      <td style="text-align: center;">
+        <button class="btn-icon danger remove-pt-btn" data-index="${i}" title="Delete point">
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </td>`;
     
     pointsTableBody.innerHTML = activeSeries.points.map((pt, i) => {
       const math = toMathCoords(pt.px, pt.py);
       const isPtSelected = selectedDataPoint === pt;
       const rowStyle = isPtSelected ? `background: var(--accent-primary-glow); font-weight: 600;` : ``;
+      if (discrete) {
+        const label = pt.label != null ? pt.label : ((PM && PM.defaultBarLabel) ? PM.defaultBarLabel(i) : ("Bar " + (i + 1)));
+        return `
+        <tr style="${rowStyle}">
+          <td contenteditable="true" class="label-cell" data-index="${i}" title="Edit category label">${escapeHtml(label)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="y" title="Edit value">${formatYValue(math.y)}</td>
+          ${delBtn(i)}
+        </tr>`;
+      }
+      if (kind === "polar") {
+        return `
+        <tr style="${rowStyle}">
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="r">${formatYValue(math.r)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="theta">${formatYValue(math.theta)}</td>
+          ${delBtn(i)}
+        </tr>`;
+      }
+      if (kind === "ternary") {
+        return `
+        <tr style="${rowStyle}">
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="a">${formatYValue(math.a)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="b">${formatYValue(math.b)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="c">${formatYValue(math.c)}</td>
+          ${delBtn(i)}
+        </tr>`;
+      }
+      if (kind === "pie") {
+        return `
+        <tr style="${rowStyle}">
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="theta">${formatYValue(math.theta)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="percent">${formatYValue(math.percent)}</td>
+          ${delBtn(i)}
+        </tr>`;
+      }
+      if (kind === "map") {
+        const lon = math.lon != null ? math.lon : math.x;
+        const lat = math.lat != null ? math.lat : math.y;
+        return `
+        <tr style="${rowStyle}">
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="lon">${formatYValue(lon)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="lat">${formatYValue(lat)}</td>
+          ${delBtn(i)}
+        </tr>`;
+      }
       return `
         <tr style="${rowStyle}">
-          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="x" title="Double click to edit">${math.x.toFixed(4)}</td>
-          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="y" title="Double click to edit">${math.y.toFixed(4)}</td>
-          <td style="text-align: center;">
-            <button class="btn-icon danger remove-pt-btn" data-index="${i}" title="Delete point">
-              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-          </td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="x" title="Edit">${formatXValue(math.x, false)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="y" title="Edit">${formatYValue(math.y)}</td>
+          ${delBtn(i)}
         </tr>
       `;
     }).join("");
@@ -817,6 +1656,28 @@ document.addEventListener("DOMContentLoaded", () => {
           const pt = activeSeriesObj.points[index];
           if (pt === selectedDataPoint) selectedDataPoint = null;
           activeSeriesObj.points.splice(index, 1);
+          triggerProjectChange();
+          renderAll();
+        }
+      });
+    });
+
+    pointsTableBody.querySelectorAll(".label-cell").forEach(cell => {
+      cell.addEventListener("focus", () => {
+        const index = parseInt(cell.dataset.index, 10);
+        if (activeSeries.points[index]) {
+          selectedDataPoint = activeSeries.points[index];
+          renderAll();
+        }
+      });
+      cell.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); cell.blur(); }
+      });
+      cell.addEventListener("blur", () => {
+        const index = parseInt(cell.dataset.index, 10);
+        const pt = activeSeries.points[index];
+        if (pt) {
+          pt.label = cell.textContent.trim() || pt.label || ("Bar " + (index + 1));
           triggerProjectChange();
           renderAll();
         }
@@ -844,25 +1705,76 @@ document.addEventListener("DOMContentLoaded", () => {
       cell.addEventListener("blur", () => {
         const index = parseInt(cell.dataset.index);
         const coord = cell.dataset.coord;
-        const newVal = parseFloat(cell.textContent.trim());
+        const raw = cell.textContent.trim();
         const pt = activeSeries.points[index];
-        if (pt) {
-          const math = toMathCoords(pt.px, pt.py);
-          if (!isNaN(newVal)) {
-            if (coord === "x") {
-              const pixelPt = toPixelCoords(newVal, math.y);
-              pt.px = Math.round(pixelPt.px);
-            } else {
-              const pixelPt = toPixelCoords(math.x, newVal);
-              pt.py = Math.round(pixelPt.py);
-            }
-            activeSeries.points.sort((a, b) => a.px - b.px);
-            triggerProjectChange();
-            renderAll();
-          } else {
-            // Revert cell text to original on invalid input
-            cell.textContent = coord === "x" ? math.x.toFixed(4) : math.y.toFixed(4);
+        if (!pt) return;
+        const math = toMathCoords(pt.px, pt.py);
+        const kind = getChartKind();
+
+        let newVal;
+        if (coord === "x" && isTimeScale() && PM && kind === "continuous") {
+          const parsed = PM.parseTimeToSeconds(raw, getTimeUnit());
+          if (!parsed) {
+            cell.textContent = formatXValue(math.x, false);
+            return;
           }
+          if (!parsed.absolute && !calUsesAbsoluteTime()) {
+            newVal = parseCalXValue(inputCalX1.value) + parsed.seconds;
+          } else {
+            newVal = parsed.seconds;
+          }
+        } else {
+          newVal = parseFloat(raw);
+        }
+
+        if (!isNaN(newVal) && Number.isFinite(newVal)) {
+          let pixelPt;
+          if (kind === "polar") {
+            const data = {
+              r: coord === "r" ? newVal : math.r,
+              theta: coord === "theta" ? newVal : math.theta,
+              thetaRad: ((coord === "theta" ? newVal : math.theta) || 0) * Math.PI / 180
+            };
+            pixelPt = toPixelCoords(data);
+          } else if (kind === "ternary") {
+            let a = math.a, b = math.b, c = math.c;
+            if (coord === "a") a = newVal;
+            if (coord === "b") b = newVal;
+            if (coord === "c") c = newVal;
+            const s = a + b + c;
+            if (s > 0) { a /= s; b /= s; c /= s; }
+            pixelPt = toPixelCoords({ a, b, c });
+          } else if (kind === "pie") {
+            const data = {
+              theta: coord === "theta" ? newVal : math.theta,
+              percent: coord === "percent" ? newVal : math.percent,
+              fraction: ((coord === "percent" ? newVal : math.percent) || 0) / 100
+            };
+            // Rebuild from angle around center for pixel placement
+            const ctx = getProjectionContext();
+            const o = ctx.cal.origin || calibrationPoints.x1;
+            const rim = ctx.cal.rim || calibrationPoints.x2;
+            const rPx = Math.hypot(rim.px - o.px, rim.py - o.py) || 1;
+            const th = ((data.theta || 0) + (ctx.values.startDeg || 0)) * Math.PI / 180;
+            pixelPt = { px: o.px + rPx * Math.cos(th), py: o.py - rPx * Math.sin(th) };
+          } else if (kind === "map") {
+            const lon = coord === "lon" ? newVal : (math.lon != null ? math.lon : math.x);
+            const lat = coord === "lat" ? newVal : (math.lat != null ? math.lat : math.y);
+            pixelPt = toPixelCoords({ lon, lat, x: lon, y: lat });
+          } else if (coord === "x") {
+            pixelPt = toPixelCoords(newVal, math.y);
+          } else {
+            pixelPt = toPixelCoords(math.x, newVal);
+          }
+          if (pixelPt && Number.isFinite(pixelPt.px) && Number.isFinite(pixelPt.py)) {
+            pt.px = Math.round(pixelPt.px);
+            pt.py = Math.round(pixelPt.py);
+          }
+          activeSeries.points.sort((a, b) => a.px - b.px);
+          triggerProjectChange();
+          renderAll();
+        } else {
+          populatePointsTable();
         }
       });
     });
@@ -1129,6 +2041,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   function drawRegressionCurve() {
+    if (isDiscreteMode()) return;
     seriesList.forEach(series => {
       const type = series.fitType || "none";
       if (type === "none" || series.points.length < 2) return;
@@ -1223,21 +2136,13 @@ document.addEventListener("DOMContentLoaded", () => {
     seriesContainer.querySelectorAll(".series-activate-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.id;
-        if (activeSeriesId === id && currentMode === "digitize") {
-          // Toggle off to pan mode
-          currentMode = "pan";
-        } else {
-          activeSeriesId = id;
-          currentMode = "digitize";
-          modeBtnCalibrate.classList.remove("active");
-          
-          // Sync Curve Fitting dropdown with newly selected series fit type
-          const activeSeries = seriesList.find(s => s.id === activeSeriesId);
-          if (activeSeries) {
-            selectFitType.value = activeSeries.fitType || "none";
-          }
+        activeSeriesId = id;
+        openPanel("series");
+        currentMode = "digitize";
+        const activeSeries = seriesList.find(s => s.id === activeSeriesId);
+        if (activeSeries) {
+          selectFitType.value = activeSeries.fitType || "none";
         }
-        
         triggerProjectChange();
         renderAll();
         updateSeriesUI();
@@ -1340,23 +2245,109 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     renderAll();
   });
-  selectScaleX.addEventListener("change", renderAll);
-  selectScaleY.addEventListener("change", renderAll);
-  inputCalX1.addEventListener("input", renderAll);
-  inputCalX2.addEventListener("input", renderAll);
-  inputCalY1.addEventListener("input", renderAll);
-  inputCalY2.addEventListener("input", renderAll);
+  function refreshAxesAndTable() {
+    updateChartModeUI();
+    triggerProjectChange();
+    renderAll();
+    populatePointsTable();
+  }
+
+  selectScaleX.addEventListener("change", refreshAxesAndTable);
+  selectScaleY.addEventListener("change", refreshAxesAndTable);
+  if (selectChartKind) {
+    selectChartKind.addEventListener("change", () => {
+      const k = getChartKind();
+      // Sensible scale defaults when switching kinds
+      if (k === "map") {
+        if (selectScaleX) selectScaleX.value = "lon";
+        if (selectScaleY) selectScaleY.value = "lat";
+      } else if (k === "continuous" || k === "discrete" || k === "histogram") {
+        if (selectScaleX && (selectScaleX.value === "lon" || selectScaleX.value === "lat")) {
+          selectScaleX.value = "linear";
+        }
+        if (selectScaleY && (selectScaleY.value === "lon" || selectScaleY.value === "lat")) {
+          selectScaleY.value = "linear";
+        }
+      }
+      refreshAxesAndTable();
+    });
+  }
+  ["polar-rmax", "polar-theta0", "pie-total", "pie-start", "map-projection"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", refreshAxesAndTable);
+    if (el) el.addEventListener("input", refreshAxesAndTable);
+  });
+  if (selectTimeUnit) selectTimeUnit.addEventListener("change", refreshAxesAndTable);
+  if (selectTimeExport) selectTimeExport.addEventListener("change", refreshAxesAndTable);
+  inputCalX1.addEventListener("input", () => { triggerProjectChange(); renderAll(); populatePointsTable(); });
+  inputCalX2.addEventListener("input", () => { triggerProjectChange(); renderAll(); populatePointsTable(); });
+  inputCalY1.addEventListener("input", () => { triggerProjectChange(); renderAll(); populatePointsTable(); });
+  inputCalY2.addEventListener("input", () => { triggerProjectChange(); renderAll(); populatePointsTable(); });
+
+  // Alias used by click handlers
+  function updatePointsTable() {
+    populatePointsTable();
+  }
   
   // ── CSV Exporters & Copy table ───────────────────────────────
   
   function getCSVContent() {
     const activeSeries = seriesList.find(s => s.id === activeSeriesId);
     if (!activeSeries || activeSeries.points.length === 0) return "";
+    const kind = getChartKind();
+
+    if (isDiscreteMode()) {
+      let csv = "Category,Y Value\n";
+      activeSeries.points.forEach((pt, i) => {
+        const math = toMathCoords(pt.px, pt.py);
+        const label = (pt.label != null ? pt.label : ("Bar " + (i + 1))).replace(/"/g, '""');
+        csv += `"${label}",${math.y}\n`;
+      });
+      return csv;
+    }
+
+    if (kind === "polar") {
+      let csv = "r,theta_deg,x_cart,y_cart\n";
+      activeSeries.points.forEach((pt) => {
+        const m = toMathCoords(pt.px, pt.py);
+        csv += `${m.r},${m.theta},${m.x},${m.y}\n`;
+      });
+      return csv;
+    }
+    if (kind === "ternary") {
+      let csv = "A,B,C\n";
+      activeSeries.points.forEach((pt) => {
+        const m = toMathCoords(pt.px, pt.py);
+        csv += `${m.a},${m.b},${m.c}\n`;
+      });
+      return csv;
+    }
+    if (kind === "pie") {
+      let csv = "theta_deg,percent,value,fraction\n";
+      activeSeries.points.forEach((pt) => {
+        const m = toMathCoords(pt.px, pt.py);
+        csv += `${m.theta},${m.percent},${m.value},${m.fraction}\n`;
+      });
+      return csv;
+    }
+    if (kind === "map") {
+      let csv = "longitude,latitude\n";
+      activeSeries.points.forEach((pt) => {
+        const m = toMathCoords(pt.px, pt.py);
+        const lon = m.lon != null ? m.lon : m.x;
+        const lat = m.lat != null ? m.lat : m.y;
+        csv += `${lon},${lat}\n`;
+      });
+      return csv;
+    }
     
-    let csv = "X Coordinate,Y Coordinate\n";
+    const xHeader = isTimeScale() ? "Time" : "X Coordinate";
+    let csv = `${xHeader},Y Coordinate\n`;
     activeSeries.points.forEach(pt => {
       const math = toMathCoords(pt.px, pt.py);
-      csv += `${math.x},${math.y}\n`;
+      const xOut = formatXValue(math.x, true);
+      const xCell = /[,"]/.test(String(xOut)) ? `"${String(xOut).replace(/"/g, '""')}"` : xOut;
+      csv += `${xCell},${math.y}\n`;
     });
     return csv;
   }
@@ -1392,16 +2383,69 @@ document.addEventListener("DOMContentLoaded", () => {
   
   btnDownloadCombinedCSV.addEventListener("click", () => {
     let hasPoints = false;
-    let csv = "Series Name,X Coordinate,Y Coordinate\n";
-    seriesList.forEach(series => {
-      if (series.points.length > 0) {
-        hasPoints = true;
-        series.points.forEach(pt => {
+    let csv;
+    const kind = getChartKind();
+    if (isDiscreteMode()) {
+      csv = "Series Name,Category,Y Value\n";
+      seriesList.forEach(series => {
+        series.points.forEach((pt, i) => {
+          hasPoints = true;
           const math = toMathCoords(pt.px, pt.py);
-          csv += `"${series.name.replace(/"/g, '""')}",${math.x},${math.y}\n`;
+          const label = (pt.label != null ? pt.label : ("Bar " + (i + 1))).replace(/"/g, '""');
+          csv += `"${series.name.replace(/"/g, '""')}","${label}",${math.y}\n`;
         });
-      }
-    });
+      });
+    } else if (kind === "polar") {
+      csv = "Series Name,r,theta_deg,x_cart,y_cart\n";
+      seriesList.forEach((series) => {
+        series.points.forEach((pt) => {
+          hasPoints = true;
+          const m = toMathCoords(pt.px, pt.py);
+          csv += `"${series.name.replace(/"/g, '""')}",${m.r},${m.theta},${m.x},${m.y}\n`;
+        });
+      });
+    } else if (kind === "ternary") {
+      csv = "Series Name,A,B,C\n";
+      seriesList.forEach((series) => {
+        series.points.forEach((pt) => {
+          hasPoints = true;
+          const m = toMathCoords(pt.px, pt.py);
+          csv += `"${series.name.replace(/"/g, '""')}",${m.a},${m.b},${m.c}\n`;
+        });
+      });
+    } else if (kind === "pie") {
+      csv = "Series Name,theta_deg,percent,value\n";
+      seriesList.forEach((series) => {
+        series.points.forEach((pt) => {
+          hasPoints = true;
+          const m = toMathCoords(pt.px, pt.py);
+          csv += `"${series.name.replace(/"/g, '""')}",${m.theta},${m.percent},${m.value}\n`;
+        });
+      });
+    } else if (kind === "map") {
+      csv = "Series Name,longitude,latitude\n";
+      seriesList.forEach((series) => {
+        series.points.forEach((pt) => {
+          hasPoints = true;
+          const m = toMathCoords(pt.px, pt.py);
+          csv += `"${series.name.replace(/"/g, '""')}",${m.lon != null ? m.lon : m.x},${m.lat != null ? m.lat : m.y}\n`;
+        });
+      });
+    } else {
+      const xHeader = isTimeScale() ? "Time" : "X Coordinate";
+      csv = `Series Name,${xHeader},Y Coordinate\n`;
+      seriesList.forEach(series => {
+        if (series.points.length > 0) {
+          hasPoints = true;
+          series.points.forEach(pt => {
+            const math = toMathCoords(pt.px, pt.py);
+            const xOut = formatXValue(math.x, true);
+            const xCell = /[,"]/.test(String(xOut)) ? `"${String(xOut).replace(/"/g, '""')}"` : xOut;
+            csv += `"${series.name.replace(/"/g, '""')}",${xCell},${math.y}\n`;
+          });
+        }
+      });
+    }
     
     if (!hasPoints) {
       alert("No data points in any series to export.");
@@ -1568,21 +2612,35 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Firebase Project Manager Sync Hooks ───────────────────────
   
   function getPlotExtractorState() {
-    return {
+    const base = {
+      schemaVersion: 3,
       compressedImgData,
       imgWidth,
       imgHeight,
       calibrationPoints,
       seriesList,
       activeSeriesId,
+      chartKind: selectChartKind ? selectChartKind.value : "continuous",
       scaleX: selectScaleX.value,
       scaleY: selectScaleY.value,
-      x1Val: parseFloat(inputCalX1.value) || 0,
-      x2Val: parseFloat(inputCalX2.value) || 10,
+      timeUnit: selectTimeUnit ? selectTimeUnit.value : "s",
+      timeExport: selectTimeExport ? selectTimeExport.value : "elapsed",
+      // Keep raw string cal X for time modes (numbers still stringify fine)
+      x1Val: inputCalX1.value,
+      x2Val: inputCalX2.value,
       y1Val: parseFloat(inputCalY1.value) || 0,
       y2Val: parseFloat(inputCalY2.value) || 10,
-      fitType: selectFitType.value
+      fitType: selectFitType.value,
+      polarRmax: (document.getElementById("polar-rmax") || {}).value,
+      polarTheta0: (document.getElementById("polar-theta0") || {}).value,
+      pieTotal: (document.getElementById("pie-total") || {}).value,
+      pieStart: (document.getElementById("pie-start") || {}).value,
+      mapProjection: (document.getElementById("map-projection") || {}).value
     };
+    if (window.__plotParity && window.__plotParity.getExtraState) {
+      Object.assign(base, window.__plotParity.getExtraState());
+    }
+    return base;
   }
   
   function setPlotExtractorState(state) {
@@ -1594,6 +2652,13 @@ document.addEventListener("DOMContentLoaded", () => {
       imgWidth = state.imgWidth || 1000;
       imgHeight = state.imgHeight || 1000;
       imageLoaded = true;
+      if (!originalImageBackup) {
+        originalImageBackup = {
+          dataUrl: compressedImgData,
+          width: imgWidth,
+          height: imgHeight
+        };
+      }
       dropzone.style.display = "none";
       canvasWrapper.style.display = "block";
       imageActions.style.display = "flex";
@@ -1617,21 +2682,51 @@ document.addEventListener("DOMContentLoaded", () => {
       activeSeriesId = state.activeSeriesId;
     }
     
+    if (state.chartKind && selectChartKind) selectChartKind.value = state.chartKind;
     if (state.scaleX) selectScaleX.value = state.scaleX;
     if (state.scaleY) selectScaleY.value = state.scaleY;
+    if (state.timeUnit && selectTimeUnit) selectTimeUnit.value = state.timeUnit;
+    if (state.timeExport && selectTimeExport) selectTimeExport.value = state.timeExport;
     if (state.x1Val !== undefined) inputCalX1.value = state.x1Val;
     if (state.x2Val !== undefined) inputCalX2.value = state.x2Val;
     if (state.y1Val !== undefined) inputCalY1.value = state.y1Val;
     if (state.y2Val !== undefined) inputCalY2.value = state.y2Val;
     if (state.fitType !== undefined) selectFitType.value = state.fitType;
+    if (state.polarRmax != null && document.getElementById("polar-rmax")) {
+      document.getElementById("polar-rmax").value = state.polarRmax;
+    }
+    if (state.polarTheta0 != null && document.getElementById("polar-theta0")) {
+      document.getElementById("polar-theta0").value = state.polarTheta0;
+    }
+    if (state.pieTotal != null && document.getElementById("pie-total")) {
+      document.getElementById("pie-total").value = state.pieTotal;
+    }
+    if (state.pieStart != null && document.getElementById("pie-start")) {
+      document.getElementById("pie-start").value = state.pieStart;
+    }
+    if (state.mapProjection && document.getElementById("map-projection")) {
+      document.getElementById("map-projection").value = state.mapProjection;
+    }
+    // Migrate removed chart kind
+    if (selectChartKind && selectChartKind.value === "measure") {
+      selectChartKind.value = "continuous";
+    }
+    if (window.__plotParity && window.__plotParity.setExtraState) {
+      window.__plotParity.setExtraState(state);
+    }
     
     updateSeriesUI();
+    updateChartModeUI();
     updateHelperBanner();
+    if (window.__plotParity && window.__plotParity.updateParityUI) {
+      window.__plotParity.updateParityUI();
+    }
     
     // Trigger delay refresh to allow image component dimension loading
     setTimeout(() => {
       resizeCanvas();
       renderAll();
+      populatePointsTable();
     }, 150);
   }
   
@@ -1643,14 +2738,25 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Undo / Redo History Stack ──────────────────────────────────
   const MAX_HISTORY = 60;
 
+  /** Full undo snapshot: series + calibration markers + active series. */
+  function snapshotAppState() {
+    return {
+      seriesList: JSON.parse(JSON.stringify(seriesList)),
+      calibrationPoints: JSON.parse(JSON.stringify(calibrationPoints)),
+      activeSeriesId,
+      // Image data is large — only store reference; prep undo relies on originalImageBackup + redo chain for series
+    };
+  }
+
+  // Back-compat name used at image load
   function snapshotSeriesList() {
-    return JSON.parse(JSON.stringify(seriesList));
+    return snapshotAppState();
   }
 
   function pushHistory() {
     // Discard any forward history when a new action occurs
     historyStack = historyStack.slice(0, historyPointer + 1);
-    historyStack.push(snapshotSeriesList());
+    historyStack.push(snapshotAppState());
     if (historyStack.length > MAX_HISTORY) historyStack.shift();
     historyPointer = historyStack.length - 1;
     updateUndoRedoButtons();
@@ -1662,7 +2768,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function applyHistory(snapshot) {
-    seriesList = JSON.parse(JSON.stringify(snapshot));
+    if (!snapshot) return;
+    // Legacy snapshots were bare series arrays
+    if (Array.isArray(snapshot)) {
+      seriesList = JSON.parse(JSON.stringify(snapshot));
+    } else {
+      if (snapshot.seriesList) {
+        seriesList = JSON.parse(JSON.stringify(snapshot.seriesList));
+      }
+      if (snapshot.calibrationPoints) {
+        calibrationPoints = JSON.parse(JSON.stringify(snapshot.calibrationPoints));
+      }
+      if (snapshot.activeSeriesId) activeSeriesId = snapshot.activeSeriesId;
+    }
     // Ensure activeSeriesId still exists; if not, fall back to first series
     if (!seriesList.find(s => s.id === activeSeriesId)) {
       activeSeriesId = seriesList[0]?.id;
@@ -1671,6 +2789,7 @@ document.addEventListener("DOMContentLoaded", () => {
     triggerProjectChange();
     renderAll();
     updateSeriesUI();
+    populatePointsTable();
   }
 
   function undo() {
@@ -1792,6 +2911,20 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Draw all data series and fits
     seriesList.forEach(series => {
+      if (isDiscreteMode()) {
+        const baseline = calibrationPoints.y1.py;
+        series.points.forEach(pt => {
+          offCtx.strokeStyle = series.color;
+          offCtx.lineWidth = 3;
+          offCtx.beginPath();
+          offCtx.moveTo(pt.px, baseline);
+          offCtx.lineTo(pt.px, pt.py);
+          offCtx.stroke();
+          offCtx.fillStyle = series.color;
+          offCtx.fillRect(pt.px - 5, pt.py - 5, 10, 10);
+        });
+        return;
+      }
       // Connect points with lines
       if (series.points.length > 1) {
         offCtx.strokeStyle = series.color;
@@ -1915,7 +3048,7 @@ document.addEventListener("DOMContentLoaded", () => {
       hoverInfo = {
         x: lastMousePos.x,
         y: lastMousePos.y,
-        label: `(${mathCoords.x.toFixed(2)}, ${mathCoords.y.toFixed(2)})`
+        label: formatHoverLabel(mathCoords)
       };
       
       triggerProjectChange();
@@ -1929,11 +3062,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const advancedTuningPanel = document.getElementById("advanced-tuning-panel");
   const nudgeTarget = document.getElementById("nudge-target");
   
-  btnToggleAdvanced.addEventListener("click", () => {
-    const isHidden = advancedTuningPanel.style.display === "none";
-    advancedTuningPanel.style.display = isHidden ? "block" : "none";
-    btnToggleAdvanced.style.color = isHidden ? "var(--text-primary)" : "var(--accent-primary)";
-  });
+  if (btnToggleAdvanced && advancedTuningPanel) {
+    btnToggleAdvanced.addEventListener("click", () => {
+      const opening = advancedTuningPanel.hasAttribute("hidden")
+        || advancedTuningPanel.style.display === "none"
+        || getComputedStyle(advancedTuningPanel).display === "none";
+      if (opening) {
+        advancedTuningPanel.hidden = false;
+        advancedTuningPanel.style.display = "block";
+        btnToggleAdvanced.classList.add("is-open");
+        btnToggleAdvanced.setAttribute("aria-expanded", "true");
+      } else {
+        advancedTuningPanel.hidden = true;
+        advancedTuningPanel.style.display = "none";
+        btnToggleAdvanced.classList.remove("is-open");
+        btnToggleAdvanced.setAttribute("aria-expanded", "false");
+      }
+      if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+    });
+  }
   
   function nudgePoint(dx, dy) {
     if (!imageLoaded) return;
@@ -1967,10 +3114,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (saveStatusBadge) {
       if (saveBadgeTimeout) clearTimeout(saveBadgeTimeout);
       saveStatusBadge.style.opacity = "1";
-      saveStatusBadge.innerHTML = '<span style="width:5px; height:5px; border-radius:50%; background:#f59e0b; display:inline-block; animation: pulse 1s infinite;"></span> Saving...';
+      saveStatusBadge.innerHTML = '<span class="hdr-status-dot" style="background:#f59e0b; animation: pulse 1s infinite;"></span> Saving...';
       
       saveBadgeTimeout = setTimeout(() => {
-        saveStatusBadge.innerHTML = '<span style="width:5px; height:5px; border-radius:50%; background:#10b981; display:inline-block;"></span> Synced';
+        saveStatusBadge.innerHTML = '<span class="hdr-status-dot"></span> Synced';
         saveBadgeTimeout = setTimeout(() => {
           saveStatusBadge.style.opacity = "0";
         }, 1500);
@@ -2004,6 +3151,58 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("Failed to load design from URL:", err);
     }
+  }
+
+  updateChartModeUI();
+
+  // Parity-full runtime (image prep, mask, detectors, measures, projections)
+  if (window.PlotParityRuntime && window.PlotParityRuntime.init) {
+    window.__plotParity = window.PlotParityRuntime.init({
+      getSeries: () => seriesList,
+      setSeries: (s) => { seriesList = s; },
+      getActiveSeriesId: () => activeSeriesId,
+      getCal: () => calibrationPoints,
+      setCal: (c) => { calibrationPoints = c; },
+      getPlotImageEl: () => plotImg,
+      getImageSize: () => ({ w: imgWidth, h: imgHeight }),
+      pushHistory,
+      renderAll,
+      populatePointsTable,
+      triggerProjectChange,
+      toMathCoords,
+      setChartKind: (k) => {
+        if (selectChartKind) selectChartKind.value = k;
+        updateChartModeUI();
+      },
+      onChartKindChanged: (kind, discrete) => {
+        updateChartModeUI();
+        updateHelperBanner();
+        renderAll();
+        populatePointsTable();
+      },
+      replaceImage: (dataUrl, w, h) => {
+        // Prep edits — do not overwrite originalImageBackup
+        compressedImgData = dataUrl;
+        plotImg.src = dataUrl;
+        imgWidth = w;
+        imgHeight = h;
+        imageLoaded = true;
+        dropzone.style.display = "none";
+        canvasWrapper.style.display = "block";
+        imageActions.style.display = "flex";
+        setTimeout(() => { resizeCanvas(); renderAll(); updateModeBadge(); }, 50);
+      },
+      openPanel,
+      updateModeBadge,
+      getActivePanel: () => activePanel,
+      afterImageEdit: () => {
+        triggerProjectChange();
+        updateSeriesUI();
+        populatePointsTable();
+        flashPointsReady();
+        setTimeout(() => { resizeCanvas(); renderAll(); updateModeBadge(); }, 50);
+      }
+    });
   }
 
   loadURLDesign();

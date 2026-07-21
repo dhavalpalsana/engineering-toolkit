@@ -77,3 +77,6 @@ node_modules/
 # Tailwind build tools (compiled output css/tailwind.css IS committed, these are build-only)
 tailwind.config.js
 css/tailwind-input.css
+
+# Local planning only — do not publish
+docs/implementation-plan-plot-extractor-parity-full.md

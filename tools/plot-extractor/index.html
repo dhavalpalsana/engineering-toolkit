@@ -6,7 +6,7 @@
   <title>Plot Data Extractor — Engineering Toolkit</title>
   
   <!-- SEO & Social Meta Tags -->
-  <meta name="description" content="Digitize and extract coordinate data from plots, graphs, and chart images. Supports linear/log axes calibration, precision magnifier, multi-series extraction, and curve fitting.">
+  <meta name="description" content="Digitize plot images: multi-scale axes, auto axis detect, autotrace, bar/time modes, image prep, measurements, and CSV export.">
   <meta name="keywords" content="plot digitizer, graph data extractor, extract data from plot, curve fitting, chart digitizer, engineering tools">
   
   <meta property="og:type" content="website">
@@ -46,7 +46,7 @@
   <script src="../../js/project-manager.js"></script>
   <script src="../../js/analytics.js"></script>
 </head>
-<body class="bg-[#f8fafc] text-[#0f172a] font-sans min-h-screen flex flex-col antialiased transition-colors duration-200">
+<body>
 
   <!-- Standard Toolkit Header -->
   <header>
@@ -59,13 +59,13 @@
           <i data-lucide="line-chart"></i>
         </div>
         <div class="hdr-titles">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <h1 style="margin: 0;">Plot Data Extractor</h1>
-            <span id="save-status-badge" style="font-size: 10px; font-weight: 700; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 6px; display: inline-flex; align-items: center; gap: 4px; opacity: 0; transition: opacity 0.3s ease; height: 16px; margin-top: 4px;">
-              <span style="width: 5px; height: 5px; border-radius: 50%; background: #10b981;"></span> Synced
+          <div>
+            <h1>Plot Data Extractor</h1>
+            <span id="save-status-badge" class="hdr-status-badge" style="opacity: 0;">
+              <span class="hdr-status-dot"></span> Synced
             </span>
           </div>
-          <p>Digitize charts, calibrate scales, extract points &amp; fit curves</p>
+          <p>Digitize curves, time series &amp; bar charts · calibrate · export CSV</p>
         </div>
       </div>
       
@@ -93,227 +93,441 @@
   </header>
 
   <!-- Interactive Workspace -->
-  <main>
-    <!-- Left Column: Interactive Image Digitizer Canvas -->
+  <main class="plot-layout">
+    <!-- Left: canvas -->
     <div class="workspace-card">
       <div class="workspace-header">
-        <div class="workspace-title">
-          <i data-lucide="image"></i>
-          <span id="workspace-mode-title">Plot Image Canvas</span>
-        </div>
-        <div id="image-actions" style="display: none; gap: 12px; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <i data-lucide="zoom-in" style="width:14px; height:14px; color:var(--text-secondary);"></i>
-            <input type="range" id="zoom-slider" min="0.5" max="3.0" step="0.1" value="1.0" style="width: 80px; accent-color: var(--accent-primary);" />
-            <span id="zoom-label" style="font-size: 11px; font-weight: 700; width: 32px; text-align: right; color:var(--text-secondary);">100%</span>
+        <div class="workspace-title-block">
+          <div class="workspace-title">
+            <i data-lucide="image"></i>
+            <span id="workspace-mode-title">Canvas</span>
           </div>
-          <div class="hdr-divider" style="height:16px; margin:0;"></div>
-          <button id="btn-undo" class="hdr-btn" style="height:28px; padding:0 8px;" title="Undo (Ctrl+Z)" disabled>
-            <i data-lucide="undo" style="width: 13px; height: 13px;"></i>
+          <button type="button" id="canvas-mode-badge" class="mode-badge" title="Click to open the matching sidebar panel">
+            <span class="mode-badge-dot"></span>
+            <span id="canvas-mode-label">Ready</span>
           </button>
-          <button id="btn-redo" class="hdr-btn" style="height:28px; padding:0 8px;" title="Redo (Ctrl+Y)" disabled>
-            <i data-lucide="redo" style="width: 13px; height: 13px;"></i>
-          </button>
-          <div class="hdr-divider" style="height:16px; margin:0;"></div>
-          <button id="btn-toggle-legend" class="hdr-btn" style="height:28px; padding:0 8px; font-size:11px;" title="Toggle Legend Visibility">
-            <i data-lucide="eye" style="width: 13px; height: 13px;"></i> Toggle Legend
-          </button>
-          <button id="btn-reset-zoom" class="hdr-btn" style="height:28px; padding:0 8px; font-size:11px;" title="Reset Zoom and Offset">
-            <i data-lucide="maximize-2"></i> Reset View
-          </button>
-          <button id="btn-remove-image" class="hdr-btn" style="height:28px; padding:0 8px; font-size:11px; color:var(--color-error);" title="Remove current plot">
-            <i data-lucide="trash-2"></i> Clear Image
-          </button>
+        </div>
+        <div id="image-actions" class="workspace-toolbar" style="display: none;">
+          <div class="toolbar-group" title="Zoom">
+            <i data-lucide="zoom-in" class="toolbar-icon"></i>
+            <input type="range" id="zoom-slider" min="0.5" max="3.0" step="0.1" value="1.0" class="zoom-range" />
+            <span id="zoom-label" class="zoom-label">100%</span>
+          </div>
+          <span class="toolbar-sep"></span>
+          <div class="toolbar-group">
+            <button id="btn-undo" class="tool-icon-btn" title="Undo (Ctrl+Z)" disabled><i data-lucide="undo"></i></button>
+            <button id="btn-redo" class="tool-icon-btn" title="Redo (Ctrl+Y)" disabled><i data-lucide="redo"></i></button>
+          </div>
+          <span class="toolbar-sep"></span>
+          <div class="toolbar-group">
+            <button id="btn-toggle-legend" class="tool-icon-btn" title="Toggle legend"><i data-lucide="eye"></i></button>
+            <button id="btn-reset-zoom" class="tool-icon-btn" title="Reset view"><i data-lucide="maximize-2"></i></button>
+            <button id="btn-remove-image" class="tool-icon-btn danger" title="Clear image"><i data-lucide="trash-2"></i></button>
+          </div>
         </div>
       </div>
 
-      <!-- Dropzone when no image is loaded -->
       <div class="canvas-container" id="canvas-container-root">
-        <div class="dropzone" id="image-dropzone" style="position: relative; overflow: hidden;">
-          <img src="assets/plot-placeholder.jpg" alt="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.06; pointer-events: none; z-index: 1;" />
-          <div style="position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
+        <div class="dropzone" id="image-dropzone">
+          <img src="assets/plot-placeholder.jpg" alt="" class="dropzone-bg" />
+          <div class="dropzone-content">
             <i data-lucide="upload-cloud"></i>
-            <h3>Upload Plot Image</h3>
-            <p>Drag &amp; drop, browse files, or simply paste an image link or clipboard screenshot (Ctrl+V)</p>
-            <button type="button" id="btn-load-example" class="action-btn secondary" style="margin-top: 18px; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px;">💡 Try Example Plot</button>
+            <h3>Upload a plot image</h3>
+            <p>Drag &amp; drop, browse, or paste a screenshot (<kbd>Ctrl</kbd>+<kbd>V</kbd>)</p>
+            <button type="button" id="btn-load-example" class="action-btn secondary dropzone-example-btn">Try example plot</button>
             <input type="file" id="file-upload-input" accept="image/*" style="display: none;" />
           </div>
         </div>
-        
-        <!-- Canvas wrapper visible after load -->
         <div id="plot-canvas-wrapper" style="display: none;">
-          <img id="plot-image" alt="Plot screen to digitize" />
+          <img id="plot-image" alt="Plot to digitize" />
           <canvas id="interaction-canvas"></canvas>
-          
-          <!-- Canvas Floating Legend -->
-          <div id="canvas-legend" style="position: absolute; top: 12px; right: 12px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-md); padding: 8px 12px; display: none; flex-direction: column; gap: 4px; z-index: 10; pointer-events: none; color: #ffffff; font-size: 11px; font-family: var(--font-sans); box-shadow: var(--shadow-md);">
-          </div>
+          <div id="canvas-legend" class="canvas-legend" style="display: none;"></div>
         </div>
       </div>
 
-      <!-- Helper instruction footer -->
       <div class="instruction-banner" id="helper-banner">
         <i data-lucide="info"></i>
         <span id="helper-text">Start by dragging or pasting a plot image to begin digitization.</span>
       </div>
     </div>
 
-    <!-- Right Column: Calibration Controls, Series, Curves & Export -->
-    <div class="sidebar-panel">
-      
-      <!-- Interactive Digitizing / Setup Mode -->
-      <div class="control-card">
-        <span class="card-title">
-          <i data-lucide="settings-2"></i> Calibration
-        </span>
-        <button class="active" id="mode-btn-calibrate" title="Toggle calibration mode to drag coordinates">
-          <i data-lucide="compass"></i> Calibrate Axes
-        </button>
+    <!-- Right: progressive sidebar (one section open at a time) -->
+    <aside class="sidebar-panel" aria-label="Digitizer controls">
+      <!-- 1. Setup — open by default → calibrating mode -->
+      <details class="control-card accordion" data-panel="setup" open>
+        <summary class="card-title">
+          <span class="card-title-left"><i data-lucide="settings-2"></i> Setup &amp; calibration</span>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </summary>
+        <div class="card-body">
+          <button type="button" class="action-btn primary" id="btn-detect-axes" title="Detect plot frame and place axis markers" style="width:100%;">
+            <i data-lucide="scan"></i> Detect axes
+          </button>
+          <p id="axis-detect-status" class="hint-text" style="display:none;" role="status"></p>
 
-        <!-- Calibration Parameters -->
-        <div id="calibration-settings" class="flex flex-col gap-3">
-          <div class="form-row">
+          <div id="calibration-settings" class="stack-sm">
             <div class="input-group">
-              <label for="cal-x1">X1 Reference Value</label>
-              <input type="number" id="cal-x1" value="0" step="any" />
-            </div>
-            <div class="input-group">
-              <label for="cal-x2">X2 Reference Value</label>
-              <input type="number" id="cal-x2" value="10" step="any" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="input-group">
-              <label for="cal-y1">Y1 Reference Value</label>
-              <input type="number" id="cal-y1" value="0" step="any" />
-            </div>
-            <div class="input-group">
-              <label for="cal-y2">Y2 Reference Value</label>
-              <input type="number" id="cal-y2" value="10" step="any" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="input-group">
-              <label for="scale-x">X-Axis Scale</label>
-              <select id="scale-x">
-                <option value="linear">Linear</option>
-                <option value="log">Logarithmic</option>
+              <label for="chart-kind">Chart kind</label>
+              <select id="chart-kind">
+                <option value="continuous">XY continuous / time series</option>
+                <option value="discrete">Bar / column tops</option>
+                <option value="histogram">Histogram</option>
+                <option value="polar">Polar</option>
+                <option value="ternary">Ternary</option>
+                <option value="pie">Pie / doughnut</option>
+                <option value="map">Map (geo)</option>
               </select>
             </div>
-            <div class="input-group">
-              <label for="scale-y">Y-Axis Scale</label>
-              <select id="scale-y">
-                <option value="linear">Linear</option>
-                <option value="log">Logarithmic</option>
-              </select>
+
+            <div id="axis-scale-row" class="form-row">
+              <div class="input-group">
+                <label for="scale-x" id="label-scale-x">X scale</label>
+                <select id="scale-x">
+                  <option value="linear">Linear</option>
+                  <option value="log">Log₁₀</option>
+                  <option value="ln">Ln</option>
+                  <option value="reciprocal">1/x</option>
+                  <option value="time">Time</option>
+                  <option value="lon">Longitude</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="scale-y" id="label-scale-y">Y scale</label>
+                <select id="scale-y">
+                  <option value="linear">Linear</option>
+                  <option value="log">Log₁₀</option>
+                  <option value="ln">Ln</option>
+                  <option value="reciprocal">1/y</option>
+                  <option value="lat">Latitude</option>
+                </select>
+              </div>
             </div>
+
+            <div id="map-options" class="callout-panel" style="display:none;">
+              <div class="input-group">
+                <label for="map-projection">Map projection</label>
+                <select id="map-projection">
+                  <option value="linear">Linear (georeferenced)</option>
+                  <option value="mercator">Web Mercator</option>
+                </select>
+              </div>
+              <p class="hint-text">X1/X2 = lon range · Y1/Y2 = lat range (use lon/lat scales).</p>
+            </div>
+
+            <div id="polar-options" class="callout-panel" style="display:none;">
+              <div class="form-row">
+                <div class="input-group">
+                  <label for="polar-rmax">r max (data)</label>
+                  <input type="number" id="polar-rmax" value="1" step="any" />
+                </div>
+                <div class="input-group">
+                  <label for="polar-theta0">θ₀ (deg)</label>
+                  <input type="number" id="polar-theta0" value="0" step="any" />
+                </div>
+              </div>
+              <p class="hint-text"><strong>X1</strong> = origin · <strong>X2</strong> = point at r_max on the 0° ray (right = 0° before θ₀).</p>
+            </div>
+
+            <div id="ternary-options" class="callout-panel" style="display:none;">
+              <p class="hint-text"><strong>X1</strong> = vertex A · <strong>X2</strong> = vertex B · <strong>Y2</strong> = vertex C. Digitized points export as a, b, c (sum ≈ 1).</p>
+            </div>
+
+            <div id="pie-options" class="callout-panel" style="display:none;">
+              <div class="form-row">
+                <div class="input-group">
+                  <label for="pie-total">Total value</label>
+                  <input type="number" id="pie-total" value="100" step="any" />
+                </div>
+                <div class="input-group">
+                  <label for="pie-start">Start angle (°)</label>
+                  <input type="number" id="pie-start" value="0" step="any" />
+                </div>
+              </div>
+              <p class="hint-text"><strong>X1</strong> = center · <strong>X2</strong> = rim on start ray. Click wedge edges; table shows angle &amp; share.</p>
+            </div>
+
+            <div id="time-axis-options" class="callout-panel" style="display: none;">
+              <div class="form-row">
+                <div class="input-group">
+                  <label for="time-unit">Time unit</label>
+                  <select id="time-unit">
+                    <option value="s">Seconds</option>
+                    <option value="min">Minutes</option>
+                    <option value="h">Hours</option>
+                    <option value="ms">Milliseconds</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label for="time-export">CSV time</label>
+                  <select id="time-export">
+                    <option value="elapsed">Elapsed</option>
+                    <option value="seconds">Seconds</option>
+                    <option value="iso">ISO (if absolute)</option>
+                  </select>
+                </div>
+              </div>
+              <p class="hint-text">e.g. <code>0</code>, <code>2min</code>, <code>1:30</code>, or ISO datetime</p>
+            </div>
+
+            <div class="form-row">
+              <div class="input-group">
+                <label for="cal-x1" id="label-cal-x1">X1 value</label>
+                <input type="text" id="cal-x1" value="0" inputmode="decimal" autocomplete="off" />
+              </div>
+              <div class="input-group">
+                <label for="cal-x2" id="label-cal-x2">X2 value</label>
+                <input type="text" id="cal-x2" value="10" inputmode="decimal" autocomplete="off" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="input-group">
+                <label for="cal-y1">Y1 value</label>
+                <input type="number" id="cal-y1" value="0" step="any" />
+              </div>
+              <div class="input-group">
+                <label for="cal-y2">Y2 value</label>
+                <input type="number" id="cal-y2" value="10" step="any" />
+              </div>
+            </div>
+
+            <button type="button" id="btn-toggle-advanced" class="action-btn secondary fine-tune-btn" aria-expanded="false" aria-controls="advanced-tuning-panel" title="Nudge X1/X2/Y1/Y2 markers by 1 pixel">
+              <i data-lucide="sliders"></i>
+              <span>Fine-tune markers</span>
+              <i data-lucide="chevron-down" class="fine-tune-chevron"></i>
+            </button>
+            <div id="advanced-tuning-panel" class="nudge-panel" style="display: none;" hidden>
+              <div class="form-row" style="align-items: end;">
+                <div class="input-group">
+                  <label for="nudge-target">Marker</label>
+                  <select id="nudge-target">
+                    <option value="x1">X1</option>
+                    <option value="x2">X2</option>
+                    <option value="y1">Y1</option>
+                    <option value="y2">Y2</option>
+                  </select>
+                </div>
+                <div class="nudge-pad" aria-label="Nudge marker">
+                  <button type="button" class="tool-icon-btn" id="btn-nudge-up" title="Up">▲</button>
+                  <button type="button" class="tool-icon-btn" id="btn-nudge-left" title="Left">◀</button>
+                  <button type="button" class="tool-icon-btn" id="btn-nudge-down" title="Down">▼</button>
+                  <button type="button" class="tool-icon-btn" id="btn-nudge-right" title="Right">▶</button>
+                </div>
+              </div>
+            </div>
+
+            <p id="cal-help-text" class="hint-text">
+              <strong>Calibrate:</strong> drag red markers to tick marks, then enter their values above.
+            </p>
           </div>
-          
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-            <button id="btn-toggle-advanced" class="btn-icon" style="font-size: 11px; font-weight: 700; color: var(--accent-primary); display: flex; align-items: center; gap: 4px; padding: 4px 0;">
-              <i data-lucide="sliders" style="width:13px; height:13px;"></i> Advanced Tuning
+        </div>
+      </details>
+
+      <!-- 2. Digitize -->
+      <details class="control-card accordion" data-panel="series">
+        <summary class="card-title">
+          <span class="card-title-left"><i data-lucide="layers"></i> Series &amp; points</span>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </summary>
+        <div class="card-body">
+          <div class="stack-sm" id="series-list-container"></div>
+          <div class="btn-row">
+            <button type="button" id="btn-add-series" class="action-btn secondary">
+              <i data-lucide="plus"></i> Series
+            </button>
+            <button type="button" id="btn-clear-points" class="action-btn secondary danger-text">
+              <i data-lucide="trash"></i> Clear
             </button>
           </div>
 
-          <!-- Advanced Fine-Tuning D-Pad Panel -->
-          <div id="advanced-tuning-panel" style="display: none; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 4px;" class="flex flex-col gap-3">
-            <div class="form-row" style="align-items: center;">
-              <div class="input-group">
-                <label for="nudge-target">Select Point</label>
-                <select id="nudge-target">
-                  <option value="x1">X1 Reference</option>
-                  <option value="x2">X2 Reference</option>
-                  <option value="y1">Y1 Reference</option>
-                  <option value="y2">Y2 Reference</option>
-                </select>
-              </div>
-              <div style="display: grid; grid-template-columns: repeat(3, 30px); grid-template-rows: repeat(2, 30px); gap: 4px; justify-content: center; align-items: center; margin-left: auto;">
-                <div></div>
-                <button class="hdr-icon-btn" id="btn-nudge-up" style="height:30px; width:30px;" title="Nudge Up 1px">▲</button>
-                <div></div>
-                <button class="hdr-icon-btn" id="btn-nudge-left" style="height:30px; width:30px;" title="Nudge Left 1px">◀</button>
-                <button class="hdr-icon-btn" id="btn-nudge-down" style="height:30px; width:30px;" title="Nudge Down 1px">▼</button>
-                <button class="hdr-icon-btn" id="btn-nudge-right" style="height:30px; width:30px;" title="Nudge Right 1px">▶</button>
-              </div>
+          <div class="section-label">Extracted data</div>
+          <div class="table-container">
+            <table class="points-table">
+              <thead>
+                <tr id="points-table-head">
+                  <th id="th-x">X</th>
+                  <th id="th-y">Y</th>
+                  <th style="width: 40px; text-align: center;"></th>
+                </tr>
+              </thead>
+              <tbody id="points-table-body">
+                <tr>
+                  <td colspan="3" class="table-empty">No points yet — activate a series pencil, then click the plot.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p id="points-table-hint" class="hint-text">Double-click a point to delete · drag to adjust · edit cells in the table</p>
+        </div>
+      </details>
+
+      <!-- Autotrace (collapsed) -->
+      <details class="control-card accordion" id="autotrace-card" data-panel="autotrace">
+        <summary class="card-title">
+          <span class="card-title-left"><i data-lucide="wand-2"></i> Autotrace</span>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </summary>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="input-group">
+              <label for="detector-id">Algorithm</label>
+              <select id="detector-id">
+                <option value="curve">Curve (color)</option>
+                <option value="cluster">Points / cluster</option>
+                <option value="bar">Bar tops</option>
+                <option value="edge">Edge</option>
+                <option value="centroid">Centroid</option>
+                <option value="skeleton">Skeleton</option>
+                <option value="histogram">Histogram</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="detector-tol">Color tol</label>
+              <input type="number" id="detector-tol" value="40" min="5" max="200" />
             </div>
           </div>
+          <div class="btn-row align-center trace-color-row">
+            <label class="trace-color-picker" title="Trace color — click to choose">
+              <input type="color" id="sample-color-input" value="#0d9488" aria-label="Trace color" />
+              <span class="trace-color-face" id="sample-color-swatch" aria-hidden="true"></span>
+              <i data-lucide="palette" class="trace-color-icon"></i>
+            </label>
+            <button type="button" id="btn-sample-color" class="tool-icon-btn" title="Eyedropper: click the plot to sample a color">
+              <i data-lucide="pipette"></i>
+            </button>
+            <button type="button" id="btn-run-detector" class="action-btn primary" style="flex:1;">Run</button>
+          </div>
 
-          <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4; border-top: 1px solid var(--border-color); padding-top: 8px;">
-            <strong>How to calibrate:</strong> Drag the red target markers (X1, X2, Y1, Y2) on the plot image to match grid gridlines or tick marks, then type the actual numbers representing those points into the boxes above.
+          <div class="section-label">Mask (optional)</div>
+          <div id="mask-card" class="stack-sm">
+            <div class="form-row">
+              <div class="input-group">
+                <label for="mask-tool">Mask tool</label>
+                <select id="mask-tool">
+                  <option value="off">Off</option>
+                  <option value="box">Box add</option>
+                  <option value="box-erase">Box erase</option>
+                  <option value="pencil">Pencil add</option>
+                  <option value="erase">Pencil erase</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="mask-brush">Brush px</label>
+                <input type="number" id="mask-brush" value="12" min="2" max="80" />
+              </div>
+            </div>
+            <div class="btn-row">
+              <button type="button" id="btn-mask-clear" class="action-btn secondary">Clear</button>
+              <button type="button" id="btn-mask-fill" class="action-btn secondary">Fill all</button>
+              <button type="button" id="btn-mask-toggle" class="action-btn secondary">Overlay</button>
+            </div>
+          </div>
+          <p class="hint-text">Set trace color (picker or eyedropper), optionally mask a region, then Run.</p>
+        </div>
+      </details>
+
+      <!-- Image prep (collapsed) -->
+      <details class="control-card accordion" id="image-edit-card" data-panel="image">
+        <summary class="card-title">
+          <span class="card-title-left"><i data-lucide="image"></i> Image prep</span>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </summary>
+        <div class="card-body">
+          <div class="chip-grid">
+            <button type="button" id="btn-img-rotate90" class="chip-btn">Rotate 90°</button>
+            <button type="button" id="btn-img-flip-h" class="chip-btn">Flip H</button>
+            <button type="button" id="btn-img-flip-v" class="chip-btn">Flip V</button>
+            <button type="button" id="btn-img-gray" class="chip-btn">Grayscale</button>
+            <button type="button" id="btn-img-blur" class="chip-btn">Blur</button>
+            <button type="button" id="btn-img-contrast" class="chip-btn">Contrast+</button>
+            <button type="button" id="btn-img-threshold" class="chip-btn">Threshold</button>
+          </div>
+          <div class="section-label">Background (PNG / alpha)</div>
+          <div class="form-row" style="align-items:end;">
+            <div class="input-group">
+              <label for="img-bg-color">Fill color</label>
+              <input type="color" id="img-bg-color" value="#ffffff" title="Background color for transparent areas" />
+            </div>
+            <div class="input-group">
+              <label for="img-bg-mode">Apply to</label>
+              <select id="img-bg-mode">
+                <option value="transparent">Transparent only</option>
+                <option value="all">Entire image (flatten)</option>
+              </select>
+            </div>
+          </div>
+          <div class="chip-grid">
+            <button type="button" class="chip-btn" data-bg-preset="#ffffff" title="White">White</button>
+            <button type="button" class="chip-btn" data-bg-preset="#000000" title="Black">Black</button>
+            <button type="button" class="chip-btn" data-bg-preset="#f1f5f9" title="Light gray">Gray</button>
+            <button type="button" id="btn-img-bg-apply" class="chip-btn chip-btn-accent">Apply background</button>
+          </div>
+          <p class="hint-text">Flattens transparent PNG pixels onto a solid color so axes/autotrace see a real background.</p>
+          <div class="form-row">
+            <div class="input-group">
+              <label for="img-scale">Resample</label>
+              <input type="number" id="img-scale" value="1" min="0.25" max="2" step="0.25" />
+            </div>
+            <button type="button" id="btn-img-scale" class="action-btn secondary" style="align-self:end;">Apply</button>
+          </div>
+          <p class="hint-text">Crop: hold <kbd>Shift</kbd> and drag on the canvas</p>
+          <button type="button" id="btn-img-crop-apply" class="action-btn secondary" disabled>Apply crop</button>
+          <div class="section-label">Reset</div>
+          <div class="btn-row">
+            <button type="button" id="btn-img-reset-markers" class="action-btn secondary" title="Reset X1/X2/Y1/Y2 to default corners of the current image">Reset markers only</button>
+            <button type="button" id="btn-img-reset-original" class="action-btn secondary" title="Restore the image as first loaded (undoes prep edits)">Reset image</button>
           </div>
         </div>
-      </div>
+      </details>
 
-      <!-- Series Management -->
-      <div class="control-card">
-        <span class="card-title">
-          <i data-lucide="layers"></i> Data Series
-        </span>
-        <div class="flex flex-col gap-2" id="series-list-container">
-          <!-- Populated dynamically via JS -->
+      <!-- Measure (collapsed) -->
+      <details class="control-card accordion" id="measure-card" data-panel="measure">
+        <summary class="card-title">
+          <span class="card-title-left"><i data-lucide="ruler"></i> Measurements</span>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </summary>
+        <div class="card-body">
+          <div class="input-group">
+            <label for="measure-mode">Tool</label>
+            <select id="measure-mode">
+              <option value="off">Off</option>
+              <option value="distance">Distance (2 clicks)</option>
+              <option value="angle">Angle (3 clicks)</option>
+              <option value="area">Area (polygon, Enter to close)</option>
+            </select>
+          </div>
+          <div id="measure-results" class="measure-readout"></div>
+          <button type="button" id="btn-measure-clear" class="action-btn secondary">Clear measurements</button>
         </div>
-        <div class="flex gap-2">
-          <button id="btn-add-series" class="action-btn secondary" style="height:32px; font-size:12px;">
-            <i data-lucide="plus"></i> Add Series
-          </button>
-          <button id="btn-clear-points" class="action-btn secondary" style="height:32px; font-size:12px; color:var(--color-error);">
-            <i data-lucide="trash"></i> Clear Points
-          </button>
-        </div>
-      </div>
+      </details>
 
-      <!-- Extracted Points Table -->
-      <div class="control-card">
-        <span class="card-title">
-          <i data-lucide="list"></i> Extracted Data Points
-        </span>
-        <div class="table-container">
-          <table class="points-table">
-            <thead>
-              <tr>
-                <th>X</th>
-                <th>Y</th>
-                <th style="width: 40px; text-align: center;">Action</th>
-              </tr>
-            </thead>
-            <tbody id="points-table-body">
-              <tr>
-                <td colspan="3" style="text-align: center; color: var(--text-muted); font-family: var(--font-sans); padding: 20px 0;">No points digitized yet. Click in Digitize mode.</td>
-              </tr>
-            </tbody>
-          </table>
+      <!-- Fit (collapsed) -->
+      <details class="control-card accordion" id="regression-card" data-panel="fit">
+        <summary class="card-title">
+          <span class="card-title-left"><i data-lucide="trending-up"></i> Curve fit</span>
+          <i data-lucide="chevron-down" class="accordion-chevron"></i>
+        </summary>
+        <div class="card-body">
+          <div class="input-group">
+            <label for="fit-type">Model</label>
+            <select id="fit-type">
+              <option value="none">None</option>
+              <option value="linear">Linear</option>
+              <option value="poly2">Quadratic</option>
+              <option value="poly3">Cubic</option>
+              <option value="exponential">Exponential</option>
+              <option value="logarithmic">Logarithmic</option>
+              <option value="power">Power</option>
+            </select>
+          </div>
+          <div class="stats-box" id="fit-stats-box" style="display: none;">
+            <div class="stat-r2" id="val-r2">R² = --</div>
+            <div class="stat-formula" id="val-formula">y = --</div>
+          </div>
         </div>
-        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; display: flex; align-items: center; gap: 4px;">
-          <i data-lucide="info" style="width:12px; height:12px; flex-shrink:0; color:var(--accent-primary);"></i>
-          <span>Double-click a point on the canvas to delete it.</span>
-        </div>
-      </div>
+      </details>
 
-      <!-- Curve Fitting & Calculations -->
-      <div class="control-card">
-        <span class="card-title">
-          <i data-lucide="trending-up"></i> Regression &amp; Curve Fitting
-        </span>
-        <div class="input-group">
-          <label for="fit-type">Model Fitting Type</label>
-          <select id="fit-type">
-            <option value="none">None (Scatter Only)</option>
-            <option value="linear">Linear (y = mx + c)</option>
-            <option value="poly2">Quadratic (y = ax² + bx + c)</option>
-            <option value="poly3">Cubic (y = ax³ + bx² + cx + d)</option>
-            <option value="exponential">Exponential (y = ae^(bx))</option>
-            <option value="logarithmic">Logarithmic (y = a*ln(x) + b)</option>
-            <option value="power">Power (y = ax^b)</option>
-          </select>
-        </div>
-        
-        <div class="stats-box" id="fit-stats-box" style="display: none;">
-          <div class="stat-r2" id="val-r2">R² = --</div>
-          <div class="stat-formula" id="val-formula">y = --</div>
-        </div>
-      </div>
+      <p class="export-hint">Export CSV / JSON / plot image from the header <strong>Export</strong> menu.</p>
 
-      <!-- Export actions live in header Export ▾; keep hidden buttons for JS hooks -->
       <div class="control-card" data-et-export-ui style="display:none;" aria-hidden="true">
         <button id="btn-copy-csv" type="button"></button>
         <button id="btn-download-csv" type="button"></button>
@@ -321,8 +535,7 @@
         <button id="btn-download-plot" type="button"></button>
         <button id="btn-export-table" type="button"></button>
       </div>
-
-    </div>
+    </aside>
   </main>
 
   <footer class="tool-footer">
@@ -390,6 +603,21 @@
     </div>
   </div>
 
+  <script src="js/plot-math.js"></script>
+  <script src="js/image-pipeline.js"></script>
+  <script src="js/projection.js"></script>
+  <script src="js/axis-detect.js"></script>
+  <script src="js/mask.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/detectors/curve.js"></script>
+  <script src="js/detectors/cluster.js"></script>
+  <script src="js/detectors/bar.js"></script>
+  <script src="js/detectors/edge.js"></script>
+  <script src="js/detectors/centroid.js"></script>
+  <script src="js/detectors/skeleton.js"></script>
+  <script src="js/detectors/histogram.js"></script>
+  <script src="js/detectors/registry.js"></script>
+  <script src="js/parity-runtime.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

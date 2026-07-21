@@ -119,11 +119,19 @@ header {
   stroke: currentColor;
 }
 
-/* Title + subtitle */
+/* Title + subtitle
+ * Tool pages do not load the hub's global * { margin:0 } reset, so browser
+ * defaults on h1/p otherwise leave a large gap (looks like a blank line). */
 .hdr-titles {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.25;
 }
 .hdr-titles h1 {
+  margin: 0;
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
@@ -131,15 +139,50 @@ header {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 .hdr-titles p {
+  margin: 0;
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.3;
+}
+/* Title row when a status badge sits beside the h1 (e.g. Synced) */
+.hdr-titles > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.hdr-titles > div h1 {
+  margin: 0;
+}
+.hdr-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: opacity 0.3s ease;
+}
+.hdr-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-success, #10b981);
+  flex-shrink: 0;
 }
 
 /* ── Right group (action buttons) ──────────────────────────── */
