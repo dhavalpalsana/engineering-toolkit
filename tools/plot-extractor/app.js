@@ -18,6 +18,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const ctx = canvas.getContext("2d");
   
   const modeBtnCalibrate = document.getElementById("mode-btn-calibrate");
+  const btnDetectAxes = document.getElementById("btn-detect-axes");
+  const axisDetectStatus = document.getElementById("axis-detect-status");
   
   const inputCalX1 = document.getElementById("cal-x1");
   const inputCalX2 = document.getElementById("cal-x2");
@@ -131,6 +133,100 @@ document.addEventListener("DOMContentLoaded", () => {
       if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
     });
   });
+
+  function setAxisDetectStatus(msg, isError) {
+    if (!axisDetectStatus) return;
+    if (!msg) {
+      axisDetectStatus.style.display = "none";
+      axisDetectStatus.textContent = "";
+      return;
+    }
+    axisDetectStatus.style.display = "block";
+    axisDetectStatus.textContent = msg;
+    axisDetectStatus.style.color = isError ? "var(--color-error)" : "var(--text-muted)";
+  }
+
+  /** Capture current plot pixels for CV helpers. */
+  function capturePlotImageData() {
+    if (!imageLoaded || !plotImg.naturalWidth) return null;
+    const c = document.createElement("canvas");
+    c.width = plotImg.naturalWidth || imgWidth;
+    c.height = plotImg.naturalHeight || imgHeight;
+    const cx = c.getContext("2d");
+    try {
+      cx.drawImage(plotImg, 0, 0);
+      return cx.getImageData(0, 0, c.width, c.height);
+    } catch (err) {
+      console.warn("capturePlotImageData failed", err);
+      return null;
+    }
+  }
+
+  /**
+   * Auto-detect axis frame and place X1/X2/Y1/Y2 markers (geometry only — values stay user-entered).
+   */
+  function runAutoAxisDetect() {
+    if (!imageLoaded) {
+      setAxisDetectStatus("Load a plot image first.", true);
+      return;
+    }
+    if (typeof PlotAxisDetect === "undefined" || !PlotAxisDetect.detectAxes) {
+      setAxisDetectStatus("Axis detector not loaded.", true);
+      return;
+    }
+    const idata = capturePlotImageData();
+    if (!idata) {
+      setAxisDetectStatus("Could not read image pixels (try reloading the image).", true);
+      return;
+    }
+
+    const result = PlotAxisDetect.detectAxes(idata);
+    if (!result.ok || !result.calibrationPoints) {
+      setAxisDetectStatus(result.error || "Detection failed.", true);
+      return;
+    }
+
+    // Soft confirm when confidence is low
+    const confPct = Math.round((result.confidence || 0) * 100);
+    if ((result.confidence || 0) < 0.35) {
+      const proceed = confirm(
+        "Axis detection confidence is low (" + confPct + "%). Apply markers anyway? You can drag them to fix."
+      );
+      if (!proceed) {
+        setAxisDetectStatus("Detection cancelled — adjust image prep or place markers manually.", false);
+        return;
+      }
+    }
+
+    pushHistory();
+    calibrationPoints = {
+      x1: { ...result.calibrationPoints.x1 },
+      x2: { ...result.calibrationPoints.x2 },
+      y1: { ...result.calibrationPoints.y1 },
+      y2: { ...result.calibrationPoints.y2 }
+    };
+
+    // Enter calibrate mode so guides are visible
+    currentMode = "calibrate";
+    if (modeBtnCalibrate) modeBtnCalibrate.classList.add("active");
+    selectedDataPoint = null;
+
+    setAxisDetectStatus(
+      "Axes placed (confidence ~" + confPct + "%). Check markers, then enter X1/X2/Y1/Y2 values.",
+      false
+    );
+    if (helperText) {
+      helperText.textContent =
+        "Auto axes placed — drag markers if needed, then type the tick values in Setup.";
+    }
+    triggerProjectChange();
+    renderAll();
+    updateHelperBanner();
+  }
+
+  if (btnDetectAxes) {
+    btnDetectAxes.addEventListener("click", runAutoAxisDetect);
+  }
 
   
   // ── Drag & Drop, Select Image Handlers ───────────────────────

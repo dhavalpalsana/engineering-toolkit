@@ -160,9 +160,15 @@
           <i data-lucide="chevron-down" class="accordion-chevron"></i>
         </summary>
         <div class="card-body">
-          <button type="button" class="active mode-cal-btn" id="mode-btn-calibrate" title="Drag axis markers on the canvas">
-            <i data-lucide="compass"></i> Calibrate axes
-          </button>
+          <div class="btn-row">
+            <button type="button" class="active mode-cal-btn" id="mode-btn-calibrate" title="Drag axis markers on the canvas" style="flex:1;">
+              <i data-lucide="compass"></i> Calibrate
+            </button>
+            <button type="button" class="action-btn primary" id="btn-detect-axes" title="Detect plot frame and place axis markers" style="flex:1;">
+              <i data-lucide="scan"></i> Detect axes
+            </button>
+          </div>
+          <p id="axis-detect-status" class="hint-text" style="display:none;" role="status"></p>
 
           <div id="calibration-settings" class="stack-sm">
             <div class="input-group">
@@ -553,6 +559,7 @@
   <script src="js/plot-math.js"></script>
   <script src="js/image-pipeline.js"></script>
   <script src="js/projection.js"></script>
+  <script src="js/axis-detect.js"></script>
   <script src="js/mask.js"></script>
   <script src="js/history.js"></script>
   <script src="js/detectors/curve.js"></script>
