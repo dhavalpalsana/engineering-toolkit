@@ -371,8 +371,14 @@
       const map = $("map-options");
       if (polar) polar.style.display = kind === "polar" ? "flex" : "none";
       if (map) map.style.display = kind === "map" ? "flex" : "none";
+      // Workflow rail highlight
+      document.querySelectorAll(".workflow-step").forEach((el) => {
+        const step = el.getAttribute("data-step");
+        let active = step === "1";
+        if (kind === "measure") active = step === "2";
+        el.classList.toggle("is-active", active);
+      });
       const discrete = kind === "discrete" || kind === "histogram";
-      // scale helpers for reciprocal/ln already in select
       api.onChartKindChanged && api.onChartKindChanged(kind, discrete);
     }
 

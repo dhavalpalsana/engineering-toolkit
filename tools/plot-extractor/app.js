@@ -124,8 +124,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const loupeRadius = 45;
   const loupeZoom = 3.5;
   
-  // Initialize lucide icons
-  lucide.createIcons();
+  // Initialize lucide icons (sidebar accordions included)
+  if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+  document.querySelectorAll("details.accordion").forEach((d) => {
+    d.addEventListener("toggle", () => {
+      if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+    });
+  });
+
   
   // ── Drag & Drop, Select Image Handlers ───────────────────────
   if (btnLoadExample) {
@@ -411,23 +417,41 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function syncWorkflowRail() {
+    document.querySelectorAll(".workflow-step").forEach((el) => {
+      const step = el.getAttribute("data-step");
+      let on = false;
+      if (!imageLoaded) on = step === "1";
+      else if (currentMode === "calibrate") on = step === "1";
+      else if (currentMode === "digitize" || currentMode === "pan") on = step === "2";
+      else on = step === "2";
+      // step 3 is always soft-highlighted when we have points
+      if (step === "3") {
+        const hasPts = seriesList.some((s) => s.points && s.points.length);
+        on = hasPts;
+      }
+      el.classList.toggle("is-active", on);
+    });
+  }
+
   function updateHelperBanner() {
+    syncWorkflowRail();
     if (!imageLoaded) {
-      helperText.textContent = "Start by dragging or pasting a plot image to begin.";
+      helperText.textContent = "Drop or paste a plot image, then calibrate axes (step 1).";
       return;
     }
     if (currentMode === "calibrate") {
       helperText.textContent = isTimeScale()
-        ? "Drag X1/X2 to known time ticks and enter times (numbers, 1:30, 2min, or ISO). Set Y1/Y2 on the value axis."
-        : "Drag calibration points (X1, X2, Y1, Y2) to known axis lines and input their values in the sidebar.";
+        ? "Drag X1/X2 to time ticks · enter times (0, 2min, 1:30, or ISO) · set Y1/Y2 on the value axis."
+        : "Drag the red X1/X2/Y1/Y2 markers to tick marks, then enter their values in Setup.";
     } else if (currentMode === "digitize") {
       const activeSeries = seriesList.find(s => s.id === activeSeriesId);
       const name = activeSeries ? activeSeries.name : "active series";
       helperText.textContent = isDiscreteMode()
-        ? `Bar mode: click each bar top for "${name}". Labels default to Bar N — edit them in the table.`
-        : `Digitizing "${name}": Click canvas to add points. Drag points to adjust. Double-click to delete.`;
+        ? `Click bar tops for “${name}”. Edit labels in the table. Pencil icon toggles digitize mode.`
+        : `Click the plot to add points to “${name}”. Drag to adjust · double-click to delete.`;
     } else if (currentMode === "pan") {
-      helperText.textContent = "Pan Mode: Click and drag anywhere on the canvas to pan. Click Calibrate or a series pencil to edit.";
+      helperText.textContent = "Pan: drag the canvas. Click a series pencil to digitize, or Calibrate axes to adjust markers.";
     }
   }
   
