@@ -3114,10 +3114,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (saveStatusBadge) {
       if (saveBadgeTimeout) clearTimeout(saveBadgeTimeout);
       saveStatusBadge.style.opacity = "1";
-      saveStatusBadge.innerHTML = '<span style="width:5px; height:5px; border-radius:50%; background:#f59e0b; display:inline-block; animation: pulse 1s infinite;"></span> Saving...';
+      saveStatusBadge.innerHTML = '<span class="hdr-status-dot" style="background:#f59e0b; animation: pulse 1s infinite;"></span> Saving...';
       
       saveBadgeTimeout = setTimeout(() => {
-        saveStatusBadge.innerHTML = '<span style="width:5px; height:5px; border-radius:50%; background:#10b981; display:inline-block;"></span> Synced';
+        saveStatusBadge.innerHTML = '<span class="hdr-status-dot"></span> Synced';
         saveBadgeTimeout = setTimeout(() => {
           saveStatusBadge.style.opacity = "0";
         }, 1500);
