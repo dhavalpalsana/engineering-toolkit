@@ -17,7 +17,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const canvas = document.getElementById("interaction-canvas");
   const ctx = canvas.getContext("2d");
   
-  const modeBtnCalibrate = document.getElementById("mode-btn-calibrate");
   const btnDetectAxes = document.getElementById("btn-detect-axes");
   const axisDetectStatus = document.getElementById("axis-detect-status");
   
@@ -177,18 +176,14 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedDataPoint = null;
     if (panel === "setup") {
       currentMode = "calibrate";
-      if (modeBtnCalibrate) modeBtnCalibrate.classList.add("active");
     } else if (panel === "series") {
       currentMode = "digitize";
-      if (modeBtnCalibrate) modeBtnCalibrate.classList.remove("active");
     } else if (panel === "measure") {
       currentMode = "pan"; // measure handled by parity pointer hooks
-      if (modeBtnCalibrate) modeBtnCalibrate.classList.remove("active");
       const mm = document.getElementById("measure-mode");
       if (mm && mm.value === "off") mm.value = "distance";
     } else if (panel === "autotrace" || panel === "image" || panel === "fit") {
       currentMode = "pan";
-      if (modeBtnCalibrate) modeBtnCalibrate.classList.remove("active");
     }
     updateHelperBanner();
     renderAll();
@@ -634,11 +629,6 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll();
   }
   
-  // Calibrate button removed — Setup panel drives calibrate mode.
-  if (modeBtnCalibrate) {
-    modeBtnCalibrate.addEventListener("click", () => openPanel("setup"));
-  }
-
   // Measure / mask tool changes update mode badge
   ["measure-mode", "mask-tool"].forEach((id) => {
     const el = document.getElementById(id);
@@ -1791,7 +1781,6 @@ document.addEventListener("DOMContentLoaded", () => {
         activeSeriesId = id;
         openPanel("series");
         currentMode = "digitize";
-        if (modeBtnCalibrate) modeBtnCalibrate.classList.remove("active");
         const activeSeries = seriesList.find(s => s.id === activeSeriesId);
         if (activeSeries) {
           selectFitType.value = activeSeries.fitType || "none";

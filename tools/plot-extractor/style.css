@@ -589,39 +589,6 @@ kbd {
   box-shadow: 0 0 0 3px var(--accent-primary-glow);
 }
 
-/* Calibrate mode button */
-.mode-cal-btn,
-#mode-btn-calibrate {
-  height: 38px;
-  width: 100%;
-  font-size: 13px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  box-sizing: border-box;
-}
-
-.mode-cal-btn:hover,
-#mode-btn-calibrate:hover {
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-.mode-cal-btn.active,
-#mode-btn-calibrate.active {
-  background: var(--accent-primary-glow);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-}
-
 .callout-panel {
   display: flex;
   flex-direction: column;
