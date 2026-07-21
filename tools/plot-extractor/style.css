@@ -5,9 +5,15 @@
 body, input, textarea, select, button {
   font-family: var(--font-sans);
 }
+/* Tool page layout (no Tailwind on this page — don't rely on utility classes on <body>) */
 body {
   margin: 0;
   padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 /* ── Layout ───────────────────────────────────────────────── */

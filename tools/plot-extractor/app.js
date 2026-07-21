@@ -35,8 +35,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const selectTimeExport = document.getElementById("time-export");
   const calHelpText = document.getElementById("cal-help-text");
   const regressionCard = document.getElementById("regression-card");
-  const thX = document.getElementById("th-x");
-  const thY = document.getElementById("th-y");
   const pointsTableHead = document.getElementById("points-table-head");
   const pointsTableHint = document.getElementById("points-table-hint");
   
@@ -91,10 +89,12 @@ document.addEventListener("DOMContentLoaded", () => {
   let legendVisible = true;
   let historyStack = [];
   let historyPointer = -1;
-  let activePanel = "setup"; // setup | series | autotrace | image | measure | fit
+  let activePanel = "setup"; // setup | series | autotrace | image | measure | fit | idle
   /** Until this timestamp, mode badge shows “Points ready” flash. */
   let pointsReadyFlashUntil = 0;
   let pointsReadyFlashTimer = null;
+  /** Skip toggle side-effects while programmatically opening/closing panels. */
+  let suppressPanelToggle = false;
   
   // Calibration Handles (in image pixel space)
   let calibrationPoints = {
@@ -143,11 +143,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const panels = Array.from(document.querySelectorAll("aside.sidebar-panel details.accordion"));
     panels.forEach((panel) => {
       panel.addEventListener("toggle", () => {
+        if (suppressPanelToggle) return;
         if (panel.open) {
-          // Close siblings without cascading toggle logic storms
+          // Close siblings silently (no re-entrant applyPanelMode)
+          suppressPanelToggle = true;
           panels.forEach((other) => {
             if (other !== panel && other.open) other.open = false;
           });
+          suppressPanelToggle = false;
           activePanel = panel.getAttribute("data-panel") || "setup";
           applyPanelMode(activePanel);
         } else {
@@ -168,9 +171,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function openPanel(name) {
     const panels = document.querySelectorAll("aside.sidebar-panel details.accordion");
+    suppressPanelToggle = true;
     panels.forEach((p) => {
       p.open = p.getAttribute("data-panel") === name;
     });
+    suppressPanelToggle = false;
     activePanel = name;
     applyPanelMode(name);
     updateModeBadge();
@@ -749,7 +754,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (regressionCard) {
-      regressionCard.style.display = discrete ? "none" : "";
+      // Prefer hidden so <details> accordion layout is not broken by display:none
+      regressionCard.hidden = !!discrete;
       if (discrete && selectFitType) {
         selectFitType.value = "none";
         const active = seriesList.find((s) => s.id === activeSeriesId);
@@ -2319,14 +2325,25 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Undo / Redo History Stack ──────────────────────────────────
   const MAX_HISTORY = 60;
 
+  /** Full undo snapshot: series + calibration markers + active series. */
+  function snapshotAppState() {
+    return {
+      seriesList: JSON.parse(JSON.stringify(seriesList)),
+      calibrationPoints: JSON.parse(JSON.stringify(calibrationPoints)),
+      activeSeriesId,
+      // Image data is large — only store reference; prep undo relies on originalImageBackup + redo chain for series
+    };
+  }
+
+  // Back-compat name used at image load
   function snapshotSeriesList() {
-    return JSON.parse(JSON.stringify(seriesList));
+    return snapshotAppState();
   }
 
   function pushHistory() {
     // Discard any forward history when a new action occurs
     historyStack = historyStack.slice(0, historyPointer + 1);
-    historyStack.push(snapshotSeriesList());
+    historyStack.push(snapshotAppState());
     if (historyStack.length > MAX_HISTORY) historyStack.shift();
     historyPointer = historyStack.length - 1;
     updateUndoRedoButtons();
@@ -2338,7 +2355,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function applyHistory(snapshot) {
-    seriesList = JSON.parse(JSON.stringify(snapshot));
+    if (!snapshot) return;
+    // Legacy snapshots were bare series arrays
+    if (Array.isArray(snapshot)) {
+      seriesList = JSON.parse(JSON.stringify(snapshot));
+    } else {
+      if (snapshot.seriesList) {
+        seriesList = JSON.parse(JSON.stringify(snapshot.seriesList));
+      }
+      if (snapshot.calibrationPoints) {
+        calibrationPoints = JSON.parse(JSON.stringify(snapshot.calibrationPoints));
+      }
+      if (snapshot.activeSeriesId) activeSeriesId = snapshot.activeSeriesId;
+    }
     // Ensure activeSeriesId still exists; if not, fall back to first series
     if (!seriesList.find(s => s.id === activeSeriesId)) {
       activeSeriesId = seriesList[0]?.id;
@@ -2347,6 +2376,7 @@ document.addEventListener("DOMContentLoaded", () => {
     triggerProjectChange();
     renderAll();
     updateSeriesUI();
+    populatePointsTable();
   }
 
   function undo() {
