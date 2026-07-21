@@ -83,11 +83,11 @@
       </div>
       <div class="verdict-metrics">
         <div class="metric">
-          <span class="metric-label">Buy net worth</span>
+          <span class="metric-label" id="metric-buy-label">Buy net worth</span>
           <span class="metric-value" id="metric-buy-nw">—</span>
         </div>
         <div class="metric">
-          <span class="metric-label">Rent net worth</span>
+          <span class="metric-label" id="metric-rent-label">Rent net worth</span>
           <span class="metric-value" id="metric-rent-nw">—</span>
         </div>
         <div class="metric">
@@ -99,10 +99,19 @@
           <span class="metric-value" id="metric-horizon">—</span>
         </div>
       </div>
+      <ul class="verdict-story" id="verdict-story" aria-label="Scenario summary"></ul>
+      <p class="verdict-display-note" id="verdict-display-note" hidden></p>
     </section>
 
-    <!-- Horizon + presets -->
+    <!-- Mode + horizon + presets -->
     <section class="control-strip card">
+      <div class="mode-block" role="group" aria-label="Scenario mode">
+        <span class="mode-label">Decision</span>
+        <div class="seg-control" id="mode-control">
+          <button type="button" class="seg-btn active" data-mode="buy" id="mode-buy">Should I buy?</button>
+          <button type="button" class="seg-btn" data-mode="own" id="mode-own">I already own</button>
+        </div>
+      </div>
       <div class="horizon-block">
         <label for="horizonYears">Time horizon <strong id="horizon-label">10 years</strong></label>
         <input type="range" id="horizonYears" min="1" max="40" step="1" value="10" />
@@ -113,7 +122,8 @@
     <div class="rvb-grid">
       <!-- Inputs -->
       <div class="inputs-col">
-        <section class="card input-card">
+        <!-- Buy mode: purchase card -->
+        <section class="card input-card" id="card-buy" data-mode-panel="buy">
           <header class="card-head buy-head">
             <i data-lucide="key"></i>
             <div>
@@ -123,8 +133,33 @@
           </header>
           <div class="form-grid">
             <label class="field"><span>Home price ($)</span><input type="number" id="homePrice" step="1000" min="0" inputmode="decimal" /></label>
-            <label class="field"><span>Down payment (%)</span><input type="number" id="downPaymentPct" step="0.1" min="0" max="100" inputmode="decimal" /></label>
-            <label class="field"><span>Closing costs (%)</span><input type="number" id="closingCostPct" step="0.1" min="0" inputmode="decimal" title="Percent of home price" /></label>
+
+            <div class="field dual-field" data-dual="downPayment">
+              <div class="dual-head">
+                <span>Down payment</span>
+                <div class="seg-control mini" role="group" aria-label="Down payment unit">
+                  <button type="button" class="seg-btn active" data-dual-mode="pct">%</button>
+                  <button type="button" class="seg-btn" data-dual-mode="amount">$</button>
+                </div>
+              </div>
+              <input type="number" id="downPaymentPct" step="0.1" min="0" max="100" inputmode="decimal" data-dual-input="pct" />
+              <input type="number" id="downPaymentAmount" step="1000" min="0" inputmode="decimal" data-dual-input="amount" hidden />
+              <p class="dual-hint" id="downPayment-hint"></p>
+            </div>
+
+            <div class="field dual-field" data-dual="closingCost">
+              <div class="dual-head">
+                <span>Closing costs</span>
+                <div class="seg-control mini" role="group" aria-label="Closing costs unit">
+                  <button type="button" class="seg-btn active" data-dual-mode="pct">%</button>
+                  <button type="button" class="seg-btn" data-dual-mode="amount">$</button>
+                </div>
+              </div>
+              <input type="number" id="closingCostPct" step="0.1" min="0" inputmode="decimal" data-dual-input="pct" title="Percent of home price" />
+              <input type="number" id="closingCostAmount" step="100" min="0" inputmode="decimal" data-dual-input="amount" hidden />
+              <p class="dual-hint" id="closingCost-hint"></p>
+            </div>
+
             <label class="field"><span>Mortgage rate (%)</span><input type="number" id="annualRatePct" step="0.05" min="0" inputmode="decimal" title="Annual percentage rate (APR)" /></label>
             <label class="field"><span>Loan term (yr)</span><input type="number" id="loanTermYears" step="1" min="1" max="40" inputmode="numeric" /></label>
             <label class="field"><span>Property tax (%/yr)</span><input type="number" id="propertyTaxAnnualPct" step="0.05" min="0" inputmode="decimal" title="Percent of home value per year" /></label>
@@ -133,17 +168,65 @@
             <label class="field"><span>Maintenance (%/yr)</span><input type="number" id="maintenanceAnnualPct" step="0.1" min="0" inputmode="decimal" title="Percent of home value per year" /></label>
             <label class="field"><span>PMI rate (%/yr)</span><input type="number" id="pmiAnnualPct" step="0.05" min="0" inputmode="decimal" title="Percent of original loan amount per year while LTV &gt; 80%" /></label>
             <label class="field"><span>Appreciation (%/yr)</span><input type="number" id="appreciationPct" step="0.1" inputmode="decimal" /></label>
-            <label class="field"><span>Selling costs (%)</span><input type="number" id="sellingCostPct" step="0.1" min="0" inputmode="decimal" /></label>
+
+            <div class="field dual-field" data-dual="sellingCost">
+              <div class="dual-head">
+                <span>Selling costs</span>
+                <div class="seg-control mini" role="group" aria-label="Selling costs unit">
+                  <button type="button" class="seg-btn active" data-dual-mode="pct">%</button>
+                  <button type="button" class="seg-btn" data-dual-mode="amount">$</button>
+                </div>
+              </div>
+              <input type="number" id="sellingCostPct" step="0.1" min="0" inputmode="decimal" data-dual-input="pct" />
+              <input type="number" id="sellingCostAmount" step="100" min="0" inputmode="decimal" data-dual-input="amount" hidden />
+              <p class="dual-hint" id="sellingCost-hint"></p>
+            </div>
           </div>
-          <p class="hint">PMI is charged only while LTV &gt; 80% and down payment &lt; 20% (typical US convention).</p>
+          <p class="hint">PMI is charged only while LTV &gt; 80% and down payment &lt; 20% (typical US convention). Toggle % / $ — last-touched unit wins; the other is derived.</p>
+        </section>
+
+        <!-- Own mode: keep vs sell card -->
+        <section class="card input-card" id="card-own" data-mode-panel="own" hidden>
+          <header class="card-head buy-head">
+            <i data-lucide="house"></i>
+            <div>
+              <h3>You already own</h3>
+              <p>Current position · keep vs sell &amp; rent</p>
+            </div>
+          </header>
+          <div class="own-snapshot" id="own-snapshot"></div>
+          <div class="form-grid">
+            <label class="field"><span>Current home value ($)</span><input type="number" id="ownHomePrice" step="1000" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Original purchase price ($)</span><input type="number" id="purchasePrice" step="1000" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Years owned</span><input type="number" id="yearsOwned" step="0.5" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Current loan balance ($)</span><input type="number" id="currentLoanBalance" step="1000" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Mortgage rate (%)</span><input type="number" id="ownAnnualRatePct" step="0.05" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Remaining term (yr)</span><input type="number" id="remainingTermYears" step="1" min="1" max="40" inputmode="numeric" /></label>
+            <label class="field"><span>Property tax (%/yr)</span><input type="number" id="ownPropertyTaxAnnualPct" step="0.05" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Insurance ($/yr)</span><input type="number" id="ownHomeInsuranceAnnual" step="50" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>HOA ($/mo)</span><input type="number" id="ownHoaMonthly" step="10" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Maintenance (%/yr)</span><input type="number" id="ownMaintenanceAnnualPct" step="0.1" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>PMI rate (%/yr)</span><input type="number" id="ownPmiAnnualPct" step="0.05" min="0" inputmode="decimal" title="0 if PMI already cancelled" /></label>
+            <label class="field"><span>Appreciation (%/yr)</span><input type="number" id="ownAppreciationPct" step="0.1" inputmode="decimal" /></label>
+            <label class="field"><span>Selling costs (%)</span><input type="number" id="ownSellingCostPct" step="0.1" min="0" inputmode="decimal" /></label>
+          </div>
+          <details class="advanced-block" id="own-tax-advanced">
+            <summary>Advanced · capital gains on sale today</summary>
+            <div class="form-grid advanced-grid">
+              <label class="field"><span>Cap. gains tax (%)</span><input type="number" id="capitalGainsTaxPct" step="1" min="0" max="40" inputmode="decimal" title="Simple tax on gain after exclusion; 0 to ignore" /></label>
+              <label class="field"><span>Residence exclusion ($)</span><input type="number" id="primaryResidenceExclusion" step="1000" min="0" inputmode="decimal" title="IRC §121-style exclusion before gains tax" /></label>
+            </div>
+            <p class="hint">Educational only — not a full §121 calculator. Set tax to 0 to ignore gains tax.</p>
+          </details>
+          <p class="hint">Compares <strong>keeping</strong> the house for the horizon (then selling) vs <strong>selling today</strong>, investing net proceeds, and renting. Same liquid assets on both paths.</p>
         </section>
 
         <section class="card input-card">
           <header class="card-head rent-head">
             <i data-lucide="building-2"></i>
             <div>
-              <h3>Rent</h3>
-              <p>Lease cost path over the horizon</p>
+              <h3 id="rent-card-title">Rent</h3>
+              <p id="rent-card-sub">Lease cost path over the horizon</p>
             </div>
           </header>
           <div class="form-grid">
@@ -163,14 +246,61 @@
             </div>
           </header>
           <div class="form-grid">
-            <label class="field"><span>Invest return (%/yr)</span><input type="number" id="investReturnPct" step="0.1" inputmode="decimal" title="Expected annual return on invested capital" /></label>
+            <label class="field"><span>Invest return (%/yr)</span><input type="number" id="investReturnPct" step="0.1" inputmode="decimal" title="Default return for surplus cash &amp; non-bucket capital" /></label>
             <label class="field"><span>Marginal tax (%)</span><input type="number" id="marginalTaxPct" step="1" min="0" max="60" inputmode="decimal" /></label>
             <label class="field checkbox-field">
               <span>Tax shield on interest + property tax</span>
               <input type="checkbox" id="useTaxShield" checked />
             </label>
+            <label class="field checkbox-field">
+              <span>Show results in today’s dollars</span>
+              <input type="checkbox" id="showRealDollars" />
+            </label>
+            <label class="field" id="inflation-field">
+              <span>Inflation (%/yr)</span>
+              <input type="number" id="inflationPct" step="0.1" min="0" inputmode="decimal" title="Used to deflate future wealth into today’s dollars" />
+            </label>
           </div>
+          <p class="hint" id="real-dollars-hint">Off: nominal future dollars. On: wealth &amp; cash charts deflated at your inflation rate (winner unchanged).</p>
           <div class="loan-readout" id="loan-readout"></div>
+        </section>
+
+        <!-- Asset buckets (collapsed by default) -->
+        <section class="card input-card assets-card">
+          <details class="advanced-block" id="assets-advanced">
+            <summary class="assets-summary">
+              <span class="summary-title">
+                <i data-lucide="pie-chart"></i>
+                Liquid assets <span class="summary-badge" id="assets-badge">optional</span>
+              </span>
+              <span class="summary-sub">Cash / stocks / bonds for down payment &amp; opportunity cost</span>
+            </summary>
+            <label class="field checkbox-field">
+              <span>Model liquid asset buckets</span>
+              <input type="checkbox" id="useAssetBuckets" />
+            </label>
+            <div id="buckets-panel" class="buckets-panel" hidden>
+              <p class="hint buckets-intro" id="buckets-intro">
+                In <strong>buy</strong> mode, checked sources fund down + closing in draw order; leftovers stay invested at each source’s return. The renter keeps all balances invested.
+              </p>
+              <div class="buckets-table-wrap">
+                <table class="buckets-table" id="buckets-table">
+                  <thead>
+                    <tr>
+                      <th>Source</th>
+                      <th>Balance ($)</th>
+                      <th>Return %/yr</th>
+                      <th title="Use toward down payment + closing">Use?</th>
+                      <th>Order</th>
+                    </tr>
+                  </thead>
+                  <tbody id="buckets-tbody"></tbody>
+                </table>
+              </div>
+              <div class="funding-readout" id="funding-readout"></div>
+            </div>
+            <p class="hint" id="buckets-off-hint">Off: classic model — down + closing is the shared starting wealth invested at your single invest-return rate. Turn on for a realistic example funding mix.</p>
+          </details>
         </section>
       </div>
 
@@ -180,16 +310,17 @@
           <header class="card-head">
             <i data-lucide="line-chart"></i>
             <div>
-              <h3>Net worth over time</h3>
-              <p>Buy = equity after sale costs + liquid portfolio · Rent = invested capital + deposit</p>
+              <h3 id="chart-wealth-title">Net worth over time</h3>
+              <p id="chart-wealth-sub">Buy = equity after sale costs + liquid portfolio · Rent = invested capital + deposit</p>
             </div>
           </header>
           <div class="chart-wrap">
             <canvas id="chart-wealth" width="640" height="280" aria-label="Net worth chart"></canvas>
           </div>
           <div class="legend">
-            <span class="leg buy"><i></i> Buy (if sold)</span>
-            <span class="leg rent"><i></i> Rent (portfolio)</span>
+            <span class="leg buy" id="leg-buy"><i></i> Buy (if sold)</span>
+            <span class="leg rent" id="leg-rent"><i></i> Rent (portfolio)</span>
+            <span class="leg loan" id="leg-loan-wealth" hidden><i></i> <span class="leg-text">Loan paid</span></span>
           </div>
         </section>
 
@@ -198,15 +329,16 @@
             <i data-lucide="wallet"></i>
             <div>
               <h3>Annual housing cash outlay</h3>
-              <p>True net cash leaving your pocket each year (buy includes tax shield if enabled)</p>
+              <p id="chart-cash-sub">True net cash leaving your pocket each year (buy includes tax shield if enabled)</p>
             </div>
           </header>
           <div class="chart-wrap">
             <canvas id="chart-cash" width="640" height="220" aria-label="Cash cost chart"></canvas>
           </div>
           <div class="legend">
-            <span class="leg buy"><i></i> Buy cash</span>
-            <span class="leg rent"><i></i> Rent cash</span>
+            <span class="leg buy" id="leg-cash-buy"><i></i> Buy cash</span>
+            <span class="leg rent" id="leg-cash-rent"><i></i> Rent cash</span>
+            <span class="leg loan" id="leg-loan-cash" hidden><i></i> <span class="leg-text">Loan paid</span></span>
           </div>
         </section>
 
@@ -214,7 +346,7 @@
           <header class="card-head">
             <i data-lucide="pie-chart"></i>
             <div>
-              <h3>What ownership really costs</h3>
+              <h3 id="breakdown-title">What ownership really costs</h3>
               <p>Cumulative through the horizon — not just the mortgage payment</p>
             </div>
           </header>
@@ -226,7 +358,7 @@
             <i data-lucide="gauge"></i>
             <div>
               <h3>Sensitivity</h3>
-              <p>How the buy advantage moves when assumptions flex</p>
+              <p>How the advantage moves when assumptions flex</p>
             </div>
           </header>
           <div class="table-scroll">
@@ -251,7 +383,7 @@
               <i data-lucide="table-2"></i>
               <div>
                 <h3>Year-by-year true ledger</h3>
-                <p>Wealth, cash, equity, and rent path</p>
+                <p id="ledger-sub">Wealth, cash, equity, and rent path</p>
               </div>
             </div>
             <button type="button" class="btn-secondary" id="btn-export-csv">
@@ -265,11 +397,11 @@
                   <th>Year</th>
                   <th>Home value</th>
                   <th>Loan bal.</th>
-                  <th>Buy NW (sold)</th>
-                  <th>Rent NW</th>
+                  <th id="th-owner-nw">Buy NW (sold)</th>
+                  <th id="th-renter-nw">Rent NW</th>
                   <th>Advantage</th>
-                  <th>Buy cash/yr</th>
-                  <th>Rent cash/yr</th>
+                  <th id="th-owner-cash">Buy cash/yr</th>
+                  <th id="th-renter-cash">Rent cash/yr</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -284,12 +416,16 @@
               <h3>How this is a <em>true</em> rent vs buy</h3>
             </div>
           </header>
-          <ul class="method-list">
+          <ul class="method-list" id="method-list">
             <li><strong>Same starting wealth.</strong> Down payment + closing costs buy the house for the owner, or seed the renter’s investment portfolio.</li>
             <li><strong>True ownership cost.</strong> P&amp;I, property tax (on rising value), insurance, HOA, maintenance, and PMI until LTV ≤ 80% — not just the mortgage payment.</li>
             <li><strong>Opportunity cost every month.</strong> Whoever spends less on housing invests the difference at your assumed market return.</li>
             <li><strong>Terminal reality.</strong> Owner sells at the horizon with selling costs; equity is not free cash until then.</li>
             <li><strong>Optional tax shield.</strong> Rough deduction on interest + property tax at your marginal rate (not full US tax software).</li>
+            <li><strong>% or $ inputs.</strong> Down payment, closing, and selling costs can be entered either way; the other unit is derived.</li>
+            <li><strong>Liquid asset buckets.</strong> Optionally fund the purchase from cash/stocks/bonds with different returns and keep the rest invested.</li>
+            <li><strong>Already own mode.</strong> Compare keeping the house vs selling today, paying gains tax (if set), and renting with proceeds invested.</li>
+            <li><strong>Today’s dollars.</strong> Optional inflation deflator so long-horizon wealth is easier to interpret (winner unchanged).</li>
           </ul>
           <p class="disclaimer">Educational model for the US market. Not financial, tax, or lending advice. Markets, taxes, and personal situations vary.</p>
         </section>

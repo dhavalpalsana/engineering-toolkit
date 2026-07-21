@@ -184,12 +184,12 @@ const TOOLS_DATA = [
   {
     id: "rent-vs-buy",
     name: "True Rent vs Buy Calculator",
-    description: "US homes: apples-to-apples wealth comparison with opportunity cost, PMI, maintenance, tax shield, selling costs, break-even year, sensitivity, and a true year-by-year ledger — not a generic black box.",
+    description: "US homes: true rent vs buy or keep vs sell — dual %/$ inputs, liquid asset buckets, opportunity cost, PMI, tax shield, break-even, sensitivity, and year-by-year ledger.",
     tags: ["finance", "housing", "mortgage", "rent", "buy", "us", "personal-finance", "calculator"],
     icon: "home",
     path: "./tools/rent-vs-buy/index.html",
     status: "beta",
-    physicsVersion: 1,
+    physicsVersion: 2,
     releaseDate: "2026-07-20T12:00:00Z"
   }
 
