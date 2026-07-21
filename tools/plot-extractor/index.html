@@ -272,10 +272,12 @@
               </div>
             </div>
 
-            <button type="button" id="btn-toggle-advanced" class="linkish-btn">
-              <i data-lucide="sliders"></i> Fine-tune markers
+            <button type="button" id="btn-toggle-advanced" class="action-btn secondary fine-tune-btn" aria-expanded="false" aria-controls="advanced-tuning-panel" title="Nudge X1/X2/Y1/Y2 markers by 1 pixel">
+              <i data-lucide="sliders"></i>
+              <span>Fine-tune markers</span>
+              <i data-lucide="chevron-down" class="fine-tune-chevron"></i>
             </button>
-            <div id="advanced-tuning-panel" class="nudge-panel" style="display: none;">
+            <div id="advanced-tuning-panel" class="nudge-panel" style="display: none;" hidden>
               <div class="form-row" style="align-items: end;">
                 <div class="input-group">
                   <label for="nudge-target">Marker</label>

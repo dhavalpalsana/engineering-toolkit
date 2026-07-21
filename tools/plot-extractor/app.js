@@ -2649,11 +2649,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const advancedTuningPanel = document.getElementById("advanced-tuning-panel");
   const nudgeTarget = document.getElementById("nudge-target");
   
-  btnToggleAdvanced.addEventListener("click", () => {
-    const isHidden = advancedTuningPanel.style.display === "none";
-    advancedTuningPanel.style.display = isHidden ? "block" : "none";
-    btnToggleAdvanced.style.color = isHidden ? "var(--text-primary)" : "var(--accent-primary)";
-  });
+  if (btnToggleAdvanced && advancedTuningPanel) {
+    btnToggleAdvanced.addEventListener("click", () => {
+      const opening = advancedTuningPanel.hasAttribute("hidden")
+        || advancedTuningPanel.style.display === "none"
+        || getComputedStyle(advancedTuningPanel).display === "none";
+      if (opening) {
+        advancedTuningPanel.hidden = false;
+        advancedTuningPanel.style.display = "block";
+        btnToggleAdvanced.classList.add("is-open");
+        btnToggleAdvanced.setAttribute("aria-expanded", "true");
+      } else {
+        advancedTuningPanel.hidden = true;
+        advancedTuningPanel.style.display = "none";
+        btnToggleAdvanced.classList.remove("is-open");
+        btnToggleAdvanced.setAttribute("aria-expanded", "false");
+      }
+      if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+    });
+  }
   
   function nudgePoint(dx, dy) {
     if (!imageLoaded) return;
