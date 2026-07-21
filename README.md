@@ -29,7 +29,7 @@ The toolkit runs entirely client-side as a static site with optional user authen
 | [**Engineering Unit Converter**](tools/unit-converter/) | General Utility | Bidirectional conversions across 23 categories (Mechanics, Thermo, Fluids, Electrical) with instant fuzzy search. |
 | [**Busbar Capacity Calculator**](tools/busbar-sizing/) | Power Systems | DC skin effect, EM forces, deflection, short-circuit ratings, and voltage drops with live SVG busbar previews. |
 | [**CAN Bus Harness Designer**](tools/can-bus-designer/) | Aerospace / Auto | Interactive drag-and-drop topology canvas, ISO 11898 compliance checker, propagation delays, and signal reflection model. |
-| [**Plot Data Extractor**](tools/plot-extractor/) | Data / Analytics | Digitizer for plot images with magnifying axis calibration, linear/log grids, curve regressions, and CSV export. |
+| [**Plot Data Extractor**](tools/plot-extractor/) | Data / Analytics | Full digitizer: multi chart kinds, time/ln/1/x scales, image prep, mask + autotrace, measurements, CSV. |
 | [**Barcode & QR Code Scanner**](tools/code-scanner/) | General Utility | Client-side webcam/image decoding scanner, history logger, CSV exports, sharing links, and Project Manager sync. |
 | [**Interactive Time Planner**](tools/timezone-converter/) | General Utility | Multi-timezone alignment layout with visual daylight/night/work segments, horizontal continuous gradients, and JDN/Julian conversions. |
 | [**MCC Feeder & Starter Designer**](tools/mcc-feeder-designer/) | Electrical / Control | Design Motor Control Center Single Line Diagrams. Drag & drop DOL starters, VFDs, soft starters, and cables with real-time sizing calculations. |

@@ -65,7 +65,7 @@
               <span style="width: 5px; height: 5px; border-radius: 50%; background: #10b981;"></span> Synced
             </span>
           </div>
-          <p>Digitize charts, calibrate scales, extract points &amp; fit curves</p>
+          <p>Digitize curves, time series &amp; bar charts · calibrate · export CSV</p>
         </div>
       </div>
       
@@ -173,13 +173,97 @@
         <!-- Calibration Parameters -->
         <div id="calibration-settings" class="flex flex-col gap-3">
           <div class="form-row">
+            <div class="input-group" style="flex: 1;">
+              <label for="chart-kind">Chart kind</label>
+              <select id="chart-kind">
+                <option value="continuous">XY continuous / time series</option>
+                <option value="discrete">Bar / column tops</option>
+                <option value="histogram">Histogram</option>
+                <option value="polar">Polar</option>
+                <option value="ternary">Ternary</option>
+                <option value="pie">Pie / doughnut</option>
+                <option value="map">Map (geo)</option>
+                <option value="measure">Measurements only</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
             <div class="input-group">
-              <label for="cal-x1">X1 Reference Value</label>
-              <input type="number" id="cal-x1" value="0" step="any" />
+              <label for="scale-x">X-Axis Scale</label>
+              <select id="scale-x">
+                <option value="linear">Linear</option>
+                <option value="log">Log₁₀</option>
+                <option value="ln">Ln (natural)</option>
+                <option value="reciprocal">Reciprocal (1/x)</option>
+                <option value="time">Time series</option>
+                <option value="lon">Longitude</option>
+              </select>
             </div>
             <div class="input-group">
-              <label for="cal-x2">X2 Reference Value</label>
-              <input type="number" id="cal-x2" value="10" step="any" />
+              <label for="scale-y">Y-Axis Scale</label>
+              <select id="scale-y">
+                <option value="linear">Linear</option>
+                <option value="log">Log₁₀</option>
+                <option value="ln">Ln (natural)</option>
+                <option value="reciprocal">Reciprocal (1/y)</option>
+                <option value="lat">Latitude</option>
+              </select>
+            </div>
+          </div>
+          <div id="map-options" class="time-axis-options" style="display:none;">
+            <div class="input-group">
+              <label for="map-projection">Map projection</label>
+              <select id="map-projection">
+                <option value="linear">Linear (georeferenced XY)</option>
+                <option value="mercator">Web Mercator</option>
+              </select>
+            </div>
+          </div>
+          <div id="polar-options" class="time-axis-options" style="display:none;">
+            <div class="form-row">
+              <div class="input-group">
+                <label for="polar-rmax">r max (data)</label>
+                <input type="number" id="polar-rmax" value="1" step="any" />
+              </div>
+              <div class="input-group">
+                <label for="polar-theta0">θ₀ (deg)</label>
+                <input type="number" id="polar-theta0" value="0" step="any" />
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);">Place X1 at origin and X2 on the r_max tick along 0°.</div>
+          </div>
+          <div id="time-axis-options" class="time-axis-options" style="display: none;">
+            <div class="form-row">
+              <div class="input-group">
+                <label for="time-unit">Time unit (relative)</label>
+                <select id="time-unit">
+                  <option value="s">Seconds (s)</option>
+                  <option value="min">Minutes</option>
+                  <option value="h">Hours</option>
+                  <option value="ms">Milliseconds</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="time-export">CSV time column</label>
+                <select id="time-export">
+                  <option value="elapsed">Elapsed (unit above)</option>
+                  <option value="seconds">Seconds from origin</option>
+                  <option value="iso">ISO if absolute cal</option>
+                </select>
+              </div>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+              Enter X1/X2 as numbers (<code>0</code>, <code>120</code>), with units (<code>2min</code>), clock (<code>1:30</code>), or absolute ISO (<code>2026-07-20 14:00:00</code>).
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="input-group">
+              <label for="cal-x1" id="label-cal-x1">X1 Reference Value</label>
+              <input type="text" id="cal-x1" value="0" inputmode="decimal" autocomplete="off" />
+            </div>
+            <div class="input-group">
+              <label for="cal-x2" id="label-cal-x2">X2 Reference Value</label>
+              <input type="text" id="cal-x2" value="10" inputmode="decimal" autocomplete="off" />
             </div>
           </div>
           <div class="form-row">
@@ -190,22 +274,6 @@
             <div class="input-group">
               <label for="cal-y2">Y2 Reference Value</label>
               <input type="number" id="cal-y2" value="10" step="any" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="input-group">
-              <label for="scale-x">X-Axis Scale</label>
-              <select id="scale-x">
-                <option value="linear">Linear</option>
-                <option value="log">Logarithmic</option>
-              </select>
-            </div>
-            <div class="input-group">
-              <label for="scale-y">Y-Axis Scale</label>
-              <select id="scale-y">
-                <option value="linear">Linear</option>
-                <option value="log">Logarithmic</option>
-              </select>
             </div>
           </div>
           
@@ -238,10 +306,104 @@
             </div>
           </div>
 
-          <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4; border-top: 1px solid var(--border-color); padding-top: 8px;">
-            <strong>How to calibrate:</strong> Drag the red target markers (X1, X2, Y1, Y2) on the plot image to match grid gridlines or tick marks, then type the actual numbers representing those points into the boxes above.
+          <div id="cal-help-text" style="font-size: 11px; color: var(--text-muted); line-height: 1.4; border-top: 1px solid var(--border-color); padding-top: 8px;">
+            <strong>How to calibrate:</strong> Drag the red target markers (X1, X2, Y1, Y2) on the plot image to match gridlines or tick marks, then type the actual values for those points above.
           </div>
         </div>
+      </div>
+
+      <!-- Image editing -->
+      <div class="control-card" id="image-edit-card">
+        <span class="card-title"><i data-lucide="image"></i> Image prep</span>
+        <div class="flex flex-wrap gap-2" style="flex-wrap:wrap;gap:6px;">
+          <button type="button" id="btn-img-rotate90" class="action-btn secondary" style="height:30px;font-size:11px;">Rotate 90°</button>
+          <button type="button" id="btn-img-flip-h" class="action-btn secondary" style="height:30px;font-size:11px;">Flip H</button>
+          <button type="button" id="btn-img-flip-v" class="action-btn secondary" style="height:30px;font-size:11px;">Flip V</button>
+          <button type="button" id="btn-img-gray" class="action-btn secondary" style="height:30px;font-size:11px;">Grayscale</button>
+          <button type="button" id="btn-img-blur" class="action-btn secondary" style="height:30px;font-size:11px;">Blur</button>
+          <button type="button" id="btn-img-contrast" class="action-btn secondary" style="height:30px;font-size:11px;">Contrast+</button>
+          <button type="button" id="btn-img-threshold" class="action-btn secondary" style="height:30px;font-size:11px;">Threshold</button>
+        </div>
+        <div class="form-row" style="margin-top:8px;">
+          <div class="input-group">
+            <label for="img-scale">Resample scale</label>
+            <input type="number" id="img-scale" value="1" min="0.25" max="2" step="0.25" />
+          </div>
+          <button type="button" id="btn-img-scale" class="action-btn secondary" style="height:32px;align-self:flex-end;font-size:11px;">Apply scale</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Crop: hold <kbd>Shift</kbd> and drag on the canvas, then click Apply crop.</div>
+        <button type="button" id="btn-img-crop-apply" class="action-btn secondary" style="height:30px;font-size:11px;margin-top:6px;" disabled>Apply crop</button>
+      </div>
+
+      <!-- Mask tools -->
+      <div class="control-card" id="mask-card">
+        <span class="card-title"><i data-lucide="brush"></i> Autotrace mask</span>
+        <div class="form-row">
+          <div class="input-group">
+            <label for="mask-tool">Mask tool</label>
+            <select id="mask-tool">
+              <option value="off">Off (digitize)</option>
+              <option value="box">Box (add)</option>
+              <option value="box-erase">Box (erase)</option>
+              <option value="pencil">Pencil (add)</option>
+              <option value="erase">Pencil (erase)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="mask-brush">Brush px</label>
+            <input type="number" id="mask-brush" value="12" min="2" max="80" />
+          </div>
+        </div>
+        <div class="flex gap-2" style="gap:6px;flex-wrap:wrap;">
+          <button type="button" id="btn-mask-clear" class="action-btn secondary" style="height:30px;font-size:11px;">Clear mask</button>
+          <button type="button" id="btn-mask-fill" class="action-btn secondary" style="height:30px;font-size:11px;">Fill all</button>
+          <button type="button" id="btn-mask-toggle" class="action-btn secondary" style="height:30px;font-size:11px;">Toggle overlay</button>
+        </div>
+      </div>
+
+      <!-- Autotrace / detectors -->
+      <div class="control-card" id="autotrace-card">
+        <span class="card-title"><i data-lucide="wand-2"></i> Autotrace</span>
+        <div class="form-row">
+          <div class="input-group">
+            <label for="detector-id">Algorithm</label>
+            <select id="detector-id">
+              <option value="curve">Curve (color follow)</option>
+              <option value="cluster">Points / cluster</option>
+              <option value="bar">Bar tops</option>
+              <option value="edge">Edge (Sobel)</option>
+              <option value="centroid">Centroid</option>
+              <option value="skeleton">Skeleton</option>
+              <option value="histogram">Histogram bins</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="detector-tol">Color tol</label>
+            <input type="number" id="detector-tol" value="40" min="5" max="200" />
+          </div>
+        </div>
+        <div class="flex gap-2" style="gap:6px;align-items:center;flex-wrap:wrap;">
+          <button type="button" id="btn-sample-color" class="action-btn secondary" style="height:30px;font-size:11px;">Sample color</button>
+          <span id="sample-color-swatch" style="width:22px;height:22px;border-radius:4px;border:1px solid var(--border-color);background:#0d9488;"></span>
+          <button type="button" id="btn-run-detector" class="action-btn primary" style="height:30px;font-size:11px;">Run autotrace</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Click Sample color then click the plot curve. Optional: paint a mask first.</div>
+      </div>
+
+      <!-- Measurements -->
+      <div class="control-card" id="measure-card">
+        <span class="card-title"><i data-lucide="ruler"></i> Measurements</span>
+        <div class="input-group">
+          <label for="measure-mode">Tool</label>
+          <select id="measure-mode">
+            <option value="off">Off</option>
+            <option value="distance">Distance (2 clicks)</option>
+            <option value="angle">Angle (3 clicks)</option>
+            <option value="area">Area (polygon, Enter to close)</option>
+          </select>
+        </div>
+        <div id="measure-results" style="font-size:12px;font-family:var(--font-mono);margin-top:8px;color:var(--text-secondary);min-height:1.4em;"></div>
+        <button type="button" id="btn-measure-clear" class="action-btn secondary" style="height:28px;font-size:11px;margin-top:6px;">Clear measurements</button>
       </div>
 
       <!-- Series Management -->
@@ -270,9 +432,9 @@
         <div class="table-container">
           <table class="points-table">
             <thead>
-              <tr>
-                <th>X</th>
-                <th>Y</th>
+              <tr id="points-table-head">
+                <th id="th-x">X</th>
+                <th id="th-y">Y</th>
                 <th style="width: 40px; text-align: center;">Action</th>
               </tr>
             </thead>
@@ -285,12 +447,12 @@
         </div>
         <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; display: flex; align-items: center; gap: 4px;">
           <i data-lucide="info" style="width:12px; height:12px; flex-shrink:0; color:var(--accent-primary);"></i>
-          <span>Double-click a point on the canvas to delete it.</span>
+          <span id="points-table-hint">Double-click a point on the canvas to delete it. In bar mode, edit category labels in the table.</span>
         </div>
       </div>
 
       <!-- Curve Fitting & Calculations -->
-      <div class="control-card">
+      <div class="control-card" id="regression-card">
         <span class="card-title">
           <i data-lucide="trending-up"></i> Regression &amp; Curve Fitting
         </span>
@@ -390,6 +552,20 @@
     </div>
   </div>
 
+  <script src="js/plot-math.js"></script>
+  <script src="js/image-pipeline.js"></script>
+  <script src="js/projection.js"></script>
+  <script src="js/mask.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/detectors/curve.js"></script>
+  <script src="js/detectors/cluster.js"></script>
+  <script src="js/detectors/bar.js"></script>
+  <script src="js/detectors/edge.js"></script>
+  <script src="js/detectors/centroid.js"></script>
+  <script src="js/detectors/skeleton.js"></script>
+  <script src="js/detectors/histogram.js"></script>
+  <script src="js/detectors/registry.js"></script>
+  <script src="js/parity-runtime.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

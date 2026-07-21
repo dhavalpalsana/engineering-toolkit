@@ -74,12 +74,12 @@ const TOOLS_DATA = [
   {
     id: "plot-extractor",
     name: "Plot Data Extractor",
-    description: "Upload or paste plot images to digitize and extract coordinates with sub-pixel loupe precision. Supports linear/logarithmic scales, multi-series extraction, regression curve fitting, and CSV lookup table generation.",
-    tags: ["general", "math", "curve-fitting", "plot", "digitizer", "data-extraction"],
+    description: "Full plot digitizer: XY/bar/histogram/polar/ternary/pie/map, time & multi-scale axes, image prep, mask + autotrace suite, measurements, multi-series, regression, CSV.",
+    tags: ["general", "math", "curve-fitting", "plot", "digitizer", "data-extraction", "time-series", "bar-chart", "autotrace", "polar"],
     icon: "line-chart",
     path: "./tools/plot-extractor/index.html",
     status: "active",
-    physicsVersion: 1,
+    physicsVersion: 3,
     releaseDate: "2026-07-08T21:10:00Z"
   },
   {

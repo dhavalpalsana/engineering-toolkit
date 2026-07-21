@@ -1,10 +1,12 @@
 /**
  * Plot Data Extractor — App Logic
- * Precision axes calibration, logarithmic scaling, magnifier loupe, curve fitting,
- * multi-series management, clipboard paste, and Firebase Project Manager synchronization.
+ * Precision axes calibration, linear/log/time scales, discrete bar mode,
+ * magnifier loupe, curve fitting, multi-series, clipboard paste, Project Manager sync.
  */
 
 document.addEventListener("DOMContentLoaded", () => {
+  const PM = typeof PlotMath !== "undefined" ? PlotMath : null;
+
   // Select DOM Elements
   const dropzone = document.getElementById("image-dropzone");
   const fileInput = document.getElementById("file-upload-input");
@@ -21,9 +23,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const inputCalX2 = document.getElementById("cal-x2");
   const inputCalY1 = document.getElementById("cal-y1");
   const inputCalY2 = document.getElementById("cal-y2");
+  const labelCalX1 = document.getElementById("label-cal-x1");
+  const labelCalX2 = document.getElementById("label-cal-x2");
   
   const selectScaleX = document.getElementById("scale-x");
   const selectScaleY = document.getElementById("scale-y");
+  const selectChartKind = document.getElementById("chart-kind");
+  const timeAxisOptions = document.getElementById("time-axis-options");
+  const selectTimeUnit = document.getElementById("time-unit");
+  const selectTimeExport = document.getElementById("time-export");
+  const calHelpText = document.getElementById("cal-help-text");
+  const regressionCard = document.getElementById("regression-card");
+  const thX = document.getElementById("th-x");
+  const thY = document.getElementById("th-y");
+  const pointsTableHead = document.getElementById("points-table-head");
+  const pointsTableHint = document.getElementById("points-table-hint");
   
   const seriesContainer = document.getElementById("series-list-container");
   const btnAddSeries = document.getElementById("btn-add-series");
@@ -276,17 +290,142 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAll();
   });
   
+  function isTimeScale() {
+    return selectScaleX && selectScaleX.value === "time";
+  }
+
+  function isDiscreteMode() {
+    if (window.__plotParity && window.__plotParity.isDiscreteKind) {
+      return window.__plotParity.isDiscreteKind();
+    }
+    const k = selectChartKind ? selectChartKind.value : "continuous";
+    return k === "discrete" || k === "histogram";
+  }
+
+  function getTimeUnit() {
+    return (selectTimeUnit && selectTimeUnit.value) || "s";
+  }
+
+  /** Parse X calibration field → seconds (time) or numeric (linear/log). */
+  function parseCalXValue(raw) {
+    if (isTimeScale() && PM) {
+      const parsed = PM.parseTimeToSeconds(raw, getTimeUnit());
+      if (parsed) return parsed.seconds;
+      return 0;
+    }
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function getAxisCalValues() {
+    return {
+      x1Val: parseCalXValue(inputCalX1.value),
+      x2Val: parseCalXValue(inputCalX2.value),
+      y1Val: parseFloat(inputCalY1.value) || 0,
+      y2Val: parseFloat(inputCalY2.value) || 10
+    };
+  }
+
+  function calUsesAbsoluteTime() {
+    if (!isTimeScale() || !PM) return false;
+    const a = PM.parseTimeToSeconds(inputCalX1.value, getTimeUnit());
+    const b = PM.parseTimeToSeconds(inputCalX2.value, getTimeUnit());
+    return !!(a && b && a.absolute && b.absolute);
+  }
+
+  function formatXValue(x, forCsv) {
+    if (!isTimeScale() || !PM) {
+      if (!Number.isFinite(x)) return "—";
+      if (forCsv) return String(x);
+      return Math.abs(x) >= 1e4 || (Math.abs(x) > 0 && Math.abs(x) < 1e-3)
+        ? x.toExponential(4)
+        : parseFloat(x.toFixed(4)).toString();
+    }
+    const exportMode = (selectTimeExport && selectTimeExport.value) || "elapsed";
+    if (exportMode === "iso" && calUsesAbsoluteTime()) {
+      return PM.formatAbsolute(x);
+    }
+    if (exportMode === "seconds") {
+      return forCsv ? String(x) : parseFloat(x.toFixed(4)).toString();
+    }
+    const origin = parseCalXValue(inputCalX1.value);
+    return PM.formatElapsed(x - origin, getTimeUnit());
+  }
+
+  function formatYValue(y) {
+    if (!Number.isFinite(y)) return "—";
+    return parseFloat(Number(y).toFixed(4)).toString();
+  }
+
+  function formatHoverLabel(math) {
+    if (isDiscreteMode()) return `y=${formatYValue(math.y)}`;
+    return `(${formatXValue(math.x, false)}, ${formatYValue(math.y)})`;
+  }
+
+  function updateChartModeUI() {
+    const time = isTimeScale();
+    const discrete = isDiscreteMode();
+
+    if (timeAxisOptions) timeAxisOptions.style.display = time ? "flex" : "none";
+    if (labelCalX1) labelCalX1.textContent = time ? "X1 Time (left/origin)" : "X1 Reference Value";
+    if (labelCalX2) labelCalX2.textContent = time ? "X2 Time (right)" : "X2 Reference Value";
+
+    if (calHelpText) {
+      if (discrete) {
+        calHelpText.innerHTML = "<strong>Bar mode:</strong> Calibrate Y (and optionally X span). Click each bar <em>top</em> to capture its height. Edit category labels in the table.";
+      } else if (time) {
+        calHelpText.innerHTML = "<strong>Time series:</strong> Place X1/X2 on known time ticks. Values may be relative (<code>0</code>, <code>2min</code>, <code>1:30</code>) or absolute ISO timestamps.";
+      } else {
+        calHelpText.innerHTML = "<strong>How to calibrate:</strong> Drag the red target markers (X1, X2, Y1, Y2) on the plot image to match gridlines or tick marks, then type the actual values for those points above.";
+      }
+    }
+
+    if (regressionCard) {
+      regressionCard.style.display = discrete ? "none" : "";
+      if (discrete && selectFitType) {
+        selectFitType.value = "none";
+        const active = seriesList.find((s) => s.id === activeSeriesId);
+        if (active) active.fitType = "none";
+        if (fitStatsBox) fitStatsBox.style.display = "none";
+      }
+    }
+
+    if (pointsTableHead) {
+      if (discrete) {
+        pointsTableHead.innerHTML = `
+          <th>Category</th>
+          <th>Y (value)</th>
+          <th style="width: 40px; text-align: center;">Action</th>`;
+      } else {
+        const xLabel = time ? `Time (${getTimeUnit()})` : "X";
+        pointsTableHead.innerHTML = `
+          <th>${xLabel}</th>
+          <th>Y</th>
+          <th style="width: 40px; text-align: center;">Action</th>`;
+      }
+    }
+    if (pointsTableHint) {
+      pointsTableHint.textContent = discrete
+        ? "Click bar tops on the canvas. Edit category labels in the table. Double-click a marker to delete."
+        : "Double-click a point on the canvas to delete it. Drag to fine-tune.";
+    }
+  }
+
   function updateHelperBanner() {
     if (!imageLoaded) {
       helperText.textContent = "Start by dragging or pasting a plot image to begin.";
       return;
     }
     if (currentMode === "calibrate") {
-      helperText.textContent = "Drag calibration points (X1, X2, Y1, Y2) to known axis lines and input their values in the sidebar.";
+      helperText.textContent = isTimeScale()
+        ? "Drag X1/X2 to known time ticks and enter times (numbers, 1:30, 2min, or ISO). Set Y1/Y2 on the value axis."
+        : "Drag calibration points (X1, X2, Y1, Y2) to known axis lines and input their values in the sidebar.";
     } else if (currentMode === "digitize") {
       const activeSeries = seriesList.find(s => s.id === activeSeriesId);
       const name = activeSeries ? activeSeries.name : "active series";
-      helperText.textContent = `Digitizing "${name}": Click canvas to add points. Drag points to adjust. Double-click to delete.`;
+      helperText.textContent = isDiscreteMode()
+        ? `Bar mode: click each bar top for "${name}". Labels default to Bar N — edit them in the table.`
+        : `Digitizing "${name}": Click canvas to add points. Drag points to adjust. Double-click to delete.`;
     } else if (currentMode === "pan") {
       helperText.textContent = "Pan Mode: Click and drag anywhere on the canvas to pan. Click Calibrate or a series pencil to edit.";
     }
@@ -296,77 +435,47 @@ document.addEventListener("DOMContentLoaded", () => {
   function toMathCoords(px, py) {
     const scaleX = selectScaleX.value;
     const scaleY = selectScaleY.value;
-    
-    const x1Val = parseFloat(inputCalX1.value) || 0;
-    const x2Val = parseFloat(inputCalX2.value) || 10;
-    const y1Val = parseFloat(inputCalY1.value) || 0;
-    const y2Val = parseFloat(inputCalY2.value) || 10;
-    
+    const { x1Val, x2Val, y1Val, y2Val } = getAxisCalValues();
+
+    if (PM) {
+      return PM.pixelToMath({
+        px, py,
+        cal: calibrationPoints,
+        scaleX, scaleY,
+        x1Val, x2Val, y1Val, y2Val
+      });
+    }
+
     const cal = calibrationPoints;
-    let x, y;
-    
-    // X scale conversion
-    if (scaleX === "log") {
-      const logX1 = Math.log10(x1Val);
-      const logX2 = Math.log10(x2Val);
-      const frac = (px - cal.x1.px) / (cal.x2.px - cal.x1.px);
-      x = Math.pow(10, logX1 + frac * (logX2 - logX1));
-    } else {
-      const frac = (px - cal.x1.px) / (cal.x2.px - cal.x1.px);
-      x = x1Val + frac * (x2Val - x1Val);
-    }
-    
-    // Y scale conversion
-    if (scaleY === "log") {
-      const logY1 = Math.log10(y1Val);
-      const logY2 = Math.log10(y2Val);
-      const frac = (py - cal.y1.py) / (cal.y2.py - cal.y1.py);
-      y = Math.pow(10, logY1 + frac * (logY2 - logY1));
-    } else {
-      const frac = (py - cal.y1.py) / (cal.y2.py - cal.y1.py);
-      y = y1Val + frac * (y2Val - y1Val);
-    }
-    
-    return { x, y };
+    const fracX = (px - cal.x1.px) / (cal.x2.px - cal.x1.px || 1);
+    const fracY = (py - cal.y1.py) / (cal.y2.py - cal.y1.py || 1);
+    return {
+      x: x1Val + fracX * (x2Val - x1Val),
+      y: y1Val + fracY * (y2Val - y1Val)
+    };
   }
   
   function toPixelCoords(x, y) {
     const scaleX = selectScaleX.value;
     const scaleY = selectScaleY.value;
-    
-    const x1Val = parseFloat(inputCalX1.value) || 0;
-    const x2Val = parseFloat(inputCalX2.value) || 10;
-    const y1Val = parseFloat(inputCalY1.value) || 0;
-    const y2Val = parseFloat(inputCalY2.value) || 10;
-    
+    const { x1Val, x2Val, y1Val, y2Val } = getAxisCalValues();
+
+    if (PM) {
+      return PM.mathToPixel({
+        x, y,
+        cal: calibrationPoints,
+        scaleX, scaleY,
+        x1Val, x2Val, y1Val, y2Val
+      });
+    }
+
     const cal = calibrationPoints;
-    let px, py;
-    
-    // X math to pixel
-    if (scaleX === "log") {
-      const logX = Math.log10(x);
-      const logX1 = Math.log10(x1Val);
-      const logX2 = Math.log10(x2Val);
-      const frac = (logX - logX1) / (logX2 - logX1);
-      px = cal.x1.px + frac * (cal.x2.px - cal.x1.px);
-    } else {
-      const frac = (x - x1Val) / (x2Val - x1Val);
-      px = cal.x1.px + frac * (cal.x2.px - cal.x1.px);
-    }
-    
-    // Y math to pixel
-    if (scaleY === "log") {
-      const logY = Math.log10(y);
-      const logY1 = Math.log10(y1Val);
-      const logY2 = Math.log10(y2Val);
-      const frac = (logY - logY1) / (logY2 - logY1);
-      py = cal.y1.py + frac * (cal.y2.py - cal.y1.py);
-    } else {
-      const frac = (y - y1Val) / (y2Val - y1Val);
-      py = cal.y1.py + frac * (cal.y2.py - cal.y1.py);
-    }
-    
-    return { px, py };
+    const fracX = (x - x1Val) / (x2Val - x1Val || 1);
+    const fracY = (y - y1Val) / (y2Val - y1Val || 1);
+    return {
+      px: cal.x1.px + fracX * (cal.x2.px - cal.x1.px),
+      py: cal.y1.py + fracY * (cal.y2.py - cal.y1.py)
+    };
   }
   
   // ── Drag & Click Canvas Handlers ─────────────────────────────
@@ -380,6 +489,12 @@ document.addEventListener("DOMContentLoaded", () => {
   
   canvas.addEventListener("mousedown", (e) => {
     if (!imageLoaded) return;
+
+    const earlyPos = getMouseCoordinates(e);
+    if (window.__plotParity && window.__plotParity.onPointerDown(earlyPos, e)) {
+      e.preventDefault();
+      return;
+    }
     
     if (currentMode === "pan") {
       isPanning = true;
@@ -391,7 +506,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     
-    const pos = getMouseCoordinates(e);
+    const pos = earlyPos;
     const clickThreshold = 10 / imgScale; // 10 display pixels
     
     if (currentMode === "calibrate") {
@@ -432,6 +547,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (activeSeriesObj) {
         pushHistory(); // snapshot before mutation
         const newPt = { px: Math.round(pos.x), py: Math.round(pos.y) };
+        if (isDiscreteMode()) {
+          const idx = activeSeriesObj.points.length;
+          newPt.label = (PM && PM.defaultBarLabel)
+            ? PM.defaultBarLabel(idx)
+            : ("Bar " + (idx + 1));
+        }
         activeSeriesObj.points.push(newPt);
         activeSeriesObj.points.sort((a, b) => a.px - b.px);
         selectedDataPoint = newPt; // Select newly added point
@@ -454,6 +575,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     const pos = getMouseCoordinates(e);
+    if (window.__plotParity && window.__plotParity.onPointerMove(pos, e)) {
+      lastMousePos = pos;
+      mouseOnCanvas = true;
+      return;
+    }
     lastMousePos = pos;
     mouseOnCanvas = true;
     
@@ -473,7 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
         hoverInfo = {
           x: pos.x,
           y: pos.y,
-          label: `(${mathCoords.x.toFixed(2)}, ${mathCoords.y.toFixed(2)})`
+          label: formatHoverLabel(mathCoords)
         };
       }
       triggerProjectChange();
@@ -500,10 +626,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (Math.hypot(pos.x - pt.px, pos.y - pt.py) < clickThreshold) {
               canvas.style.cursor = "grab";
               const mathCoords = toMathCoords(pt.px, pt.py);
+              const prefix = (isDiscreteMode() && pt.label) ? (pt.label + " ") : "";
               hoverInfo = {
                 x: pt.px,
                 y: pt.py,
-                label: `(${mathCoords.x.toFixed(2)}, ${mathCoords.y.toFixed(2)})`
+                label: prefix + formatHoverLabel(mathCoords)
               };
               found = true;
               break;
@@ -521,6 +648,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   
   canvas.addEventListener("mouseup", () => {
+    if (window.__plotParity && window.__plotParity.onPointerUp) {
+      window.__plotParity.onPointerUp();
+    }
     const wasDraggingPoint = isDragging && dragTarget && typeof dragTarget === "object";
     isDragging = false;
     isPanning = false;
@@ -568,17 +698,54 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     updateCanvasLegend();
     if (!imageLoaded) return;
+
+    if (window.__plotParity && window.__plotParity.drawOverlay) {
+      window.__plotParity.drawOverlay(ctx, imgScale);
+    }
     
     // Draw regression curve if selected
     drawRegressionCurve();
     
-    // Draw all data series lines & points
+    // Draw all data series (curve lines or discrete bar stems)
     seriesList.forEach(series => {
       const isActive = series.id === activeSeriesId;
       ctx.lineWidth = isActive ? 2.5 : 1.5;
       ctx.strokeStyle = series.color;
       ctx.fillStyle = series.color;
+      const baselinePy = calibrationPoints.y1.py * imgScale;
       
+      if (isDiscreteMode()) {
+        // Stems from Y1 baseline to bar top + square marker
+        series.points.forEach(pt => {
+          const x = pt.px * imgScale;
+          const y = pt.py * imgScale;
+          ctx.beginPath();
+          ctx.moveTo(x, baselinePy);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+          const s = isActive ? 5 : 4;
+          ctx.fillRect(x - s, y - s, s * 2, s * 2);
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(x - s, y - s, s * 2, s * 2);
+          ctx.strokeStyle = series.color;
+          ctx.fillStyle = series.color;
+          if (pt.label && isActive) {
+            ctx.font = "bold 10px var(--font-sans)";
+            ctx.fillStyle = series.color;
+            const tw = ctx.measureText(pt.label).width;
+            ctx.fillText(pt.label, x - tw / 2, y - 10);
+          }
+          if (pt === selectedDataPoint) {
+            ctx.beginPath();
+            ctx.arc(x, y, 9, 0, 2 * Math.PI);
+            ctx.strokeStyle = "#f43f5e";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.strokeStyle = series.color;
+          }
+        });
+      } else {
       // Draw path connections
       if (series.points.length > 1) {
         ctx.beginPath();
@@ -607,6 +774,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ctx.stroke();
         }
       });
+      } // end continuous series draw
     });
     
     // Draw calibration points unconditionally (softer style when locked)
@@ -779,7 +947,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Table Builder ────────────────────────────────────────────
   function populatePointsTable() {
     const activeSeries = seriesList.find(s => s.id === activeSeriesId);
-    if (document.activeElement && document.activeElement.classList.contains("coord-cell")) {
+    if (document.activeElement && (
+      document.activeElement.classList.contains("coord-cell") ||
+      document.activeElement.classList.contains("label-cell")
+    )) {
       return;
     }
     if (!activeSeries || activeSeries.points.length === 0) {
@@ -790,15 +961,30 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
       return;
     }
+
+    const discrete = isDiscreteMode();
     
     pointsTableBody.innerHTML = activeSeries.points.map((pt, i) => {
       const math = toMathCoords(pt.px, pt.py);
       const isPtSelected = selectedDataPoint === pt;
       const rowStyle = isPtSelected ? `background: var(--accent-primary-glow); font-weight: 600;` : ``;
+      if (discrete) {
+        const label = pt.label != null ? pt.label : ((PM && PM.defaultBarLabel) ? PM.defaultBarLabel(i) : ("Bar " + (i + 1)));
+        return `
+        <tr style="${rowStyle}">
+          <td contenteditable="true" class="label-cell" data-index="${i}" title="Edit category label">${escapeHtml(label)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="y" title="Edit value">${formatYValue(math.y)}</td>
+          <td style="text-align: center;">
+            <button class="btn-icon danger remove-pt-btn" data-index="${i}" title="Delete point">
+              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </td>
+        </tr>`;
+      }
       return `
         <tr style="${rowStyle}">
-          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="x" title="Double click to edit">${math.x.toFixed(4)}</td>
-          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="y" title="Double click to edit">${math.y.toFixed(4)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="x" title="Double click to edit">${formatXValue(math.x, false)}</td>
+          <td contenteditable="true" class="coord-cell" data-index="${i}" data-coord="y" title="Double click to edit">${formatYValue(math.y)}</td>
           <td style="text-align: center;">
             <button class="btn-icon danger remove-pt-btn" data-index="${i}" title="Delete point">
               <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -817,6 +1003,28 @@ document.addEventListener("DOMContentLoaded", () => {
           const pt = activeSeriesObj.points[index];
           if (pt === selectedDataPoint) selectedDataPoint = null;
           activeSeriesObj.points.splice(index, 1);
+          triggerProjectChange();
+          renderAll();
+        }
+      });
+    });
+
+    pointsTableBody.querySelectorAll(".label-cell").forEach(cell => {
+      cell.addEventListener("focus", () => {
+        const index = parseInt(cell.dataset.index, 10);
+        if (activeSeries.points[index]) {
+          selectedDataPoint = activeSeries.points[index];
+          renderAll();
+        }
+      });
+      cell.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); cell.blur(); }
+      });
+      cell.addEventListener("blur", () => {
+        const index = parseInt(cell.dataset.index, 10);
+        const pt = activeSeries.points[index];
+        if (pt) {
+          pt.label = cell.textContent.trim() || pt.label || ("Bar " + (index + 1));
           triggerProjectChange();
           renderAll();
         }
@@ -844,25 +1052,41 @@ document.addEventListener("DOMContentLoaded", () => {
       cell.addEventListener("blur", () => {
         const index = parseInt(cell.dataset.index);
         const coord = cell.dataset.coord;
-        const newVal = parseFloat(cell.textContent.trim());
+        const raw = cell.textContent.trim();
         const pt = activeSeries.points[index];
-        if (pt) {
-          const math = toMathCoords(pt.px, pt.py);
-          if (!isNaN(newVal)) {
-            if (coord === "x") {
-              const pixelPt = toPixelCoords(newVal, math.y);
-              pt.px = Math.round(pixelPt.px);
-            } else {
-              const pixelPt = toPixelCoords(math.x, newVal);
-              pt.py = Math.round(pixelPt.py);
-            }
-            activeSeries.points.sort((a, b) => a.px - b.px);
-            triggerProjectChange();
-            renderAll();
-          } else {
-            // Revert cell text to original on invalid input
-            cell.textContent = coord === "x" ? math.x.toFixed(4) : math.y.toFixed(4);
+        if (!pt) return;
+        const math = toMathCoords(pt.px, pt.py);
+
+        let newVal;
+        if (coord === "x" && isTimeScale() && PM) {
+          const parsed = PM.parseTimeToSeconds(raw, getTimeUnit());
+          if (!parsed) {
+            cell.textContent = formatXValue(math.x, false);
+            return;
           }
+          // Relative entry → absolute seconds = origin + elapsed when cal is relative-style
+          if (!parsed.absolute && !calUsesAbsoluteTime()) {
+            newVal = parseCalXValue(inputCalX1.value) + parsed.seconds;
+          } else {
+            newVal = parsed.seconds;
+          }
+        } else {
+          newVal = parseFloat(raw);
+        }
+
+        if (!isNaN(newVal) && Number.isFinite(newVal)) {
+          if (coord === "x") {
+            const pixelPt = toPixelCoords(newVal, math.y);
+            pt.px = Math.round(pixelPt.px);
+          } else {
+            const pixelPt = toPixelCoords(math.x, newVal);
+            pt.py = Math.round(pixelPt.py);
+          }
+          activeSeries.points.sort((a, b) => a.px - b.px);
+          triggerProjectChange();
+          renderAll();
+        } else {
+          cell.textContent = coord === "x" ? formatXValue(math.x, false) : formatYValue(math.y);
         }
       });
     });
@@ -1129,6 +1353,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   function drawRegressionCurve() {
+    if (isDiscreteMode()) return;
     seriesList.forEach(series => {
       const type = series.fitType || "none";
       if (type === "none" || series.points.length < 2) return;
@@ -1340,23 +1565,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     renderAll();
   });
-  selectScaleX.addEventListener("change", renderAll);
-  selectScaleY.addEventListener("change", renderAll);
-  inputCalX1.addEventListener("input", renderAll);
-  inputCalX2.addEventListener("input", renderAll);
-  inputCalY1.addEventListener("input", renderAll);
-  inputCalY2.addEventListener("input", renderAll);
+  function refreshAxesAndTable() {
+    updateChartModeUI();
+    triggerProjectChange();
+    renderAll();
+    populatePointsTable();
+  }
+
+  selectScaleX.addEventListener("change", refreshAxesAndTable);
+  selectScaleY.addEventListener("change", refreshAxesAndTable);
+  if (selectChartKind) selectChartKind.addEventListener("change", refreshAxesAndTable);
+  if (selectTimeUnit) selectTimeUnit.addEventListener("change", refreshAxesAndTable);
+  if (selectTimeExport) selectTimeExport.addEventListener("change", refreshAxesAndTable);
+  inputCalX1.addEventListener("input", () => { triggerProjectChange(); renderAll(); populatePointsTable(); });
+  inputCalX2.addEventListener("input", () => { triggerProjectChange(); renderAll(); populatePointsTable(); });
+  inputCalY1.addEventListener("input", () => { triggerProjectChange(); renderAll(); populatePointsTable(); });
+  inputCalY2.addEventListener("input", () => { triggerProjectChange(); renderAll(); populatePointsTable(); });
+
+  // Alias used by click handlers
+  function updatePointsTable() {
+    populatePointsTable();
+  }
   
   // ── CSV Exporters & Copy table ───────────────────────────────
   
   function getCSVContent() {
     const activeSeries = seriesList.find(s => s.id === activeSeriesId);
     if (!activeSeries || activeSeries.points.length === 0) return "";
+
+    if (isDiscreteMode()) {
+      let csv = "Category,Y Value\n";
+      activeSeries.points.forEach((pt, i) => {
+        const math = toMathCoords(pt.px, pt.py);
+        const label = (pt.label != null ? pt.label : ("Bar " + (i + 1))).replace(/"/g, '""');
+        csv += `"${label}",${math.y}\n`;
+      });
+      return csv;
+    }
     
-    let csv = "X Coordinate,Y Coordinate\n";
+    const xHeader = isTimeScale() ? "Time" : "X Coordinate";
+    let csv = `${xHeader},Y Coordinate\n`;
     activeSeries.points.forEach(pt => {
       const math = toMathCoords(pt.px, pt.py);
-      csv += `${math.x},${math.y}\n`;
+      const xOut = formatXValue(math.x, true);
+      // Quote time strings that may contain commas
+      const xCell = /[,"]/.test(String(xOut)) ? `"${String(xOut).replace(/"/g, '""')}"` : xOut;
+      csv += `${xCell},${math.y}\n`;
     });
     return csv;
   }
@@ -1392,16 +1646,32 @@ document.addEventListener("DOMContentLoaded", () => {
   
   btnDownloadCombinedCSV.addEventListener("click", () => {
     let hasPoints = false;
-    let csv = "Series Name,X Coordinate,Y Coordinate\n";
-    seriesList.forEach(series => {
-      if (series.points.length > 0) {
-        hasPoints = true;
-        series.points.forEach(pt => {
+    let csv;
+    if (isDiscreteMode()) {
+      csv = "Series Name,Category,Y Value\n";
+      seriesList.forEach(series => {
+        series.points.forEach((pt, i) => {
+          hasPoints = true;
           const math = toMathCoords(pt.px, pt.py);
-          csv += `"${series.name.replace(/"/g, '""')}",${math.x},${math.y}\n`;
+          const label = (pt.label != null ? pt.label : ("Bar " + (i + 1))).replace(/"/g, '""');
+          csv += `"${series.name.replace(/"/g, '""')}","${label}",${math.y}\n`;
         });
-      }
-    });
+      });
+    } else {
+      const xHeader = isTimeScale() ? "Time" : "X Coordinate";
+      csv = `Series Name,${xHeader},Y Coordinate\n`;
+      seriesList.forEach(series => {
+        if (series.points.length > 0) {
+          hasPoints = true;
+          series.points.forEach(pt => {
+            const math = toMathCoords(pt.px, pt.py);
+            const xOut = formatXValue(math.x, true);
+            const xCell = /[,"]/.test(String(xOut)) ? `"${String(xOut).replace(/"/g, '""')}"` : xOut;
+            csv += `"${series.name.replace(/"/g, '""')}",${xCell},${math.y}\n`;
+          });
+        }
+      });
+    }
     
     if (!hasPoints) {
       alert("No data points in any series to export.");
@@ -1568,21 +1838,30 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── Firebase Project Manager Sync Hooks ───────────────────────
   
   function getPlotExtractorState() {
-    return {
+    const base = {
+      schemaVersion: 3,
       compressedImgData,
       imgWidth,
       imgHeight,
       calibrationPoints,
       seriesList,
       activeSeriesId,
+      chartKind: selectChartKind ? selectChartKind.value : "continuous",
       scaleX: selectScaleX.value,
       scaleY: selectScaleY.value,
-      x1Val: parseFloat(inputCalX1.value) || 0,
-      x2Val: parseFloat(inputCalX2.value) || 10,
+      timeUnit: selectTimeUnit ? selectTimeUnit.value : "s",
+      timeExport: selectTimeExport ? selectTimeExport.value : "elapsed",
+      // Keep raw string cal X for time modes (numbers still stringify fine)
+      x1Val: inputCalX1.value,
+      x2Val: inputCalX2.value,
       y1Val: parseFloat(inputCalY1.value) || 0,
       y2Val: parseFloat(inputCalY2.value) || 10,
       fitType: selectFitType.value
     };
+    if (window.__plotParity && window.__plotParity.getExtraState) {
+      Object.assign(base, window.__plotParity.getExtraState());
+    }
+    return base;
   }
   
   function setPlotExtractorState(state) {
@@ -1617,21 +1896,32 @@ document.addEventListener("DOMContentLoaded", () => {
       activeSeriesId = state.activeSeriesId;
     }
     
+    if (state.chartKind && selectChartKind) selectChartKind.value = state.chartKind;
     if (state.scaleX) selectScaleX.value = state.scaleX;
     if (state.scaleY) selectScaleY.value = state.scaleY;
+    if (state.timeUnit && selectTimeUnit) selectTimeUnit.value = state.timeUnit;
+    if (state.timeExport && selectTimeExport) selectTimeExport.value = state.timeExport;
     if (state.x1Val !== undefined) inputCalX1.value = state.x1Val;
     if (state.x2Val !== undefined) inputCalX2.value = state.x2Val;
     if (state.y1Val !== undefined) inputCalY1.value = state.y1Val;
     if (state.y2Val !== undefined) inputCalY2.value = state.y2Val;
     if (state.fitType !== undefined) selectFitType.value = state.fitType;
+    if (window.__plotParity && window.__plotParity.setExtraState) {
+      window.__plotParity.setExtraState(state);
+    }
     
     updateSeriesUI();
+    updateChartModeUI();
     updateHelperBanner();
+    if (window.__plotParity && window.__plotParity.updateParityUI) {
+      window.__plotParity.updateParityUI();
+    }
     
     // Trigger delay refresh to allow image component dimension loading
     setTimeout(() => {
       resizeCanvas();
       renderAll();
+      populatePointsTable();
     }, 150);
   }
   
@@ -1792,6 +2082,20 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Draw all data series and fits
     seriesList.forEach(series => {
+      if (isDiscreteMode()) {
+        const baseline = calibrationPoints.y1.py;
+        series.points.forEach(pt => {
+          offCtx.strokeStyle = series.color;
+          offCtx.lineWidth = 3;
+          offCtx.beginPath();
+          offCtx.moveTo(pt.px, baseline);
+          offCtx.lineTo(pt.px, pt.py);
+          offCtx.stroke();
+          offCtx.fillStyle = series.color;
+          offCtx.fillRect(pt.px - 5, pt.py - 5, 10, 10);
+        });
+        return;
+      }
       // Connect points with lines
       if (series.points.length > 1) {
         offCtx.strokeStyle = series.color;
@@ -1915,7 +2219,7 @@ document.addEventListener("DOMContentLoaded", () => {
       hoverInfo = {
         x: lastMousePos.x,
         y: lastMousePos.y,
-        label: `(${mathCoords.x.toFixed(2)}, ${mathCoords.y.toFixed(2)})`
+        label: formatHoverLabel(mathCoords)
       };
       
       triggerProjectChange();
@@ -2004,6 +2308,53 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("Failed to load design from URL:", err);
     }
+  }
+
+  updateChartModeUI();
+
+  // Parity-full runtime (image prep, mask, detectors, measures, projections)
+  if (window.PlotParityRuntime && window.PlotParityRuntime.init) {
+    window.__plotParity = window.PlotParityRuntime.init({
+      getSeries: () => seriesList,
+      setSeries: (s) => { seriesList = s; },
+      getActiveSeriesId: () => activeSeriesId,
+      getCal: () => calibrationPoints,
+      setCal: (c) => { calibrationPoints = c; },
+      getPlotImageEl: () => plotImg,
+      getImageSize: () => ({ w: imgWidth, h: imgHeight }),
+      pushHistory,
+      renderAll,
+      populatePointsTable,
+      triggerProjectChange,
+      toMathCoords,
+      setChartKind: (k) => {
+        if (selectChartKind) selectChartKind.value = k;
+        updateChartModeUI();
+      },
+      onChartKindChanged: (kind, discrete) => {
+        updateChartModeUI();
+        updateHelperBanner();
+        renderAll();
+        populatePointsTable();
+      },
+      replaceImage: (dataUrl, w, h) => {
+        compressedImgData = dataUrl;
+        plotImg.src = dataUrl;
+        imgWidth = w;
+        imgHeight = h;
+        imageLoaded = true;
+        dropzone.style.display = "none";
+        canvasWrapper.style.display = "block";
+        imageActions.style.display = "flex";
+        setTimeout(() => { resizeCanvas(); renderAll(); }, 50);
+      },
+      afterImageEdit: () => {
+        triggerProjectChange();
+        updateSeriesUI();
+        populatePointsTable();
+        setTimeout(() => { resizeCanvas(); renderAll(); }, 50);
+      }
+    });
   }
 
   loadURLDesign();
