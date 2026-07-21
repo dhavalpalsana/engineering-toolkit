@@ -135,7 +135,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
 
   /**
-   * Exclusive accordion: only one sidebar panel open at a time.
+   * Exclusive accordion: at most one sidebar panel open.
+   * All panels may be collapsed (no force-reopen — that caused UI jitter).
    * Opening a panel drives canvas interaction mode.
    */
   function setupExclusiveAccordions() {
@@ -143,17 +144,20 @@ document.addEventListener("DOMContentLoaded", () => {
     panels.forEach((panel) => {
       panel.addEventListener("toggle", () => {
         if (panel.open) {
+          // Close siblings without cascading toggle logic storms
           panels.forEach((other) => {
             if (other !== panel && other.open) other.open = false;
           });
           activePanel = panel.getAttribute("data-panel") || "setup";
           applyPanelMode(activePanel);
         } else {
-          // Keep at least one open (prefer setup)
-          const anyOpen = panels.some((p) => p.open);
-          if (!anyOpen) {
-            const setup = panels.find((p) => p.getAttribute("data-panel") === "setup") || panels[0];
-            if (setup) setup.open = true;
+          // Fully collapsed is allowed — idle/pan canvas
+          const stillOpen = panels.find((p) => p.open);
+          if (stillOpen) {
+            activePanel = stillOpen.getAttribute("data-panel") || activePanel;
+          } else {
+            activePanel = "idle";
+            applyPanelMode("idle");
           }
         }
         if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
@@ -192,6 +196,9 @@ document.addEventListener("DOMContentLoaded", () => {
       currentMode = "pan"; // measure handled by parity pointer hooks
       if (measureModeEl && measureModeEl.value === "off") measureModeEl.value = "distance";
     } else if (panel === "autotrace" || panel === "image" || panel === "fit") {
+      currentMode = "pan";
+    } else {
+      // idle / collapsed — pan only, no special tool
       currentMode = "pan";
     }
     updateHelperBanner();
@@ -293,6 +300,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return { key: "measure", label: "Measuring distance", panel: "measure", hint: "Click two points to measure distance in data units." };
       case "fit":
         return { key: "fit", label: "Curve fit", panel: "fit", hint: "Choose a model for the active series · export from the header menu." };
+      case "idle":
+        return {
+          key: "idle",
+          label: "Idle",
+          panel: "setup",
+          hint: "Open a sidebar section to calibrate, digitize, autotrace, or measure. Export is in the header."
+        };
       default:
         return { key: "ready", label: "Ready", panel: "setup", hint: helperText ? helperText.textContent : "" };
     }

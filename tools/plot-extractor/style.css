@@ -173,7 +173,14 @@ main {
 .mode-badge.mode-image .mode-badge-dot,
 .mode-badge.mode-fit .mode-badge-dot { background: var(--text-muted); }
 
-.mode-badge.mode-ready .mode-badge-dot { background: var(--text-muted); }
+.mode-badge.mode-ready .mode-badge-dot,
+.mode-badge.mode-idle .mode-badge-dot { background: var(--text-muted); }
+
+.mode-badge.mode-idle {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
 
 .mode-badge.mode-points-ready {
   background: var(--color-success-bg);
