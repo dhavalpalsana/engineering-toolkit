@@ -174,14 +174,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function applyPanelMode(panel) {
     selectedDataPoint = null;
+
+    // Clear sticky tools from other panels so they don't capture clicks on Setup / Series
+    const maskTool = document.getElementById("mask-tool");
+    const measureModeEl = document.getElementById("measure-mode");
+    if (panel !== "autotrace" && maskTool) maskTool.value = "off";
+    if (panel !== "measure" && measureModeEl) measureModeEl.value = "off";
+    if (window.__plotParity && typeof window.__plotParity.onPanelEnter === "function") {
+      window.__plotParity.onPanelEnter(panel);
+    }
+
     if (panel === "setup") {
       currentMode = "calibrate";
     } else if (panel === "series") {
       currentMode = "digitize";
     } else if (panel === "measure") {
       currentMode = "pan"; // measure handled by parity pointer hooks
-      const mm = document.getElementById("measure-mode");
-      if (mm && mm.value === "off") mm.value = "distance";
+      if (measureModeEl && measureModeEl.value === "off") measureModeEl.value = "distance";
     } else if (panel === "autotrace" || panel === "image" || panel === "fit") {
       currentMode = "pan";
     }
@@ -268,9 +277,9 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       case "autotrace":
         if (maskTool && maskTool !== "off") {
-          return { key: "masking", label: "Painting mask", panel: "autotrace", hint: "Paint include/exclude regions, then sample color and Run." };
+          return { key: "masking", label: "Painting mask", panel: "autotrace", hint: "Paint include/exclude regions, set trace color, then Run." };
         }
-        return { key: "autotrace", label: "Autotrace", panel: "autotrace", hint: "Sample a curve color (optional mask), then Run autotrace." };
+        return { key: "autotrace", label: "Autotrace", panel: "autotrace", hint: "Pick trace color (palette) or eyedropper on the plot, optional mask, then Run." };
       case "image":
         return {
           key: "image",
@@ -2714,6 +2723,7 @@ document.addEventListener("DOMContentLoaded", () => {
       },
       openPanel,
       updateModeBadge,
+      getActivePanel: () => activePanel,
       afterImageEdit: () => {
         triggerProjectChange();
         updateSeriesUI();

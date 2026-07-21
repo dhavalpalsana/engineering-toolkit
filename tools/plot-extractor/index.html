@@ -365,10 +365,16 @@
               <input type="number" id="detector-tol" value="40" min="5" max="200" />
             </div>
           </div>
-          <div class="btn-row align-center">
-            <button type="button" id="btn-sample-color" class="action-btn secondary">Sample color</button>
-            <span id="sample-color-swatch" class="color-swatch" title="Sampled color"></span>
-            <button type="button" id="btn-run-detector" class="action-btn primary">Run</button>
+          <div class="btn-row align-center trace-color-row">
+            <label class="trace-color-picker" title="Trace color — click to choose">
+              <input type="color" id="sample-color-input" value="#0d9488" aria-label="Trace color" />
+              <span class="trace-color-face" id="sample-color-swatch" aria-hidden="true"></span>
+              <i data-lucide="palette" class="trace-color-icon"></i>
+            </label>
+            <button type="button" id="btn-sample-color" class="tool-icon-btn" title="Eyedropper: click the plot to sample a color">
+              <i data-lucide="pipette"></i>
+            </button>
+            <button type="button" id="btn-run-detector" class="action-btn primary" style="flex:1;">Run</button>
           </div>
 
           <div class="section-label">Mask (optional)</div>
@@ -395,7 +401,7 @@
               <button type="button" id="btn-mask-toggle" class="action-btn secondary">Overlay</button>
             </div>
           </div>
-          <p class="hint-text">Sample a curve color, optionally mask the region, then Run.</p>
+          <p class="hint-text">Set trace color (picker or eyedropper), optionally mask a region, then Run.</p>
         </div>
       </details>
 

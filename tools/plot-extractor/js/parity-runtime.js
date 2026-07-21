@@ -388,6 +388,45 @@
       };
     }
 
+    function rgbToHex(rgb) {
+      const h = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, "0");
+      return "#" + h(rgb[0]) + h(rgb[1]) + h(rgb[2]);
+    }
+
+    function syncSampleColorUI() {
+      const hex = rgbToHex(sampleRgb);
+      const input = $("sample-color-input");
+      if (input) input.value = hex;
+      const sw = $("sample-color-swatch");
+      if (sw) sw.style.background = hex;
+    }
+
+    function setSampleRgb(r, g, b) {
+      sampleRgb = [r | 0, g | 0, b | 0];
+      syncSampleColorUI();
+    }
+
+    /** Called when sidebar panel changes — drop transient capture modes. */
+    function onPanelEnter(panel) {
+      samplingColor = false;
+      maskDragging = false;
+      cropDragging = false;
+      if (cropRect && cropRect.mask) cropRect = null;
+      if (panel !== "measure") {
+        measurePts = [];
+      }
+      if (panel !== "image") {
+        // leave image crop rect if user was cropping only while on image panel
+        if (cropRect && !cropRect.mask) {
+          cropRect = null;
+          const btn = $("btn-img-crop-apply");
+          if (btn) btn.disabled = true;
+        }
+      }
+      api.renderAll();
+      if (api.updateModeBadge) api.updateModeBadge();
+    }
+
     function setExtraState(st) {
       if (!st) return;
       if (st.sampleRgb) sampleRgb = st.sampleRgb;
@@ -398,8 +437,7 @@
       if (st.mask && Mask && st.mask.data) {
         mask = Mask.fromBase64(st.mask.width, st.mask.height, st.mask.data);
       }
-      const sw = $("sample-color-swatch");
-      if (sw) sw.style.background = "rgb(" + sampleRgb.join(",") + ")";
+      syncSampleColorUI();
     }
 
     // Wire DOM
@@ -458,8 +496,17 @@
       bind("btn-run-detector", runDetector);
       bind("btn-sample-color", () => {
         samplingColor = true;
-        alert("Click a pixel on the plot to sample its color for autotrace.");
+        if (api.updateModeBadge) api.updateModeBadge();
+        // No blocking alert — cursor/mode badge shows eyedropper intent
       });
+      const sampleInput = $("sample-color-input");
+      if (sampleInput) {
+        sampleInput.addEventListener("input", () => {
+          const c = parseHexColor(sampleInput.value);
+          setSampleRgb(c.r, c.g, c.b);
+        });
+        syncSampleColorUI();
+      }
       bind("btn-measure-clear", () => {
         measures = [];
         measurePts = [];
@@ -485,37 +532,51 @@
         drawMaskOverlay(ctx, imgScale);
         drawMeasures(ctx, imgScale);
       },
+      onPanelEnter,
       onPointerDown(pos, evt) {
+        // Only intercept when the relevant panel owns the tool
+        const panel = api.getActivePanel ? api.getActivePanel() : null;
+
         if (samplingColor) {
-          const id = captureImageData();
-          if (id) {
-            const i = (Math.round(pos.y) * id.width + Math.round(pos.x)) * 4;
-            sampleRgb = [id.data[i], id.data[i + 1], id.data[i + 2]];
-            const sw = $("sample-color-swatch");
-            if (sw) sw.style.background = "rgb(" + sampleRgb.join(",") + ")";
+          if (panel && panel !== "autotrace") {
+            samplingColor = false;
+          } else {
+            const id = captureImageData();
+            if (id) {
+              const x = Math.max(0, Math.min(id.width - 1, Math.round(pos.x)));
+              const y = Math.max(0, Math.min(id.height - 1, Math.round(pos.y)));
+              const i = (y * id.width + x) * 4;
+              setSampleRgb(id.data[i], id.data[i + 1], id.data[i + 2]);
+            }
+            samplingColor = false;
+            if (api.updateModeBadge) api.updateModeBadge();
+            return true;
           }
-          samplingColor = false;
-          return true;
         }
-        if (evt && evt.shiftKey) {
+        if (evt && evt.shiftKey && (!panel || panel === "image")) {
           cropDragging = true;
           cropRect = { x0: pos.x, y0: pos.y, x1: pos.x, y1: pos.y };
           const btn = $("btn-img-crop-apply");
           if (btn) btn.disabled = false;
           return true;
         }
-        if (handleMaskPointer(pos, true, false)) return true;
-        if (handleMeasureClick(pos)) return true;
+        if (panel === "autotrace" && handleMaskPointer(pos, true, false)) return true;
+        if (panel === "measure" && handleMeasureClick(pos)) return true;
         return false;
       },
       onPointerMove(pos, evt) {
+        const panel = api.getActivePanel ? api.getActivePanel() : null;
         if (cropDragging && cropRect && !cropRect.mask) {
+          if (panel && panel !== "image") {
+            cropDragging = false;
+            return false;
+          }
           cropRect.x1 = pos.x;
           cropRect.y1 = pos.y;
           api.renderAll();
           return true;
         }
-        if (handleMaskPointer(pos, false, true)) return true;
+        if (panel === "autotrace" && handleMaskPointer(pos, false, true)) return true;
         return false;
       },
       onPointerUp() {
