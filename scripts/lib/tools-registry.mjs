@@ -26,11 +26,29 @@ export function liveTools(registry) {
   return registry.filter((t) => t.status === "active" || t.status === "beta");
 }
 
-/** Absolute filesystem path for a tool's index.html from registry path. */
+/**
+ * Absolute filesystem path for a tool's index.html from registry path.
+ * Registry paths are clean URLs: "./tools/wire-gauge/" (or legacy ".../index.html").
+ */
 export function toolIndexPath(root, tool) {
-  // path is like "./tools/wire-gauge/index.html"
-  const rel = String(tool.path || "").replace(/^\.\//, "");
+  let rel = String(tool.path || "").replace(/^\.\//, "");
+  if (rel.endsWith("/index.html")) {
+    // already file path
+  } else if (rel.endsWith(".html")) {
+    // other html file as-is
+  } else {
+    rel = rel.replace(/\/?$/, "/") + "index.html";
+  }
   return path.join(root, rel);
+}
+
+/** Public URL path for a tool (always ends with /). */
+export function toolPublicPath(tool) {
+  let rel = String(tool.path || "").replace(/^\.\//, "");
+  if (rel.endsWith("/index.html")) rel = rel.slice(0, -"index.html".length);
+  else if (rel.endsWith(".html")) rel = rel.replace(/[^/]+\.html$/, "");
+  if (!rel.endsWith("/")) rel += "/";
+  return "/" + rel.replace(/^\//, "");
 }
 
 export function toolDirOnDisk(root, toolId) {

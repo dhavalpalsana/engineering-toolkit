@@ -6,6 +6,20 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "cleanUrls": true,
+    "trailingSlash": true,
+    "redirects": [
+      {
+        "source": "/index.html",
+        "destination": "/",
+        "type": 301
+      },
+      {
+        "source": "/tools/:toolId/index.html",
+        "destination": "/tools/:toolId/",
+        "type": 301
+      }
+    ],
     "headers": [
       {
         "source": "/**",

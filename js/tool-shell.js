@@ -36,7 +36,7 @@
  *     toolId: "beam-calculator",     // defaults to URL / projectManagerConfig
  *     showBetaBanner: true,          // default true when status === "beta"
  *     showFooter: true,              // default true
- *     hubPath: "../../index.html"
+ *     hubPath: "../../"
  *   };
  */
 (function () {
@@ -92,7 +92,7 @@
   }
 
   function hubPath() {
-    return getConfig().hubPath || "../../index.html";
+    return getConfig().hubPath || "../../";
   }
 
   /** Context attached to bug reports (no project payload / PII beyond path). */
