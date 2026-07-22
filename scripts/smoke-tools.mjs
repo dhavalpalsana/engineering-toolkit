@@ -13,7 +13,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { liveTools, loadToolsData } from "./lib/tools-registry.mjs";
+import { liveTools, loadToolsData, toolPublicPath } from "./lib/tools-registry.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -107,7 +107,7 @@ async function main() {
       return { status: res.status, text };
     }
 
-    const hub = await fetchText(`${base}/index.html`);
+    const hub = await fetchText(`${base}/`);
     if (hub.status !== 200 || !hub.text.includes("tools-grid")) {
       console.error(`✗ hub HTTP ${hub.status}`);
       failures += 1;
@@ -116,8 +116,7 @@ async function main() {
     }
 
     for (const tool of tools) {
-      const urlPath = String(tool.path || "").replace(/^\.\//, "/");
-      const url = `${base}${urlPath.startsWith("/") ? urlPath : "/" + urlPath}`;
+      const url = `${base}${toolPublicPath(tool)}`;
       try {
         const r = await fetchText(url);
         if (r.status !== 200) {
@@ -184,7 +183,7 @@ async function main() {
   // Hub
   {
     pageErrors.length = 0;
-    const res = await page.goto(`${base}/index.html`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    const res = await page.goto(`${base}/`, { waitUntil: "domcontentloaded", timeout: 30000 });
     if (!res || !res.ok()) {
       console.error(`✗ hub HTTP ${res && res.status()}`);
       failures += 1;
@@ -204,9 +203,8 @@ async function main() {
 
   for (const tool of tools) {
     pageErrors.length = 0;
-    const urlPath = String(tool.path || "").replace(/^\.\//, "/");
-    // path like ./tools/x/index.html → /tools/x/index.html
-    const url = `${base}${urlPath.startsWith("/") ? urlPath : "/" + urlPath}`;
+    // Clean public URL: ./tools/x/ → /tools/x/
+    const url = `${base}${toolPublicPath(tool)}`;
 
     try {
       const res = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });

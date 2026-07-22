@@ -8,10 +8,10 @@ const TOOLS_DATA = [
   {
     id: "fishbone-diagram",
     name: "Ishikawa Fishbone Diagram Creator",
-    description: "Visualize cause-and-effect relationships with interactive diagrams, templates, dynamic layouts, and SVG/PNG exports.",
+    description: "Canvas-first root-cause workspace: status filters, investigation summary, drag-reorder, focus mode, templates, and SVG/PNG export.",
     tags: ["management", "quality", "root-cause", "ishikawa", "lean", "six-sigma", "engineering"],
     icon: "fishbone",
-    path: "./tools/fishbone-diagram/index.html",
+    path: "./tools/fishbone-diagram/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-03T12:00:00Z"
@@ -22,7 +22,7 @@ const TOOLS_DATA = [
     description: "Evaluate multi-segment thermodynamic conditions and electrodynamic voltage drops for series electrical cables.",
     tags: ["electrical", "awg", "nec", "power", "cable", "thermal", "thermodynamics"],
     icon: "zap",
-    path: "./tools/wire-gauge/index.html",
+    path: "./tools/wire-gauge/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-04T12:00:00Z"
@@ -33,7 +33,7 @@ const TOOLS_DATA = [
     description: "Convert between 23 categories of engineering units: pressure, torque, temperature, energy, power, density, velocity, volume flow, viscosity, thermal conductivity, and more. Live search, instant bidirectional conversion, and copy-to-clipboard.",
     tags: ["general", "conversion", "units", "pressure", "temperature", "torque", "energy"],
     icon: "refresh-cw",
-    path: "./tools/unit-converter/index.html",
+    path: "./tools/unit-converter/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-05T12:00:00Z"
@@ -44,7 +44,7 @@ const TOOLS_DATA = [
     description: "Full physics-based busbar design: thermal current capacity (CDA method), AC skin effect, multi-bar derating, IEC 60865-1 short-circuit rating, mechanical deflection, and voltage drop. Copper and aluminium.",
     tags: ["electrical", "busbar", "copper", "aluminium", "switchgear", "short-circuit", "IEC", "thermal"],
     icon: "busbar",
-    path: "./tools/busbar-sizing/index.html",
+    path: "./tools/busbar-sizing/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-06T12:00:00Z"
@@ -55,7 +55,7 @@ const TOOLS_DATA = [
     description: "Design and verify CAN wire harnesses: model nodes, spacing, stubs, and terminations. Performs speed-based physical layer compliance checks and estimates signal integrity / reflection risks.",
     tags: ["electrical", "automotive", "can", "signal-integrity", "physics", "harness"],
     icon: "network",
-    path: "./tools/can-bus-designer/index.html",
+    path: "./tools/can-bus-designer/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-07T12:00:00Z"
@@ -66,7 +66,7 @@ const TOOLS_DATA = [
     description: "Physics-based semiconductor power loss modeler. Calculate and compare conduction, switching, gate charge, dead-time, and Coss losses side-by-side for multiple devices.",
     tags: ["electrical", "semiconductor", "power-electronics", "mosfet", "thermal", "efficiency"],
     icon: "mosfet",
-    path: "./tools/mosfet-power-loss/index.html",
+    path: "./tools/mosfet-power-loss/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-14T16:00:00Z"
@@ -77,7 +77,7 @@ const TOOLS_DATA = [
     description: "Full plot digitizer: XY/bar/histogram/polar/ternary/pie/map with working projections, time & multi-scale axes, image prep, autotrace, measurements, CSV.",
     tags: ["general", "math", "curve-fitting", "plot", "digitizer", "data-extraction", "time-series", "bar-chart", "autotrace", "polar"],
     icon: "line-chart",
-    path: "./tools/plot-extractor/index.html",
+    path: "./tools/plot-extractor/",
     status: "active",
     physicsVersion: 4,
     releaseDate: "2026-07-08T21:10:00Z"
@@ -88,7 +88,7 @@ const TOOLS_DATA = [
     description: "Scan and decode 1D/2D codes (QR, Barcode, DataMatrix, Aztec) from a live camera feed, local image files, or directly pasted from your clipboard.",
     tags: ["general", "barcode", "qr", "scanner", "utility", "datamatrix"],
     icon: "scan",
-    path: "./tools/code-scanner/index.html",
+    path: "./tools/code-scanner/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-08T23:40:00Z"
@@ -99,7 +99,7 @@ const TOOLS_DATA = [
     description: "Interactive timezone planner with scrolling day/night visual timelines, linking UTC, local zones, and precise Julian / Modified Julian date conversions.",
     tags: ["general", "time", "timezone", "utc", "julian-date", "planner", "astronomy"],
     icon: "clock",
-    path: "./tools/timezone-converter/index.html",
+    path: "./tools/timezone-converter/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-08T23:50:00Z"
@@ -110,7 +110,7 @@ const TOOLS_DATA = [
     description: "Draw parts, blueprints, and layouts with vector snapping, dimension annotations, and distance meters. Saves drawings to your cloud account to load into solvers.",
     tags: ["mechanical", "civil", "cad", "drafting", "vector", "blueprint"],
     icon: "ruler",
-    path: "./tools/drafting-board/index.html",
+    path: "./tools/drafting-board/",
     status: "beta",
     physicsVersion: 1,
     releaseDate: "2026-07-10T11:30:00Z"
@@ -121,7 +121,7 @@ const TOOLS_DATA = [
     description: "Design Single Line Diagrams of Motor Control Centers. Drag & drop DOL starters, VFDs, soft starters, and cables, with real-time automatic sizing and compliance checks.",
     tags: ["electrical", "mcc", "motor", "vfd", "dol", "cable", "sizing", "schematic"],
     icon: "grid-3x3",
-    path: "./tools/mcc-feeder-designer/index.html",
+    path: "./tools/mcc-feeder-designer/",
     status: "beta",
     physicsVersion: 1,
     releaseDate: "2026-07-10T14:00:00Z"
@@ -132,7 +132,7 @@ const TOOLS_DATA = [
     description: "Analyze simply supported or cantilever beams with custom materials, cross-sections, and loads. Solves for reactions, shear, bending moment, deflection, and stress, with live 2D interactive diagrams.",
     tags: ["mechanical", "civil", "structural", "beam", "mechanics", "fea"],
     icon: "activity",
-    path: "./tools/beam-calculator/index.html",
+    path: "./tools/beam-calculator/",
     status: "beta",
     physicsVersion: 1,
     releaseDate: "2026-07-09T22:00:00Z"
@@ -143,7 +143,7 @@ const TOOLS_DATA = [
     description: "Design and simulate parametric finned heat sinks in 3D. Define thermal interfaces (TIM), custom materials, heat sources, and run real-time local steady-state or transient simulations.",
     tags: ["mechanical", "thermal", "heatsink", "simulation", "heat-transfer", "cfd"],
     icon: "thermometer",
-    path: "./tools/heatsink-simulator/index.html",
+    path: "./tools/heatsink-simulator/",
     status: "active",
     physicsVersion: 1,
     releaseDate: "2026-07-09T03:00:00Z"
@@ -154,7 +154,7 @@ const TOOLS_DATA = [
     description: "Determine target bolt torque, preload tension, and friction coefficient adjustments for mechanical design.",
     tags: ["mechanical", "bolt", "torque", "thread", "fastener"],
     icon: "wrench",
-    path: "./tools/bolt-torque/index.html",
+    path: "./tools/bolt-torque/",
     status: "coming-soon",
     physicsVersion: 1,
     releaseDate: "2026-07-02T12:00:00Z"
@@ -165,7 +165,7 @@ const TOOLS_DATA = [
     description: "Calculate fluid flow rate, velocity, Reynolds number, and friction pressure drops using the Darcy-Weisbach equation.",
     tags: ["fluids", "hydraulics", "pipe", "flow", "pressure"],
     icon: "droplet",
-    path: "./tools/pressure-drop/index.html",
+    path: "./tools/pressure-drop/",
     status: "coming-soon",
     physicsVersion: 1,
     releaseDate: "2026-07-01T12:00:00Z"
@@ -176,7 +176,7 @@ const TOOLS_DATA = [
     description: "Capture, score and visualise project risks. Heat‑map, category view, top‑5 risks and weekly trends.",
     tags: ["management", "risk", "analytics", "heatmap"],
     icon: "shield-alert",
-    path: "./tools/risk-management/index.html",
+    path: "./tools/risk-management/",
     status: "beta",
     physicsVersion: 1,
     releaseDate: "2026-07-14T12:00:00Z"
@@ -187,7 +187,7 @@ const TOOLS_DATA = [
     description: "US homes: true rent vs buy or keep vs sell — dual %/$ inputs, liquid asset buckets, opportunity cost, PMI, tax shield, break-even, sensitivity, and year-by-year ledger.",
     tags: ["finance", "housing", "mortgage", "rent", "buy", "us", "personal-finance", "calculator"],
     icon: "home",
-    path: "./tools/rent-vs-buy/index.html",
+    path: "./tools/rent-vs-buy/",
     status: "beta",
     physicsVersion: 2,
     releaseDate: "2026-07-20T12:00:00Z"

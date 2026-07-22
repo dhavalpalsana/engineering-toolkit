@@ -238,6 +238,11 @@
         // Current active editor tab
         let activeTab = 'structure';
 
+        // UI shell state (not persisted in diagram JSON)
+        let statusFilter = 'all'; // all | todo | under-investigation | ruled-out | confirmed-cause | none
+        let focusMode = false;
+        let selection = null; // { type: 'effect' } | { type: 'category', index } | { type: 'cause', catIndex, causeIndex }
+
         // Undo/Redo Stacks
         const historyLimit = 30;
         let undoStack = [];
@@ -245,6 +250,9 @@
 
         // Inline Editor Tracking State
         let inlineEditingTarget = null; // { type: 'effect' } or { type: 'category', index } or { type: 'cause', catIndex, causeIndex }
+
+        // Drag-reorder state
+        let dragPayload = null;
 
         // DOM Elements
         const svgElement = document.getElementById('fishbone-svg');
@@ -301,9 +309,408 @@
                 window.addEventListener('load', fitCanvas);
             }
 
+            // Escape exits focus mode
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && focusMode && !inlineEditingTarget) {
+                    toggleFocusMode(false);
+                }
+            });
+
             // Lucide initialize
             lucide.createIcons();
+            renderSummary();
+            renderSelectionPanel();
+            syncFilterChips();
         });
+
+        // ── Status filter / focus / summary / selection ─────────────────
+        function causeMatchesFilter(status) {
+            if (statusFilter === 'all') return true;
+            const s = status || '';
+            if (statusFilter === 'none') return !s;
+            return s === statusFilter;
+        }
+
+        function setStatusFilter(filter) {
+            statusFilter = filter || 'all';
+            syncFilterChips();
+            renderFishbone();
+            renderSidebar();
+        }
+
+        function syncFilterChips() {
+            document.querySelectorAll('.fb-filter-chip').forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.filter === statusFilter);
+            });
+        }
+
+        function toggleFocusMode(force) {
+            focusMode = typeof force === 'boolean' ? force : !focusMode;
+            const ws = document.getElementById('fb-workspace');
+            const btn = document.getElementById('focus-mode-btn');
+            const label = document.getElementById('focus-mode-label');
+            if (ws) ws.classList.toggle('fb-focus', focusMode);
+            if (btn) btn.classList.toggle('active', focusMode);
+            if (label) label.textContent = focusMode ? 'Exit focus' : 'Focus mode';
+            const icon = btn && btn.querySelector('[data-lucide], svg');
+            if (btn) {
+                const i = btn.querySelector('i');
+                if (i) {
+                    i.setAttribute('data-lucide', focusMode ? 'minimize-2' : 'maximize-2');
+                    if (window.lucide) lucide.createIcons({ nodes: [btn] });
+                }
+            }
+            setTimeout(fitCanvas, 80);
+        }
+
+        function getInvestigationStats() {
+            const counts = {
+                todo: 0,
+                'under-investigation': 0,
+                'ruled-out': 0,
+                'confirmed-cause': 0,
+                none: 0,
+                total: 0
+            };
+            const confirmed = [];
+            (state.categories || []).forEach((cat, catIdx) => {
+                (cat.causes || []).forEach((cause, causeIdx) => {
+                    const obj = getCauseObj(cause);
+                    counts.total += 1;
+                    const s = obj.status || 'none';
+                    if (counts[s] != null) counts[s] += 1;
+                    else counts.none += 1;
+                    if (obj.status === 'confirmed-cause') {
+                        confirmed.push({
+                            text: obj.text || '(untitled)',
+                            category: cat.name || 'Category',
+                            catIdx,
+                            causeIdx
+                        });
+                    }
+                });
+            });
+            return { counts, confirmed };
+        }
+
+        function renderSummary() {
+            const hostCounts = document.getElementById('summary-counts');
+            const hostConf = document.getElementById('summary-confirmed');
+            if (!hostCounts || !hostConf) return;
+            const { counts, confirmed } = getInvestigationStats();
+            hostCounts.innerHTML =
+                `<span class="fb-count-chip confirmed"><span class="dot"></span>${counts['confirmed-cause']} confirmed</span>` +
+                `<span class="fb-count-chip investigating"><span class="dot"></span>${counts['under-investigation']} investigating</span>` +
+                `<span class="fb-count-chip ruled"><span class="dot"></span>${counts['ruled-out']} ruled out</span>` +
+                `<span class="fb-count-chip todo"><span class="dot"></span>${counts.todo} to-do</span>` +
+                `<span class="fb-count-chip unset"><span class="dot"></span>${counts.none} unset</span>` +
+                `<span class="fb-count-chip" style="opacity:.75">${counts.total} total</span>`;
+
+            if (confirmed.length === 0) {
+                hostConf.innerHTML =
+                    `<h4>Confirmed roots</h4><p class="fb-confirmed-empty">No confirmed causes yet — mark causes as you investigate.</p>`;
+            } else {
+                hostConf.innerHTML =
+                    `<h4>Confirmed roots (${confirmed.length})</h4><ul>` +
+                    confirmed
+                        .map(
+                            (c) =>
+                                `<li><button type="button" onclick="selectCause(${c.catIdx}, ${c.causeIdx})">` +
+                                `<span style="opacity:.7;font-weight:600">${escapeHtml(c.category)} · </span>${escapeHtml(c.text)}` +
+                                `</button></li>`
+                        )
+                        .join('') +
+                    `</ul>`;
+            }
+        }
+
+        function selectCause(catIndex, causeIndex, opts = {}) {
+            if (!state.categories[catIndex] || !state.categories[catIndex].causes[causeIndex]) return;
+            selection = { type: 'cause', catIndex, causeIndex };
+            renderSelectionPanel();
+            renderFishbone();
+            // Avoid full sidebar rebuild on field focus (would steal caret)
+            if (!opts.silent) renderSidebar();
+        }
+
+        function selectCategory(index, opts = {}) {
+            if (!state.categories[index]) return;
+            selection = { type: 'category', index };
+            renderSelectionPanel();
+            renderFishbone();
+            if (!opts.silent) renderSidebar();
+        }
+
+        function selectEffect(opts = {}) {
+            selection = { type: 'effect' };
+            renderSelectionPanel();
+            renderFishbone();
+            if (!opts.silent) renderSidebar();
+        }
+
+        function clearSelection() {
+            selection = null;
+            renderSelectionPanel();
+            renderFishbone();
+            renderSidebar();
+        }
+
+        function renderSelectionPanel() {
+            const body = document.getElementById('selection-panel-body');
+            if (!body) return;
+
+            if (!selection) {
+                body.innerHTML =
+                    `<p class="fb-selection-empty">Click a category or cause on the diagram (or in Structure) to inspect status, notes, and edit details here.</p>`;
+                return;
+            }
+
+            if (selection.type === 'effect') {
+                body.innerHTML =
+                    `<p class="fb-selection-meta">Effect / problem head</p>` +
+                    `<label>Statement</label>` +
+                    `<textarea id="sel-effect-text">${escapeHtml(state.effect)}</textarea>` +
+                    `<div class="flex gap-2 mt-2">` +
+                    `<button type="button" class="fb-focus-btn" onclick="applySelectionEdits()">Apply</button>` +
+                    `<button type="button" class="fb-focus-btn" onclick="clearSelection()">Clear</button>` +
+                    `</div>`;
+                return;
+            }
+
+            if (selection.type === 'category') {
+                const cat = state.categories[selection.index];
+                if (!cat) {
+                    clearSelection();
+                    return;
+                }
+                body.innerHTML =
+                    `<p class="fb-selection-meta">Category · rib ${selection.index + 1}</p>` +
+                    `<label>Name</label>` +
+                    `<input type="text" id="sel-cat-name" value="${escapeHtml(cat.name)}" />` +
+                    `<p class="fb-selection-meta" style="margin-top:8px">${(cat.causes || []).length} cause(s)</p>` +
+                    `<div class="flex gap-2 mt-2">` +
+                    `<button type="button" class="fb-focus-btn" onclick="applySelectionEdits()">Apply</button>` +
+                    `<button type="button" class="fb-focus-btn" onclick="addCause(${selection.index})">Add cause</button>` +
+                    `<button type="button" class="fb-focus-btn" onclick="clearSelection()">Clear</button>` +
+                    `</div>`;
+                return;
+            }
+
+            if (selection.type === 'cause') {
+                const cat = state.categories[selection.catIndex];
+                const cause = cat && cat.causes[selection.causeIndex];
+                if (!cause) {
+                    clearSelection();
+                    return;
+                }
+                const obj = getCauseObj(cause);
+                body.innerHTML =
+                    `<p class="fb-selection-meta">${escapeHtml(cat.name)} · cause ${selection.causeIndex + 1}</p>` +
+                    `<label>Cause</label>` +
+                    `<textarea id="sel-cause-text">${escapeHtml(obj.text)}</textarea>` +
+                    `<label>Status</label>` +
+                    `<select id="sel-cause-status">` +
+                    `<option value="" ${!obj.status ? 'selected' : ''}>No Status</option>` +
+                    `<option value="todo" ${obj.status === 'todo' ? 'selected' : ''}>To-Do</option>` +
+                    `<option value="under-investigation" ${obj.status === 'under-investigation' ? 'selected' : ''}>Under Investigation</option>` +
+                    `<option value="ruled-out" ${obj.status === 'ruled-out' ? 'selected' : ''}>Ruled Out</option>` +
+                    `<option value="confirmed-cause" ${obj.status === 'confirmed-cause' ? 'selected' : ''}>Confirmed Cause</option>` +
+                    `</select>` +
+                    `<label>Comment</label>` +
+                    `<input type="text" id="sel-cause-comment" value="${escapeHtml(obj.comment)}" placeholder="Notes / evidence" />` +
+                    `<div class="flex gap-2 mt-2 flex-wrap">` +
+                    `<button type="button" class="fb-focus-btn" onclick="applySelectionEdits()">Apply</button>` +
+                    `<button type="button" class="fb-focus-btn" onclick="clearSelection()">Clear</button>` +
+                    `</div>`;
+            }
+        }
+
+        function applySelectionEdits() {
+            if (!selection) return;
+            if (selection.type === 'effect') {
+                const el = document.getElementById('sel-effect-text');
+                if (el && el.value.trim()) {
+                    pushHistory();
+                    state.effect = el.value.trim();
+                    updateUI();
+                }
+            } else if (selection.type === 'category') {
+                const el = document.getElementById('sel-cat-name');
+                if (el && el.value.trim()) {
+                    pushHistory();
+                    state.categories[selection.index].name = el.value.trim();
+                    updateUI();
+                }
+            } else if (selection.type === 'cause') {
+                const t = document.getElementById('sel-cause-text');
+                const s = document.getElementById('sel-cause-status');
+                const c = document.getElementById('sel-cause-comment');
+                pushHistory();
+                const cause = state.categories[selection.catIndex].causes[selection.causeIndex];
+                const next = {
+                    text: t ? t.value : getCauseObj(cause).text,
+                    status: s ? s.value : '',
+                    comment: c ? c.value : ''
+                };
+                state.categories[selection.catIndex].causes[selection.causeIndex] = next;
+                updateUI();
+            }
+            renderSelectionPanel();
+        }
+
+        // ── Drag reorder ───────────────────────────────────────────────
+        function reorderCategory(fromIdx, toIdx) {
+            if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+            if (fromIdx >= state.categories.length || toIdx >= state.categories.length) return;
+            pushHistory();
+            const [item] = state.categories.splice(fromIdx, 1);
+            state.categories.splice(toIdx, 0, item);
+            if (selection && selection.type === 'category') {
+                if (selection.index === fromIdx) selection.index = toIdx;
+                else if (fromIdx < selection.index && toIdx >= selection.index) selection.index -= 1;
+                else if (fromIdx > selection.index && toIdx <= selection.index) selection.index += 1;
+            }
+            if (selection && selection.type === 'cause') {
+                // category indices may shift — remap catIndex
+                const ci = selection.catIndex;
+                if (ci === fromIdx) selection.catIndex = toIdx;
+                else if (fromIdx < ci && toIdx >= ci) selection.catIndex -= 1;
+                else if (fromIdx > ci && toIdx <= ci) selection.catIndex += 1;
+            }
+            updateUI();
+        }
+
+        function reorderCause(catIdx, fromIdx, toIdx) {
+            const causes = state.categories[catIdx] && state.categories[catIdx].causes;
+            if (!causes || fromIdx === toIdx) return;
+            if (fromIdx < 0 || toIdx < 0 || fromIdx >= causes.length || toIdx >= causes.length) return;
+            pushHistory();
+            const [item] = causes.splice(fromIdx, 1);
+            causes.splice(toIdx, 0, item);
+            if (selection && selection.type === 'cause' && selection.catIndex === catIdx) {
+                if (selection.causeIndex === fromIdx) selection.causeIndex = toIdx;
+                else if (fromIdx < selection.causeIndex && toIdx >= selection.causeIndex) selection.causeIndex -= 1;
+                else if (fromIdx > selection.causeIndex && toIdx <= selection.causeIndex) selection.causeIndex += 1;
+            }
+            updateUI();
+        }
+
+        function moveCause(fromCat, fromIdx, toCat, toIdx) {
+            if (!state.categories[fromCat] || !state.categories[toCat]) return;
+            const fromList = state.categories[fromCat].causes;
+            if (fromIdx < 0 || fromIdx >= fromList.length) return;
+            pushHistory();
+            const [item] = fromList.splice(fromIdx, 1);
+            const toList = state.categories[toCat].causes;
+            const insertAt = Math.max(0, Math.min(toIdx, toList.length));
+            toList.splice(insertAt, 0, item);
+            if (selection && selection.type === 'cause') {
+                selection = { type: 'cause', catIndex: toCat, causeIndex: insertAt };
+            }
+            updateUI();
+        }
+
+        function onCatDragStart(e, catIdx) {
+            dragPayload = { type: 'category', catIdx };
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+            e.currentTarget.closest('.cat-card')?.classList.add('dragging');
+        }
+
+        function onCauseDragStart(e, catIdx, causeIdx) {
+            dragPayload = { type: 'cause', catIdx, causeIdx };
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+            e.currentTarget.closest('.cause-row')?.classList.add('dragging');
+            e.stopPropagation();
+        }
+
+        function onDragEnd(e) {
+            document.querySelectorAll('.dragging, .drag-over').forEach((el) => {
+                el.classList.remove('dragging', 'drag-over');
+            });
+            dragPayload = null;
+        }
+
+        function onCatDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function onCatDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function onCatDrop(e, toCatIdx) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            let payload = dragPayload;
+            try {
+                const raw = e.dataTransfer.getData('text/plain');
+                if (raw) payload = JSON.parse(raw);
+            } catch (_) {}
+            if (!payload) return;
+            if (payload.type === 'category') {
+                reorderCategory(payload.catIdx, toCatIdx);
+            } else if (payload.type === 'cause') {
+                // Drop cause onto category → append (or keep order if same cat)
+                const toIdx =
+                    payload.catIdx === toCatIdx
+                        ? state.categories[toCatIdx].causes.length - 1
+                        : state.categories[toCatIdx].causes.length;
+                if (payload.catIdx === toCatIdx) {
+                    // no-op if dropped on same category header
+                } else {
+                    moveCause(payload.catIdx, payload.causeIdx, toCatIdx, toIdx);
+                }
+            }
+            onDragEnd();
+        }
+
+        function onCauseDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function onCauseDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function onCauseDrop(e, toCatIdx, toCauseIdx) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.remove('drag-over');
+            let payload = dragPayload;
+            try {
+                const raw = e.dataTransfer.getData('text/plain');
+                if (raw) payload = JSON.parse(raw);
+            } catch (_) {}
+            if (!payload || payload.type !== 'cause') return;
+            if (payload.catIdx === toCatIdx) {
+                reorderCause(toCatIdx, payload.causeIdx, toCauseIdx);
+            } else {
+                moveCause(payload.catIdx, payload.causeIdx, toCatIdx, toCauseIdx);
+            }
+            onDragEnd();
+        }
+
+        window.setStatusFilter = setStatusFilter;
+        window.toggleFocusMode = toggleFocusMode;
+        window.selectCause = selectCause;
+        window.selectCategory = selectCategory;
+        window.selectEffect = selectEffect;
+        window.clearSelection = clearSelection;
+        window.applySelectionEdits = applySelectionEdits;
+        window.onCatDragStart = onCatDragStart;
+        window.onCauseDragStart = onCauseDragStart;
+        window.onDragEnd = onDragEnd;
+        window.onCatDragOver = onCatDragOver;
+        window.onCatDragLeave = onCatDragLeave;
+        window.onCatDrop = onCatDrop;
+        window.onCauseDragOver = onCauseDragOver;
+        window.onCauseDragLeave = onCauseDragLeave;
+        window.onCauseDrop = onCauseDrop;
 
         function initSliders() {
             document.getElementById('slider-branch-width').value = state.layout?.branchWidth || 110;
@@ -509,6 +916,14 @@
         function deleteCategory(index) {
             pushHistory();
             state.categories.splice(index, 1);
+            if (selection) {
+                if (selection.type === 'category' && selection.index === index) selection = null;
+                else if (selection.type === 'category' && selection.index > index) selection.index -= 1;
+                else if (selection.type === 'cause') {
+                    if (selection.catIndex === index) selection = null;
+                    else if (selection.catIndex > index) selection.catIndex -= 1;
+                }
+            }
             updateUI();
         }
 
@@ -572,36 +987,56 @@
         function deleteCause(categoryIndex, causeIndex) {
             pushHistory();
             state.categories[categoryIndex].causes.splice(causeIndex, 1);
+            if (
+                selection &&
+                selection.type === 'cause' &&
+                selection.catIndex === categoryIndex
+            ) {
+                if (selection.causeIndex === causeIndex) selection = null;
+                else if (selection.causeIndex > causeIndex) selection.causeIndex -= 1;
+            }
             updateUI();
         }
 
         // --- SIDEBAR UI RENDERER ---
         function renderSidebar() {
-            effectInput.value = state.effect;
+            if (effectInput) effectInput.value = state.effect;
 
             categoriesEditorList.innerHTML = "";
             state.categories.forEach((cat, catIdx) => {
                 const catCard = document.createElement("div");
-                catCard.className = "border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50";
+                const catSelected = selection && selection.type === 'category' && selection.index === catIdx;
+                catCard.className =
+                    "cat-card border rounded-xl overflow-hidden bg-slate-50/50 " +
+                    (catSelected ? "border-teal-500 ring-1 ring-teal-500/30" : "border-slate-200");
+                catCard.setAttribute("data-cat-idx", String(catIdx));
+                catCard.addEventListener("dragover", onCatDragOver);
+                catCard.addEventListener("dragleave", onCatDragLeave);
+                catCard.addEventListener("drop", (e) => onCatDrop(e, catIdx));
                 
                 const isCollapsed = !!cat.collapsed;
                 const chevronIcon = isCollapsed ? 'chevron-right' : 'chevron-down';
 
                 catCard.innerHTML = `
                     <div class="bg-slate-100/50 p-2 flex items-center justify-between gap-2 border-b border-slate-100">
-                        <div class="flex items-center gap-1 w-full">
-                            <button onclick="toggleCategoryCollapse(${catIdx})" class="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-950 rounded-lg transition-all shrink-0" title="${isCollapsed ? 'Expand' : 'Collapse'} Category">
+                        <div class="flex items-center gap-1 w-full min-w-0">
+                            <span class="drag-handle" draggable="true" title="Drag to reorder category"
+                                  ondragstart="onCatDragStart(event, ${catIdx})" ondragend="onDragEnd(event)">
+                                <i data-lucide="grip-vertical" class="w-4 h-4"></i>
+                            </span>
+                            <button type="button" onclick="toggleCategoryCollapse(${catIdx})" class="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-950 rounded-lg transition-all shrink-0" title="${isCollapsed ? 'Expand' : 'Collapse'} Category">
                                 <i data-lucide="${chevronIcon}" class="w-4 h-4"></i>
                             </button>
                             <input type="text" value="${escapeHtml(cat.name)}" 
+                                   onfocus="selectCategory(${catIdx}, {silent:true})"
                                    onchange="updateCategoryName(${catIdx}, this.value)"
-                                   class="bg-transparent border-0 hover:bg-white focus:bg-white text-xs font-bold text-slate-800 px-1.5 py-0.5 rounded focus:ring-1 focus:ring-teal-500 w-full focus:outline-none font-semibold" />
+                                   class="bg-transparent border-0 hover:bg-white focus:bg-white text-xs font-bold text-slate-800 px-1.5 py-0.5 rounded focus:ring-1 focus:ring-teal-500 w-full focus:outline-none font-semibold min-w-0" />
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
-                            <button onclick="addCause(${catIdx})" class="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-950 rounded-lg transition-all" title="Add Cause">
+                            <button type="button" onclick="addCause(${catIdx})" class="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-950 rounded-lg transition-all" title="Add Cause">
                                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                             </button>
-                            <button onclick="deleteCategory(${catIdx})" class="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all" title="Delete Category">
+                            <button type="button" onclick="deleteCategory(${catIdx})" class="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all" title="Delete Category">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
@@ -617,18 +1052,35 @@
                     cat.causes.forEach((cause, causeIdx) => {
                         const causeObj = getCauseObj(cause);
                         const causeCard = document.createElement("div");
-                        causeCard.className = "border border-slate-200 rounded-xl p-2 bg-white space-y-1.5 group shadow-sm transition-all hover:border-slate-300";
+                        const causeSelected =
+                            selection &&
+                            selection.type === 'cause' &&
+                            selection.catIndex === catIdx &&
+                            selection.causeIndex === causeIdx;
+                        const filteredOut = !causeMatchesFilter(causeObj.status);
+                        causeCard.className =
+                            "cause-row border rounded-xl p-2 bg-white space-y-1.5 group shadow-sm transition-all hover:border-slate-300 " +
+                            (causeSelected ? "border-teal-500 ring-1 ring-teal-500/30 " : "border-slate-200 ") +
+                            (filteredOut ? "opacity-40 " : "");
+                        causeCard.setAttribute("data-cat-idx", String(catIdx));
+                        causeCard.setAttribute("data-cause-idx", String(causeIdx));
+                        causeCard.addEventListener("dragover", onCauseDragOver);
+                        causeCard.addEventListener("dragleave", onCauseDragLeave);
+                        causeCard.addEventListener("drop", (e) => onCauseDrop(e, catIdx, causeIdx));
                         
                         causeCard.innerHTML = `
-                            <!-- Cause Text Row -->
                             <div class="flex items-start gap-1.5">
-                                <textarea rows="1" onchange="updateCauseText(${catIdx}, ${causeIdx}, this.value)"
+                                <span class="drag-handle mt-0.5" draggable="true" title="Drag to reorder cause"
+                                      ondragstart="onCauseDragStart(event, ${catIdx}, ${causeIdx})" ondragend="onDragEnd(event)">
+                                    <i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i>
+                                </span>
+                                <textarea rows="1" onfocus="selectCause(${catIdx}, ${causeIdx}, {silent:true})"
+                                          onchange="updateCauseText(${catIdx}, ${causeIdx}, this.value)"
                                           class="w-full bg-transparent border-0 hover:bg-slate-50 focus:bg-slate-50 focus:ring-1 focus:ring-teal-500 rounded px-1.5 py-0.5 text-xs text-slate-700 focus:outline-none font-medium resize-none leading-normal overflow-hidden">${escapeHtml(causeObj.text)}</textarea>
-                                <button onclick="deleteCause(${catIdx}, ${causeIdx})" class="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete Cause">
+                                <button type="button" onclick="deleteCause(${catIdx}, ${causeIdx})" class="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100" title="Delete Cause">
                                     <i data-lucide="x" class="w-3.5 h-3.5"></i>
                                 </button>
                             </div>
-                            <!-- Status & Comment Row -->
                             <div class="flex items-center gap-1.5 text-[10px] pt-1.5 border-t border-slate-100">
                                 <select onchange="updateCauseStatus(${catIdx}, ${causeIdx}, this.value)" 
                                         class="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500 shrink-0 cursor-pointer max-w-[110px]">
@@ -680,9 +1132,23 @@
         // --- DYNAMIC SVG RENDERING ---
         function updateUI() {
             normalizeState();
+            // Drop stale selection if indices no longer exist
+            if (selection) {
+                if (selection.type === 'category' && !state.categories[selection.index]) selection = null;
+                if (
+                    selection &&
+                    selection.type === 'cause' &&
+                    (!state.categories[selection.catIndex] ||
+                        !state.categories[selection.catIndex].causes[selection.causeIndex])
+                ) {
+                    selection = null;
+                }
+            }
             renderSidebar();
             renderDefs();
             renderFishbone();
+            renderSummary();
+            renderSelectionPanel();
         }
 
         function renderDefs() {
@@ -829,8 +1295,12 @@
             const effTotalH  = wrappedEff.length * effLineSp;
             const effStartY  = spineY - effTotalH / 2 + effectFontSz - 2;
 
-            g += `<g class="head-group cursor-pointer select-none" onclick="triggerInlineEdit({type:'effect'},event)">
+            const headSelected = selection && selection.type === 'effect';
+            g += `<g class="head-group cursor-pointer select-none"
+                     onclick="selectEffect()"
+                     ondblclick="triggerInlineEdit({type:'effect'},event)">
                       ${headShape}
+                      ${headSelected ? `<rect x="${headX - 3}" y="${effBoxY - 3}" width="${headW + 6}" height="${headH + 6}" rx="18" fill="none" stroke="${pal.primaryLight}" stroke-width="2.5" opacity="0.9"/>` : ''}
                       <text font-family="'Plus Jakarta Sans',sans-serif" font-size="${effectFontSz}" font-weight="700" fill="${pal.textOnPrimary}">`;
             wrappedEff.forEach((line, i) => {
                 g += `<tspan x="${headX + headW/2}" y="${effStartY + i * effLineSp}" text-anchor="middle">${escapeHtml(line)}</tspan>`;
@@ -891,8 +1361,12 @@
                     const plusX    = catBX + catW - 18;
                     const plusY    = catBY + 4;
 
-                    g += `<g class="category-box group/cat cursor-pointer select-none" onclick="triggerInlineEdit({type:'category',index:${idx}},event)">
+                    const catSelected = selection && selection.type === 'category' && selection.index === idx;
+                    g += `<g class="category-box group/cat cursor-pointer select-none"
+                             onclick="selectCategory(${idx})"
+                             ondblclick="triggerInlineEdit({type:'category',index:${idx}},event)">
                               ${catShape}
+                              ${catSelected ? `<rect x="${catBX - 2}" y="${catBY - 2}" width="${catW + 4}" height="${catH + 4}" rx="12" fill="none" stroke="${pal.primaryLight}" stroke-width="2.5"/>` : ''}
                               <text font-family="'Plus Jakarta Sans',sans-serif" font-size="${catFSz}" font-weight="700" fill="${textPrimaryColor}">`;
                     wrCat.forEach((line, li) => {
                         g += `<tspan x="${xOuter}" y="${catTY + li * catTSp}" text-anchor="middle">${escapeHtml(line)}</tspan>`;
@@ -967,6 +1441,13 @@
                             let textClr  = textMutedColor;
                             let sRect    = '';
                             let strikeT  = '';
+                            const matches = causeMatchesFilter(status);
+                            const causeSelected =
+                                selection &&
+                                selection.type === 'cause' &&
+                                selection.catIndex === idx &&
+                                selection.causeIndex === causeIdx;
+                            const dimOpacity = matches ? 1 : 0.16;
 
                             if (cfg) {
                                 const bgFill = cfg.bgLight;
@@ -980,15 +1461,21 @@
                                                      stroke="${textClr}" stroke-width="1.5" opacity="0.6"/>`;
                                 }
                             }
+                            if (causeSelected) {
+                                sRect += `<rect x="${xLineL-6}" y="${triggerY}" width="${useW+12}" height="${triggerH}"
+                                                 rx="8" ry="8" fill="none" stroke="${pal.primary}" stroke-width="2"/>`;
+                            }
 
                             const lineDashed = state.lineStyle === 'dashed' ? 'stroke-dasharray="4,3"' : '';
 
                             // Tick line from bone to left edge of text area
                             g += `<line x1="${xAttach}" y1="${yTick}" x2="${xLineL}" y2="${yTick}"
-                                        stroke="${boneColor}" stroke-width="1.5" ${lineDashed}/>`;
+                                        stroke="${boneColor}" stroke-width="1.5" ${lineDashed} opacity="${dimOpacity}"/>`;
 
                             g += `<g class="cause-text-group group/cause cursor-pointer select-none"
-                                     onclick="triggerInlineEdit({type:'cause',catIndex:${idx},causeIndex:${causeIdx}},event)"
+                                     opacity="${dimOpacity}"
+                                     onclick="selectCause(${idx},${causeIdx})"
+                                     ondblclick="triggerInlineEdit({type:'cause',catIndex:${idx},causeIndex:${causeIdx}},event)"
                                      onmouseenter="showCauseTooltip(event,${idx},${causeIdx})"
                                      onmousemove="showCauseTooltip(event,${idx},${causeIdx})"
                                      onmouseleave="hideCauseTooltip()">

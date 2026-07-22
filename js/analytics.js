@@ -117,7 +117,7 @@
       !(window.location.pathname || "").includes("/tools/")
     );
     if (hub || (window.location.pathname || "").endsWith("/") && !(window.location.pathname || "").includes("/tools/")) {
-      // Hub: index.html at root
+      // Hub: site root (clean URL /)
       const path = window.location.pathname || "";
       if (!path.includes("/tools/")) {
         track("hub_view", { toolId: "_hub" });

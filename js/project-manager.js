@@ -802,8 +802,8 @@ function bootProjectManager() {
   };
 
   const getToolPath = (toolId) => {
-    if (isHomepage) return `tools/${toolId}/index.html`;
-    return `../${toolId}/index.html`;
+    if (isHomepage) return `tools/${toolId}/`;
+    return `../${toolId}/`;
   };
 
   const relativeTime = (dateStr) => {
