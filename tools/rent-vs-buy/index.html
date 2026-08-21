@@ -209,6 +209,7 @@
             <label class="field"><span>PMI rate (%/yr)</span><input type="number" id="ownPmiAnnualPct" step="0.05" min="0" inputmode="decimal" title="0 if PMI already cancelled" /></label>
             <label class="field"><span>Appreciation (%/yr)</span><input type="number" id="ownAppreciationPct" step="0.1" inputmode="decimal" /></label>
             <label class="field"><span>Selling costs (%)</span><input type="number" id="ownSellingCostPct" step="0.1" min="0" inputmode="decimal" /></label>
+            <label class="field highlight-field"><span>Extra payment ($/mo)</span><input type="number" id="extraMortgageMonthly" step="50" min="0" value="0" inputmode="decimal" title="Hypothetical extra mortgage principal payment per month" /></label>
           </div>
           <details class="advanced-block" id="own-tax-advanced">
             <summary>Advanced · capital gains on sale today</summary>
@@ -320,6 +321,7 @@
           <div class="legend">
             <span class="leg buy" id="leg-buy"><i></i> Buy (if sold)</span>
             <span class="leg rent" id="leg-rent"><i></i> Rent (portfolio)</span>
+            <span class="leg extra" id="leg-extra" hidden><i></i> <span id="leg-extra-text">Keep + Extra pay</span></span>
             <span class="leg loan" id="leg-loan-wealth" hidden><i></i> <span class="leg-text">Loan paid</span></span>
           </div>
         </section>
@@ -375,6 +377,22 @@
             </table>
           </div>
           <div class="indifferent-box" id="indifferent-box"></div>
+          <div class="extra-readout-box" id="extra-readout-box" hidden></div>
+        </section>
+
+        <section class="card">
+          <header class="card-head">
+            <i data-lucide="grid-3x3"></i>
+            <div>
+              <h3 id="heatmap-title">Rent vs. Price Decision Heatmap</h3>
+              <p id="heatmap-sub">Net worth advantage across home prices (X-axis) vs. monthly rents (Y-axis)</p>
+            </div>
+          </header>
+          <div class="heatmap-container" id="heatmap-container">
+            <div class="chart-wrap heatmap-chart-wrap">
+              <canvas id="chart-heatmap" width="640" height="300" aria-label="Rent vs price decision heatmap"></canvas>
+            </div>
+          </div>
         </section>
 
         <section class="card">

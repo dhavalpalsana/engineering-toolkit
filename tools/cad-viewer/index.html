@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D CAD Viewer &amp; Converter — Engineering Toolkit</title>
+
+  <!-- SEO & Open Graph Meta Tags -->
+  <meta name="description" content="View, inspect, measure, and convert 3D CAD models (STEP, STP, IGES, STL, OBJ) directly in your browser. 100% private, client-side processing.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://eng-toolkit.web.app/tools/cad-viewer/">
+  <meta property="og:title" content="3D CAD Viewer &amp; Converter — Engineering Toolkit">
+  <meta property="og:description" content="Interactive 3D CAD viewer, metrology analyzer, and format converter for STEP, STP, IGES, STL, and OBJ.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="3D CAD Viewer &amp; Converter — Engineering Toolkit">
+
+  <!-- Typography & CSS Design Tokens -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../css/theme.css">
+  <link rel="stylesheet" href="../../css/header.css">
+  <link rel="stylesheet" href="../../css/tool-shell.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Standard Header -->
+  <header>
+    <div class="hdr">
+      <div class="hdr-left">
+        <!-- Standard Back Button -->
+        <a href="../../" class="hdr-back-btn" title="Back to Engineering Toolkit">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+
+        <!-- Tool Icon -->
+        <div class="hdr-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          </svg>
+        </div>
+
+        <!-- Titles -->
+        <div class="hdr-titles">
+          <h1>3D CAD Viewer &amp; Converter</h1>
+          <p>Inspect, measure, and convert STEP, STP, IGES, STL, and OBJ models in-browser</p>
+        </div>
+      </div>
+
+      <div class="hdr-right">
+        <button onclick="shareLink()" class="hdr-btn hdr-btn-accent" title="Copy sharing link to clipboard">
+          <i data-lucide="share-2"></i> Share Link
+        </button>
+        <button onclick="exportJSON()" class="hdr-btn" title="Export session settings to JSON">
+          <i data-lucide="download"></i> Export JSON
+        </button>
+        <button onclick="document.getElementById('import-file-input').click()" class="hdr-btn" title="Import session settings from JSON">
+          <i data-lucide="upload"></i> Import JSON
+        </button>
+        <input id="import-file-input" type="file" accept=".json" class="hidden" onchange="importJSON(event)" />
+
+        <div class="hdr-divider"></div>
+
+        <button id="auth-btn" title="Sign In">
+          <i data-lucide="user"></i> <span id="auth-btn-text">Sign In</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container page-content">
+    
+    <div class="cad-layout">
+
+      <!-- Left / Center: 3D Viewport Column -->
+      <section class="viewport-section" aria-label="3D Viewport">
+
+        <!-- Floating Top Toolbar: View Presets & Render Modes -->
+        <div class="viewport-toolbar">
+          <div class="toolbar-group">
+            <button id="btn-view-iso" class="tool-btn active" title="Isometric View">ISO</button>
+            <button id="btn-view-top" class="tool-btn" title="Top View (Z+)">Top</button>
+            <button id="btn-view-front" class="tool-btn" title="Front View (Y-)">Front</button>
+            <button id="btn-view-right" class="tool-btn" title="Right View (X+)">Right</button>
+            <button id="btn-view-fit" class="tool-btn" title="Fit Model to Viewport">
+              <i data-lucide="maximize-2"></i> Fit
+            </button>
+          </div>
+
+          <div class="toolbar-divider"></div>
+
+          <div class="toolbar-group">
+            <button id="btn-mode-solid" class="tool-btn active" title="Shaded Solid">
+              <i data-lucide="box"></i> Solid
+            </button>
+            <button id="btn-mode-edges" class="tool-btn" title="Solid with Feature Edges">
+              <i data-lucide="layers"></i> Edges
+            </button>
+            <button id="btn-mode-wire" class="tool-btn" title="Wireframe Mesh">
+              <i data-lucide="grid"></i> Wire
+            </button>
+            <button id="btn-mode-xray" class="tool-btn" title="X-Ray / Translucent">
+              <i data-lucide="eye"></i> X-Ray
+            </button>
+            <button id="btn-mode-normals" class="tool-btn" title="Surface Normals Orientation">
+              <i data-lucide="compass"></i> Normals
+            </button>
+          </div>
+
+          <div class="toolbar-divider"></div>
+
+          <div class="toolbar-group">
+            <button id="btn-toggle-measure" class="tool-btn" title="Point-to-Point Distance Ruler (Click 2 points)">
+              <i data-lucide="ruler"></i> Measure
+            </button>
+            <button id="btn-toggle-section" class="tool-btn" title="Cross-Section Clipping Planes">
+              <i data-lucide="scissors"></i> Section
+            </button>
+            <button id="btn-take-snapshot" class="tool-btn" title="Download High-Res Snapshot (PNG)">
+              <i data-lucide="camera"></i> Snapshot
+            </button>
+          </div>
+        </div>
+
+        <!-- 3D Canvas Container -->
+        <div id="viewport-container" class="viewport-canvas-wrapper">
+          <canvas id="cad-canvas"></canvas>
+
+          <!-- Loading Spinner Overlay -->
+          <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="spinner"></div>
+            <div id="loading-text" class="loading-text">Tessellating CAD geometry...</div>
+            <div id="loading-subtext" class="loading-subtext">Running client-side WebAssembly parser</div>
+          </div>
+
+          <!-- Empty State / Dropzone (shown when no model loaded) -->
+          <div id="dropzone" class="dropzone">
+            <div class="dropzone-content">
+              <div class="dropzone-icon">
+                <i data-lucide="upload-cloud"></i>
+              </div>
+              <h2>Drag &amp; Drop 3D CAD File</h2>
+              <p>Supports <strong>STEP, STP, IGES, STL, and OBJ</strong></p>
+              
+              <div class="dropzone-actions">
+                <button type="button" class="btn-primary" onclick="document.getElementById('cad-file-input').click()">
+                  <i data-lucide="folder-open"></i> Browse Files
+                </button>
+                <input id="cad-file-input" type="file" accept=".step,.stp,.iges,.igs,.stl,.obj" class="hidden" />
+              </div>
+
+              <div class="format-badges">
+                <span class="badge">.STEP / .STP</span>
+                <span class="badge">.IGES / .IGS</span>
+                <span class="badge">.STL (Binary/ASCII)</span>
+                <span class="badge">.OBJ</span>
+              </div>
+              <p class="privacy-note"><i data-lucide="shield-check"></i> 100% Private &amp; Offline — Processed entirely inside your browser.</p>
+            </div>
+          </div>
+
+          <!-- Cross-Section Control Floating Panel (conditionally shown) -->
+          <div id="section-panel" class="floating-panel section-panel hidden">
+            <div class="panel-header">
+              <span><i data-lucide="scissors"></i> Cross-Section Clipping</span>
+              <button id="btn-close-section" class="panel-close-btn">&times;</button>
+            </div>
+            <div class="panel-body">
+              <div class="section-axis-row">
+                <label class="switch-label">
+                  <input type="checkbox" id="clip-x-enable" />
+                  <span>X Plane</span>
+                </label>
+                <input type="range" id="clip-x-slider" min="-100" max="100" value="0" disabled />
+                <button id="clip-x-flip" class="icon-btn" title="Flip Normal" disabled><i data-lucide="flip-horizontal"></i></button>
+              </div>
+
+              <div class="section-axis-row">
+                <label class="switch-label">
+                  <input type="checkbox" id="clip-y-enable" />
+                  <span>Y Plane</span>
+                </label>
+                <input type="range" id="clip-y-slider" min="-100" max="100" value="0" disabled />
+                <button id="clip-y-flip" class="icon-btn" title="Flip Normal" disabled><i data-lucide="flip-horizontal"></i></button>
+              </div>
+
+              <div class="section-axis-row">
+                <label class="switch-label">
+                  <input type="checkbox" id="clip-z-enable" />
+                  <span>Z Plane</span>
+                </label>
+                <input type="range" id="clip-z-slider" min="-100" max="100" value="0" disabled />
+                <button id="clip-z-flip" class="icon-btn" title="Flip Normal" disabled><i data-lucide="flip-horizontal"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Measurement Readout Banner -->
+          <div id="measure-banner" class="measure-banner hidden">
+            <div class="measure-info">
+              <i data-lucide="ruler"></i>
+              <span id="measure-status-text">Click first point on 3D model surface...</span>
+            </div>
+            <button id="btn-clear-measure" class="btn-xs">Clear</button>
+          </div>
+
+          <!-- Viewport HUD Overlay (Bottom-left) -->
+          <div id="viewport-hud" class="viewport-hud hidden">
+            <div class="hud-item"><span class="hud-label">Triangles:</span> <strong id="hud-triangles">0</strong></div>
+            <div class="hud-item"><span class="hud-label">Vertices:</span> <strong id="hud-vertices">0</strong></div>
+            <div class="hud-item"><span class="hud-label">Watertight:</span> <span id="hud-watertight" class="hud-tag">--</span></div>
+          </div>
+
+          <!-- Viewport Options (Bottom-right) -->
+          <div class="viewport-controls-corner">
+            <select id="viewport-theme-select" class="theme-select" title="Scene Environment Lighting">
+              <option value="cad-dark">CAD Dark</option>
+              <option value="studio">Studio Neutral</option>
+              <option value="blueprint">Technical Blueprint</option>
+              <option value="clean-white">Clean White</option>
+            </select>
+            <button id="btn-toggle-grid" class="icon-btn active" title="Toggle Floor Grid">
+              <i data-lucide="grid-3x3"></i>
+            </button>
+            <button id="btn-toggle-com" class="icon-btn" title="Toggle Center of Gravity Marker">
+              <i data-lucide="target"></i>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Right: Inspection & Conversion Sidebar -->
+      <aside class="sidebar-section" aria-label="CAD Metrology & Format Conversion">
+
+        <!-- Model File Card -->
+        <div class="card model-info-card">
+          <div class="card-header">
+            <h3><i data-lucide="file-text"></i> Model Metadata</h3>
+            <button id="btn-replace-model" class="btn-xs" title="Load another model">
+              <i data-lucide="folder-open"></i> Replace
+            </button>
+          </div>
+          <div class="card-body">
+            <div class="info-grid">
+              <div class="info-row">
+                <span class="info-label">File Name:</span>
+                <span id="info-filename" class="info-val text-truncate" title="No file loaded">None</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Original Format:</span>
+                <span id="info-format" class="info-val">--</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">File Size:</span>
+                <span id="info-filesize" class="info-val">--</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Mesh Topology:</span>
+                <span id="info-manifold" class="info-val badge-neutral">--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metrology & Dimensions Card -->
+        <div class="card metrology-card">
+          <div class="card-header">
+            <h3><i data-lucide="maximize"></i> Bounding Box &amp; Dimensions</h3>
+            <div class="unit-toggle">
+              <button id="unit-mm" class="unit-btn active">mm</button>
+              <button id="unit-in" class="unit-btn">in</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="dimensions-grid">
+              <div class="dim-box">
+                <span class="dim-label">Length (X)</span>
+                <span id="dim-x" class="dim-val">0.00</span>
+                <span class="dim-unit">mm</span>
+              </div>
+              <div class="dim-box">
+                <span class="dim-label">Width (Y)</span>
+                <span id="dim-y" class="dim-val">0.00</span>
+                <span class="dim-unit">mm</span>
+              </div>
+              <div class="dim-box">
+                <span class="dim-label">Height (Z)</span>
+                <span id="dim-z" class="dim-val">0.00</span>
+                <span class="dim-unit">mm</span>
+              </div>
+            </div>
+
+            <div class="metric-list margin-top-12">
+              <div class="metric-item">
+                <span class="metric-name"><i data-lucide="box"></i> Volume:</span>
+                <span id="val-volume" class="metric-value">0.00 mm³</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-name"><i data-lucide="layers"></i> Surface Area:</span>
+                <span id="val-surface-area" class="metric-value">0.00 mm²</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-name"><i data-lucide="target"></i> Center of Gravity:</span>
+                <span id="val-com" class="metric-value">(0, 0, 0)</span>
+              </div>
+              <div id="measure-result-row" class="metric-item highlight-metric hidden">
+                <span class="metric-name"><i data-lucide="ruler"></i> Measured Distance:</span>
+                <span id="val-measured-dist" class="metric-value">0.00 mm</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Physical Mass & Material Estimator Card -->
+        <div class="card mass-card">
+          <div class="card-header">
+            <h3><i data-lucide="scale"></i> Material &amp; Mass Estimator</h3>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label for="material-select">Preset Material:</label>
+              <select id="material-select" class="form-control">
+                <optgroup label="Metals">
+                  <option value="aluminum-6061" selected>Aluminum 6061-T6 (2.70 g/cm³)</option>
+                  <option value="aluminum-7075">Aluminum 7075-T6 (2.81 g/cm³)</option>
+                  <option value="steel-mild-1018">Steel Mild 1018 (7.87 g/cm³)</option>
+                  <option value="steel-stainless-304">Stainless Steel 304 (8.00 g/cm³)</option>
+                  <option value="titanium-gr5">Titanium Gr5 (4.43 g/cm³)</option>
+                  <option value="brass-c360">Brass C360 (8.50 g/cm³)</option>
+                  <option value="copper-110">Copper C110 (8.94 g/cm³)</option>
+                </optgroup>
+                <optgroup label="3D Printing & Polymers">
+                  <option value="pla">PLA (1.24 g/cm³)</option>
+                  <option value="abs">ABS (1.04 g/cm³)</option>
+                  <option value="petg">PETG (1.27 g/cm³)</option>
+                  <option value="nylon-pa12">Nylon PA12 (1.01 g/cm³)</option>
+                  <option value="polycarbonate">Polycarbonate (1.20 g/cm³)</option>
+                  <option value="resin-standard">Standard UV Resin (1.15 g/cm³)</option>
+                </optgroup>
+                <optgroup label="High Performance">
+                  <option value="carbon-fiber-cf">Carbon Fiber Composite (1.55 g/cm³)</option>
+                  <option value="peek">PEEK (1.32 g/cm³)</option>
+                </optgroup>
+                <option value="custom">Custom Density...</option>
+              </select>
+            </div>
+
+            <div id="custom-density-group" class="form-group hidden">
+              <label for="custom-density-input">Custom Density (g/cm³):</label>
+              <input type="number" id="custom-density-input" class="form-control" value="1.0" min="0.01" step="0.01" />
+            </div>
+
+            <div class="mass-display">
+              <div class="mass-primary">
+                <span id="mass-grams" class="mass-num">0.00</span>
+                <span class="mass-unit">g</span>
+              </div>
+              <div class="mass-secondary">
+                <span id="mass-alt">0.000 kg &bull; 0.000 lbs</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Format Conversion & Export Card -->
+        <div class="card convert-card">
+          <div class="card-header">
+            <h3><i data-lucide="repeat"></i> Format Converter &amp; Export</h3>
+          </div>
+          <div class="card-body">
+            
+            <div class="form-group">
+              <label for="export-format-select">Target Format:</label>
+              <select id="export-format-select" class="form-control">
+                <option value="stl-binary" selected>STL — Stereolithography (Binary, Recommended)</option>
+                <option value="stl-ascii">STL — Stereolithography (ASCII)</option>
+                <option value="obj">OBJ — Wavefront Mesh (.obj)</option>
+              </select>
+            </div>
+
+            <!-- Transformation Options -->
+            <div class="transform-options margin-top-12">
+              <span class="options-title">Pre-Export Adjustments</span>
+              
+              <div class="form-group margin-top-6">
+                <label for="scale-factor-select">Unit Scale Multiplier:</label>
+                <select id="scale-factor-select" class="form-control">
+                  <option value="1" selected>1:1 (No scaling)</option>
+                  <option value="25.4">Inches to Millimeters (&times;25.4)</option>
+                  <option value="0.0393701">Millimeters to Inches (&times;0.0394)</option>
+                  <option value="1000">Meters to Millimeters (&times;1000)</option>
+                  <option value="0.001">Millimeters to Meters (&times;0.001)</option>
+                  <option value="custom">Custom Scale...</option>
+                </select>
+              </div>
+
+              <div id="custom-scale-group" class="form-group hidden">
+                <label for="custom-scale-input">Custom Multiplier:</label>
+                <input type="number" id="custom-scale-input" class="form-control" value="1.0" min="0.0001" step="0.1" />
+              </div>
+
+              <div class="checkbox-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="chk-center-origin" />
+                  <span>Center geometry to Origin (0,0,0)</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="chk-align-ground" />
+                  <span>Place base on Ground (Z = 0)</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="chk-flip-normals" />
+                  <span>Invert / Flip Surface Normals</span>
+                </label>
+              </div>
+            </div>
+
+            <button id="btn-convert-download" class="btn-primary btn-block margin-top-16" disabled>
+              <i data-lucide="download"></i> Convert &amp; Download File
+            </button>
+          </div>
+        </div>
+
+      </aside>
+
+    </div>
+
+  </main>
+
+  <!-- External CDN Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.12/dist/occt-import-js.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
+
+  <!-- Firebase & App Shell -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="../../js/firebase.js"></script>
+  <script src="../../js/auth-ui.js"></script>
+  <script src="../../js/tools-data.js"></script>
+  <script src="../../js/registry.js"></script>
+  <script src="../../js/tool-shell.js"></script>
+  <script src="../../js/tool-exports.js"></script>
+  <script src="../../js/project-manager.js"></script>
+  <script src="../../js/analytics.js"></script>
+  <script src="js/cad-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

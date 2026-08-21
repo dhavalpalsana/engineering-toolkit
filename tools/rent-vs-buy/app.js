@@ -35,6 +35,7 @@
     "securityDepositMonths",
     "investReturnPct",
     "marginalTaxPct",
+    "extraMortgageMonthly",
     "horizonYears",
     "inflationPct",
     "purchasePrice",
@@ -232,6 +233,7 @@
     raw.securityDepositMonths = parseNum($("securityDepositMonths"));
     raw.investReturnPct = parseNum($("investReturnPct"));
     raw.marginalTaxPct = parseNum($("marginalTaxPct"));
+    raw.extraMortgageMonthly = parseNum($("extraMortgageMonthly"));
     raw.horizonYears = parseNum($("horizonYears"));
     raw.inflationPct = parseNum($("inflationPct"));
 
@@ -401,6 +403,7 @@
     if ($("securityDepositMonths")) $("securityDepositMonths").value = merged.securityDepositMonths;
     if ($("investReturnPct")) $("investReturnPct").value = merged.investReturnPct;
     if ($("marginalTaxPct")) $("marginalTaxPct").value = merged.marginalTaxPct;
+    if ($("extraMortgageMonthly")) $("extraMortgageMonthly").value = merged.extraMortgageMonthly || 0;
     if ($("horizonYears")) $("horizonYears").value = merged.horizonYears;
     if ($("useTaxShield")) $("useTaxShield").checked = merged.useTaxShield !== false;
     if ($("showRealDollars")) $("showRealDollars").checked = !!merged.showRealDollars;
@@ -1051,6 +1054,14 @@
       );
     }
 
+    if (result.inputs.extraMortgageMonthly > 0 && result.finalExtra) {
+      const extraNetWorth = moneyCompact(result.finalExtra.ownerNetWorth);
+      const payoffStr = result.finalExtra.payoffYear ? `pays off loan in <strong>year ${result.finalExtra.payoffYear}</strong>` : `reduces balance`;
+      bullets.push(
+        `What-if: Extra <strong>${money(result.inputs.extraMortgageMonthly)}/mo</strong> payment ${payoffStr}, building <strong>${extraNetWorth}</strong> net worth.`
+      );
+    }
+
     try {
       const lever = Physics.topSensitivityLever(result.inputs);
       if (lever && lever.swing > 1000) {
@@ -1085,10 +1096,15 @@
   function renderLoanReadout(result) {
     const el = $("loan-readout");
     if (!el) return;
+    const extraStr =
+      result.inputs.extraMortgageMonthly > 0 && result.finalExtra
+        ? ` · Extra +${money(result.inputs.extraMortgageMonthly, 0)}/mo (payoff ~yr ${result.finalExtra.payoffYear || "horizon"})`
+        : "";
     if (result.scenarioMode === "own") {
       el.innerHTML =
         `Remaining loan <strong>${money(result.loanAmount)}</strong> · ` +
         `P&amp;I <strong>${money(result.monthlyPayment, 0)}/mo</strong>` +
+        extraStr +
         (result.pmiMonths
           ? ` · PMI active ~${Math.ceil(result.pmiMonths / 12)} yr`
           : " · No PMI modeled") +
@@ -1098,6 +1114,7 @@
     el.innerHTML =
       `Loan <strong>${money(result.loanAmount)}</strong> · ` +
       `P&amp;I <strong>${money(result.monthlyPayment, 0)}/mo</strong>` +
+      extraStr +
       (result.pmiMonths
         ? ` · PMI active ~${Math.ceil(result.pmiMonths / 12)} yr`
         : " · No PMI") +
@@ -1109,12 +1126,17 @@
     if (!host) return;
     const b = result.breakdown;
     const isOwn = result.scenarioMode === "own";
+    const extraM = result.inputs.extraMortgageMonthly || 0;
     const items = isOwn
       ? [
           { label: "Net proceeds if sold today", value: b.saleProceedsToday, highlight: true },
           { label: "Selling costs (today)", value: b.sellCostToday },
           { label: "Gains tax (today)", value: b.gainsTaxToday },
           { label: "Interest paid (keep)", value: b.interest },
+          ...(extraM > 0 ? [
+            { label: "Interest saved (+Extra pay)", value: b.interestSaved, purple: true },
+            { label: "Interest paid (+Extra pay)", value: b.interestExtra, muted: true }
+          ] : []),
           { label: "Principal paid (keep)", value: b.principal, muted: true },
           { label: "Property tax", value: b.propertyTax },
           { label: "Home insurance", value: b.insurance },
@@ -1131,6 +1153,10 @@
           { label: "Down payment", value: b.downPayment, highlight: true },
           { label: "Closing costs", value: b.closingCosts },
           { label: "Interest paid", value: b.interest },
+          ...(extraM > 0 ? [
+            { label: "Interest saved (+Extra pay)", value: b.interestSaved, purple: true },
+            { label: "Interest paid (+Extra pay)", value: b.interestExtra, muted: true }
+          ] : []),
           { label: "Principal paid", value: b.principal, muted: true },
           { label: "Property tax", value: b.propertyTax },
           { label: "Home insurance", value: b.insurance },
@@ -1146,7 +1172,7 @@
     host.innerHTML = items
       .map(
         (it) =>
-          `<div class="break-item${it.highlight ? " highlight" : ""}${it.muted ? " muted" : ""}">` +
+          `<div class="break-item${it.purple ? " purple" : it.highlight ? " highlight" : ""}${it.muted ? " muted" : ""}">` +
           `<span class="bl">${it.label}</span>` +
           `<span class="bv">${money(it.value, 0)}</span></div>`
       )
@@ -1156,24 +1182,25 @@
   function renderSensitivity(result) {
     const sens = Physics.sensitivityAround(result.inputs);
     const tbody = document.querySelector("#sensitivity-table tbody");
-    if (!tbody) return;
-    tbody.innerHTML = sens.rows
-      .map((row) => {
-        const lowCls = row.lowAdvantage >= 0 ? "pos" : "neg";
-        const highCls = row.highAdvantage >= 0 ? "pos" : "neg";
-        const baseCls = row.baseAdvantage >= 0 ? "pos" : "neg";
-        const fmtVal = (k, v) =>
-          k === "rentMonthly" ? money(v, 0) : Number(v).toFixed(1) + (k === "rentMonthly" ? "" : "%");
-        return (
-          `<tr>` +
-          `<td>${row.label}</td>` +
-          `<td class="${lowCls}">${moneyCompact(row.lowAdvantage)} <span style="opacity:.65;font-size:10px">(${fmtVal(row.key, row.low)})</span></td>` +
-          `<td class="${baseCls}">${moneyCompact(row.baseAdvantage)}</td>` +
-          `<td class="${highCls}">${moneyCompact(row.highAdvantage)} <span style="opacity:.65;font-size:10px">(${fmtVal(row.key, row.high)})</span></td>` +
-          `</tr>`
-        );
-      })
-      .join("");
+    if (tbody) {
+      tbody.innerHTML = sens.rows
+        .map((row) => {
+          const lowCls = row.lowAdvantage >= 0 ? "pos" : "neg";
+          const highCls = row.highAdvantage >= 0 ? "pos" : "neg";
+          const baseCls = row.baseAdvantage >= 0 ? "pos" : "neg";
+          const fmtVal = (k, v) =>
+            k === "rentMonthly" ? money(v, 0) : Number(v).toFixed(1) + (k === "rentMonthly" ? "" : "%");
+          return (
+            `<tr>` +
+            `<td>${row.label}</td>` +
+            `<td class="${lowCls}">${moneyCompact(row.lowAdvantage)} <span style="opacity:.65;font-size:10px">(${fmtVal(row.key, row.low)})</span></td>` +
+            `<td class="${baseCls}">${moneyCompact(row.baseAdvantage)}</td>` +
+            `<td class="${highCls}">${moneyCompact(row.highAdvantage)} <span style="opacity:.65;font-size:10px">(${fmtVal(row.key, row.high)})</span></td>` +
+            `</tr>`
+          );
+        })
+        .join("");
+    }
 
     const ind = Physics.indifferentRent(result.inputs);
     const box = $("indifferent-box");
@@ -1191,14 +1218,84 @@
           `Your rent is <strong>${money(result.inputs.rentMonthly, 0)}</strong>.`;
       }
     }
+
+    const extraBox = $("extra-readout-box");
+    if (extraBox) {
+      const extraM = result.inputs.extraMortgageMonthly || 0;
+      if (extraM > 0 && result.finalExtra) {
+        extraBox.hidden = false;
+        const payoffYr = result.finalExtra.payoffYear ? "Year " + result.finalExtra.payoffYear : "Beyond horizon";
+        const origTerm = result.scenarioMode === "own" ? result.inputs.remainingTermYears : result.inputs.loanTermYears;
+        const yrsSaved = result.finalExtra.payoffYear ? Math.max(0, origTerm - result.finalExtra.payoffYear) : 0;
+        const advDiff = result.finalExtra.advantageVsKeep;
+        const advStr = (advDiff >= 0 ? "+" : "") + moneyCompact(advDiff);
+        extraBox.innerHTML =
+          `<strong>What-If: Extra Mortgage Payment (+${money(extraM)}/mo)</strong><br/>` +
+          `• Loan Payoff: <strong>${payoffYr}</strong>` + (yrsSaved > 0 ? ` (<strong>${yrsSaved} yrs earlier</strong> than standard ${origTerm}yr loan)<br/>` : "<br/>") +
+          `• Interest Saved: <strong>${money(result.finalExtra.interestSaved)}</strong> over horizon<br/>` +
+          `• Terminal Net Worth (Purple Line): <strong>${moneyCompact(result.finalExtra.ownerNetWorth)}</strong> (${advStr} vs baseline keep)`;
+      } else {
+        extraBox.hidden = true;
+      }
+    }
   }
 
   function renderYearly(result) {
     const tbody = document.querySelector("#yearly-table tbody");
+    const thead = document.querySelector("#yearly-table thead");
     if (!tbody) return;
+    const isOwn = result.scenarioMode === "own";
+    const extraM = result.inputs.extraMortgageMonthly || 0;
+
+    if (thead) {
+      if (extraM > 0) {
+        thead.innerHTML =
+          `<tr>` +
+          `<th>Year</th>` +
+          `<th>Home value</th>` +
+          `<th>Loan bal.</th>` +
+          `<th class="purple-hdr">+Extra loan</th>` +
+          `<th id="th-owner-nw">${isOwn ? "Keep NW" : "Buy NW"}</th>` +
+          `<th class="purple-hdr">+Extra NW</th>` +
+          `<th id="th-renter-nw">${isOwn ? "Sell+rent NW" : "Rent NW"}</th>` +
+          `<th>Advantage</th>` +
+          `<th id="th-owner-cash">${isOwn ? "Keep cash" : "Buy cash"}</th>` +
+          `<th id="th-renter-cash">Rent cash</th>` +
+          `</tr>`;
+      } else {
+        thead.innerHTML =
+          `<tr>` +
+          `<th>Year</th>` +
+          `<th>Home value</th>` +
+          `<th>Loan bal.</th>` +
+          `<th id="th-owner-nw">${isOwn ? "Keep NW (sold)" : "Buy NW (sold)"}</th>` +
+          `<th id="th-renter-nw">${isOwn ? "Sell+rent NW" : "Rent NW"}</th>` +
+          `<th>Advantage</th>` +
+          `<th id="th-owner-cash">${isOwn ? "Keep cash/yr" : "Buy cash/yr"}</th>` +
+          `<th id="th-renter-cash">Rent cash/yr</th>` +
+          `</tr>`;
+      }
+    }
+
     tbody.innerHTML = result.yearly
       .map((y) => {
         const advCls = y.advantageIfSold >= 0 ? "pos" : "neg";
+        if (extraM > 0) {
+          return (
+            `<tr>` +
+            `<td>Y${y.year}</td>` +
+            `<td>${money(y.homeValue, 0)}</td>` +
+            `<td>${money(y.loanBalance, 0)}</td>` +
+            `<td class="purple-col">${money(y.loanBalanceExtra, 0)}</td>` +
+            `<td>${money(y.ownerNetWorthIfSold, 0)}</td>` +
+            `<td class="purple-col">${money(y.ownerNetWorthIfSoldExtra, 0)}</td>` +
+            `<td>${money(y.renterNetWorth, 0)}</td>` +
+            `<td class="${advCls}">${money(y.advantageIfSold, 0)}</td>` +
+            `<td>${money(y.yearOwnerCash, 0)}</td>` +
+            `<td>${money(y.yearRenterCash, 0)}</td>` +
+            `</tr>`
+          );
+        }
         return (
           `<tr>` +
           `<td>Y${y.year}</td>` +
@@ -1218,6 +1315,7 @@
   function renderCharts(result) {
     const buyColor = getComputedStyle(document.documentElement).getPropertyValue("--accent-primary").trim() || "#0d9488";
     const rentColor = getComputedStyle(document.documentElement).getPropertyValue("--accent-secondary").trim() || "#2563eb";
+    const extraColor = "#8b5cf6";
 
     const marker = loanTermMarker(result);
     updateLoanLegend(marker);
@@ -1225,18 +1323,42 @@
       ? [{ x: marker.x, label: marker.label, color: marker.color, dash: [5, 4] }]
       : [];
 
+    const extraM = result.inputs.extraMortgageMonthly || 0;
+    const legExtra = $("leg-extra");
+    const legExtraText = $("leg-extra-text");
+    if (legExtra) {
+      if (extraM > 0) {
+        legExtra.hidden = false;
+        if (legExtraText) {
+          const isOwn = result.scenarioMode === "own";
+          legExtraText.textContent = (isOwn ? "Keep + Extra ($" : "Buy + Extra ($") + extraM + "/mo)";
+        }
+      } else {
+        legExtra.hidden = true;
+      }
+    }
+
+    const wealthSeries = [
+      {
+        color: buyColor,
+        points: result.yearly.map((y) => ({ x: y.year, y: y.ownerNetWorthIfSold }))
+      },
+      {
+        color: rentColor,
+        points: result.yearly.map((y) => ({ x: y.year, y: y.renterNetWorth }))
+      }
+    ];
+
+    if (extraM > 0) {
+      wealthSeries.push({
+        color: extraColor,
+        points: result.yearly.map((y) => ({ x: y.year, y: y.ownerNetWorthIfSoldExtra }))
+      });
+    }
+
     drawLineChart(
       $("chart-wealth"),
-      [
-        {
-          color: buyColor,
-          points: result.yearly.map((y) => ({ x: y.year, y: y.ownerNetWorthIfSold }))
-        },
-        {
-          color: rentColor,
-          points: result.yearly.map((y) => ({ x: y.year, y: y.renterNetWorth }))
-        }
-      ],
+      wealthSeries,
       { height: 280, markers }
     );
 
@@ -1254,6 +1376,129 @@
       ],
       { height: 220, markers }
     );
+
+    renderHeatmap(result);
+  }
+
+  function renderHeatmap(result) {
+    const canvas = $("chart-heatmap");
+    if (!canvas) return;
+    const gridData = Physics.heatmapGrid(result.inputs, { priceSteps: 7, rentSteps: 7, minRatio: 0.5, maxRatio: 1.5 });
+
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth || 640;
+    const cssH = 300;
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const pad = { t: 26, r: 24, b: 46, l: 64 };
+    const w = cssW - pad.l - pad.r;
+    const h = cssH - pad.t - pad.b;
+
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--bg-primary").trim() || "#f8fafc";
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    const rows = gridData.rentSteps;
+    const cols = gridData.priceSteps;
+    const cellW = w / cols;
+    const cellH = h / rows;
+
+    let maxPos = 1;
+    let maxNeg = 1;
+    gridData.matrix.forEach((row) => {
+      row.forEach((cell) => {
+        if (cell.advantage > maxPos) maxPos = cell.advantage;
+        if (cell.advantage < maxNeg) maxNeg = cell.advantage;
+      });
+    });
+    maxNeg = Math.abs(maxNeg);
+
+    for (let rIdx = 0; rIdx < rows; rIdx++) {
+      const rowInvert = rows - 1 - rIdx;
+      const row = gridData.matrix[rowInvert];
+      const y = pad.t + rIdx * cellH;
+
+      for (let pIdx = 0; pIdx < cols; pIdx++) {
+        const cell = row[pIdx];
+        const x = pad.l + pIdx * cellW;
+
+        let fill;
+        if (cell.advantage >= 0) {
+          const t = Math.min(1, cell.advantage / maxPos);
+          // Interpolate Gray (#94a3b8 = 148, 163, 184) to Green (#16a34a = 22, 163, 74)
+          const r = Math.round(148 + (22 - 148) * t);
+          const g = 163;
+          const b = Math.round(184 + (74 - 184) * t);
+          fill = `rgb(${r}, ${g}, ${b})`;
+        } else {
+          const t = Math.min(1, Math.abs(cell.advantage) / maxNeg);
+          // Interpolate Gray (#94a3b8 = 148, 163, 184) to Red (#dc2626 = 220, 38, 38)
+          const r = Math.round(148 + (220 - 148) * t);
+          const g = Math.round(163 + (38 - 163) * t);
+          const b = Math.round(184 + (38 - 184) * t);
+          fill = `rgb(${r}, ${g}, ${b})`;
+        }
+
+        ctx.fillStyle = fill;
+        ctx.fillRect(x, y, cellW, cellH);
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, cellW, cellH);
+
+        if (pIdx === gridData.baselineCoords.priceIndex && rowInvert === gridData.baselineCoords.rentIndex) {
+          ctx.strokeStyle = "#f59e0b";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x + 1.5, y + 1.5, cellW - 3, cellH - 3);
+
+          ctx.fillStyle = "#f59e0b";
+          ctx.beginPath();
+          ctx.arc(x + cellW / 2, y + cellH / 2, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (cellW >= 54 && cellH >= 24) {
+          ctx.font = "600 10px JetBrains Mono, monospace";
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(moneyCompact(cell.advantage), x + cellW / 2, y + cellH / 2);
+        }
+      }
+    }
+
+    ctx.font = "11px JetBrains Mono, monospace";
+    ctx.fillStyle = "#64748b";
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    for (let pIdx = 0; pIdx < cols; pIdx++) {
+      const price = gridData.prices[pIdx];
+      const x = pad.l + pIdx * cellW + cellW / 2;
+      ctx.fillText(moneyCompact(price), x, pad.t + h + 6);
+    }
+    ctx.font = "600 11px Plus Jakarta Sans, sans-serif";
+    ctx.fillText("Home Price (50% → 150%)", pad.l + w / 2, pad.t + h + 24);
+
+    ctx.font = "11px JetBrains Mono, monospace";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    for (let rIdx = 0; rIdx < rows; rIdx++) {
+      const rent = gridData.rents[rows - 1 - rIdx];
+      const y = pad.t + rIdx * cellH + cellH / 2;
+      ctx.fillText(moneyCompact(rent), pad.l - 6, y);
+    }
+
+    ctx.save();
+    ctx.translate(14, pad.t + h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.font = "600 11px Plus Jakarta Sans, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Monthly Rent", 0, 0);
+    ctx.restore();
   }
 
   function recalculate() {

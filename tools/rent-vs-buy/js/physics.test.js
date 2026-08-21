@@ -293,4 +293,49 @@ describe("own mode (keep vs sell & rent)", () => {
     // Less proceeds → weaker sell&rent path → keep advantage should rise (or renter NW fall)
     assert.ok(taxed.final.renterNetWorth < noTax.final.renterNetWorth);
   });
+
+  it("extra mortgage payments pay off loan faster and produce 3rd path", () => {
+    const base = {
+      scenarioMode: "own",
+      homePrice: 500000,
+      purchasePrice: 350000,
+      currentLoanBalance: 250000,
+      remainingTermYears: 25,
+      annualRatePct: 6.5,
+      extraMortgageMonthly: 500,
+      rentMonthly: 2500,
+      horizonYears: 15
+    };
+    const r = Physics.simulate(base);
+    assert.equal(r.hasExtraPayment, true);
+    assert.equal(r.extraPaymentMonthly, 500);
+    assert.ok(r.finalExtra);
+    assert.ok(r.finalExtra.loanBalance < r.final.loanBalance);
+    assert.ok(r.yearly[14].ownerNetWorthIfSoldExtra !== r.yearly[14].ownerNetWorthIfSold);
+    assert.ok(r.finalExtra.payoffYear != null && r.finalExtra.payoffYear < 25);
+  });
 });
+
+describe("RentVsBuyPhysics.heatmapGrid", () => {
+  it("generates a 7x7 decision matrix", () => {
+    const grid = Physics.heatmapGrid(Physics.DEFAULTS, { priceSteps: 7, rentSteps: 7 });
+    assert.equal(grid.matrix.length, 7);
+    assert.equal(grid.matrix[0].length, 7);
+    assert.ok(Number.isFinite(grid.maxAdvantage));
+    assert.ok(Number.isFinite(grid.minAdvantage));
+    assert.ok(grid.maxAdvantage >= grid.minAdvantage);
+  });
+
+  it("higher rent and lower home price increases buy advantage in grid", () => {
+    const grid = Physics.heatmapGrid(Physics.DEFAULTS, { priceSteps: 7, rentSteps: 7 });
+    // Cheap price + high rent (bottom-right of price min, rent max) vs expensive price + low rent
+    const cheapHomeHighRent = grid.matrix[6][0]; // max rent, min price
+    const expensiveHomeLowRent = grid.matrix[0][6]; // min rent, max price
+    assert.ok(
+      cheapHomeHighRent.advantage > expensiveHomeLowRent.advantage,
+      `cheap/highRent ${cheapHomeHighRent.advantage} vs exp/lowRent ${expensiveHomeLowRent.advantage}`
+    );
+  });
+});
+
+
