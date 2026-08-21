@@ -191,6 +191,17 @@ const TOOLS_DATA = [
     status: "beta",
     physicsVersion: 2,
     releaseDate: "2026-07-20T12:00:00Z"
+  },
+  {
+    id: "cad-viewer",
+    name: "3D CAD Viewer & Converter",
+    description: "View, inspect, measure, and convert 3D CAD models (STEP, STP, IGES, STL, OBJ) in-browser. Fast, client-side metrology and format conversion.",
+    tags: ["cad", "3d", "step", "stp", "iges", "stl", "obj", "converter", "mechanical", "manufacturing", "engineering"],
+    icon: "box",
+    path: "./tools/cad-viewer/",
+    status: "beta",
+    physicsVersion: 1,
+    releaseDate: "2026-08-20T17:40:00Z"
   }
 
 ];

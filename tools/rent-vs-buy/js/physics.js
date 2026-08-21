@@ -52,6 +52,7 @@
     investReturnPct: 7.0,
     marginalTaxPct: 24,
     useTaxShield: true,
+    extraMortgageMonthly: 0,
     horizonYears: 10,
     inflationPct: 2.5,
     showRealDollars: false, // when true, deflate wealth/cash series by inflationPct
@@ -332,6 +333,7 @@
     out.investReturnPct = num(out.investReturnPct, DEFAULTS.investReturnPct);
     out.marginalTaxPct = clamp(num(out.marginalTaxPct, DEFAULTS.marginalTaxPct), 0, 60);
     out.useTaxShield = out.useTaxShield === true || out.useTaxShield === "true" || out.useTaxShield === 1;
+    out.extraMortgageMonthly = Math.max(0, num(out.extraMortgageMonthly, DEFAULTS.extraMortgageMonthly));
     out.horizonYears = clamp(Math.round(num(out.horizonYears, DEFAULTS.horizonYears)), 1, 40);
     out.inflationPct = Math.max(0, num(out.inflationPct, DEFAULTS.inflationPct));
     out.showRealDollars =
@@ -436,12 +438,17 @@
         ownerLiquid: d(y.ownerLiquid, t),
         ownerNetWorthMark: d(y.ownerNetWorthMark, t),
         ownerNetWorthIfSold: d(y.ownerNetWorthIfSold, t),
+        loanBalanceExtra: d(y.loanBalanceExtra, t),
+        ownerNetWorthMarkExtra: d(y.ownerNetWorthMarkExtra, t),
+        ownerNetWorthIfSoldExtra: d(y.ownerNetWorthIfSoldExtra, t),
         renterPortfolio: d(y.renterPortfolio, t),
         renterDeposit: d(y.renterDeposit, t),
         renterNetWorth: d(y.renterNetWorth, t),
         advantageIfSold: d(y.advantageIfSold, t),
+        advantageIfSoldExtra: d(y.advantageIfSoldExtra, t),
         advantageMark: d(y.advantageMark, t),
         yearOwnerCash: d(y.yearOwnerCash, t),
+        yearOwnerExtraCash: d(y.yearOwnerExtraCash, t),
         yearRenterCash: d(y.yearRenterCash, t),
         yearInterest: d(y.yearInterest, t),
         yearPrincipal: d(y.yearPrincipal, t),
@@ -475,6 +482,17 @@
       f.renterMonthlyY1 = d(f.renterMonthlyY1 * 12, 1) / 12;
       f.cumOwnerCash = d(f.cumOwnerCash, H / 2);
       f.cumRenterCash = d(f.cumRenterCash, H / 2);
+    }
+    if (result.finalExtra) {
+      const fx = result.finalExtra;
+      fx.homeValue = d(fx.homeValue, H);
+      fx.loanBalance = d(fx.loanBalance, H);
+      fx.sellCost = d(fx.sellCost, H);
+      fx.ownerLiquid = d(fx.ownerLiquid, H);
+      fx.ownerNetWorth = d(fx.ownerNetWorth, H);
+      fx.advantage = d(fx.advantage, H);
+      fx.advantageVsKeep = d(fx.advantageVsKeep, H);
+      fx.cumOwnerCash = d(fx.cumOwnerCash, H / 2);
     }
 
     // Breakdown is multi-year cumulative — leave nominal; flag for UI
@@ -540,6 +558,16 @@
     let rent = inp.rentMonthly;
     let renterDeposit = securityDeposit;
 
+    const extraM = inp.extraMortgageMonthly || 0;
+    let balanceExtra = loanAmount;
+    let keepExtraBuckets = inp.useAssetBuckets && sumBalances(inp.assetBuckets) > 0 ? cloneBucketState(funding.remainingBuckets) : [];
+    let keepExtraSurplus = 0;
+    let cumOwnerExtraCash = needed;
+    let yearOwnerExtraCash = 0;
+    let payoffMonthExtra = null;
+    let cumInterestExtra = 0;
+    let cumPrincipalExtra = 0;
+
     let cumOwnerCash = needed;
     let cumRenterCash = securityDeposit;
     let cumInterest = 0;
@@ -573,8 +601,10 @@
       homeValue *= 1 + appM;
       growBuckets(ownerBuckets);
       growBuckets(renterBuckets);
+      growBuckets(keepExtraBuckets);
       ownerSurplus *= 1 + investM;
       renterSurplus *= 1 + investM;
+      keepExtraSurplus *= 1 + investM;
       rent *= 1 + rentGrowthM;
 
       const propTax = (homeValue * (inp.propertyTaxAnnualPct / 100)) / 12;
@@ -593,6 +623,23 @@
         pAndI = interest + principal;
       }
 
+      let interestExtra = 0;
+      let principalExtra = 0;
+      let pAndIExtra = 0;
+      if (balanceExtra > 0.01) {
+        const amortExtra = amortizationMonth(balanceExtra, payment, monthlyRate);
+        interestExtra = amortExtra.interest;
+        const baseP = amortExtra.principal;
+        const remBal = amortExtra.balance;
+        const addExtraP = Math.min(remBal, extraM);
+        principalExtra = baseP + addExtraP;
+        balanceExtra = Math.max(0, remBal - addExtraP);
+        pAndIExtra = interestExtra + principalExtra;
+        if (balanceExtra <= 0.01 && payoffMonthExtra == null) {
+          payoffMonthExtra = m;
+        }
+      }
+
       const ltv = homeValue > 0 ? balance / homeValue : 0;
       let pmi = 0;
       if (loanAmount > 0 && ltv > inp.pmiCancelLtv && inp.downPaymentPct < 20) {
@@ -600,20 +647,36 @@
         pmiMonths += 1;
       }
 
+      const ltvExtra = homeValue > 0 ? balanceExtra / homeValue : 0;
+      let pmiExtra = 0;
+      if (loanAmount > 0 && ltvExtra > inp.pmiCancelLtv && inp.downPaymentPct < 20) {
+        pmiExtra = (loanAmount * (inp.pmiAnnualPct / 100)) / 12;
+      }
+
       const grossOwner = pAndI + propTax + insurance + hoa + maint + pmi;
       const taxShield = (interest + propTax) * taxRate;
       const netOwner = Math.max(0, grossOwner - taxShield);
+
+      const grossOwnerExtra = pAndIExtra + propTax + insurance + hoa + maint + pmiExtra;
+      const taxShieldExtra = (interestExtra + propTax) * taxRate;
+      const netOwnerExtra = Math.max(0, grossOwnerExtra - taxShieldExtra);
 
       const renterIns = inp.renterInsuranceAnnual / 12;
       const netRenter = rent + renterIns;
 
       cumOwnerCash += netOwner;
+      cumOwnerExtraCash += netOwnerExtra;
       cumRenterCash += netRenter;
       yearOwnerCash += netOwner;
+      yearOwnerExtraCash += netOwnerExtra;
       yearRenterCash += netRenter;
+
+      keepExtraSurplus += (netOwner - netOwnerExtra);
 
       cumInterest += interest;
       cumPrincipal += principal;
+      cumInterestExtra += interestExtra;
+      cumPrincipalExtra += principalExtra;
       cumTax += propTax;
       cumInsurance += insurance;
       cumHoa += hoa;
@@ -640,10 +703,19 @@
         ownerSurplus += -delta;
       }
 
+      const deltaExtra = netOwnerExtra - netRenter;
+      if (deltaExtra > 0) {
+        keepExtraSurplus -= deltaExtra;
+      } else if (deltaExtra < 0) {
+        keepExtraSurplus += -deltaExtra;
+      }
+
       const ownerLiquid = sumBalances(ownerBuckets) + ownerSurplus;
+      const ownerExtraLiquid = sumBalances(keepExtraBuckets) + keepExtraSurplus;
       const renterPortfolio = sumBalances(renterBuckets) + renterSurplus;
       const equityMark = homeValue - balance;
       const ownerNW = equityMark + ownerLiquid;
+      const ownerExtraNW = (homeValue - balanceExtra) + ownerExtraLiquid;
       const renterNW = renterPortfolio + renterDeposit;
 
       if (breakEvenMonth == null && ownerNW >= renterNW) {
@@ -655,21 +727,27 @@
         // Terminal realism: selling costs as % of then-current value
         const sellCostY = homeValue * (inp.sellingCostPct / 100);
         const ownerIfSold = homeValue - sellCostY - balance + ownerLiquid;
+        const ownerExtraIfSold = homeValue - sellCostY - balanceExtra + ownerExtraLiquid;
         yearly.push({
           year,
           homeValue,
           loanBalance: balance,
+          loanBalanceExtra: balanceExtra,
           equity: equityMark,
           equityAfterSell: homeValue - sellCostY - balance,
           ownerLiquid,
           ownerNetWorthMark: ownerNW,
           ownerNetWorthIfSold: ownerIfSold,
+          ownerNetWorthMarkExtra: ownerExtraNW,
+          ownerNetWorthIfSoldExtra: ownerExtraIfSold,
           renterPortfolio,
           renterDeposit,
           renterNetWorth: renterNW,
           advantageIfSold: ownerIfSold - renterNW,
+          advantageIfSoldExtra: ownerExtraIfSold - renterNW,
           advantageMark: ownerNW - renterNW,
           yearOwnerCash,
+          yearOwnerExtraCash,
           yearRenterCash,
           yearInterest,
           yearPrincipal,
@@ -685,7 +763,7 @@
           pmiMonthly: pmi,
           ltv
         });
-        yearOwnerCash = yearRenterCash = 0;
+        yearOwnerCash = yearRenterCash = yearOwnerExtraCash = 0;
         yearInterest = yearPrincipal = yearTax = yearIns = yearHoa = yearMaint = yearPmi = yearShield = yearRent = 0;
       }
     }
@@ -693,10 +771,13 @@
     const sellCost = homeValue * (inp.sellingCostPct / 100);
     const netSaleProceeds = homeValue - sellCost - balance;
     const ownerLiquid = sumBalances(ownerBuckets) + ownerSurplus;
+    const ownerExtraLiquidFinal = sumBalances(keepExtraBuckets) + keepExtraSurplus;
     const renterPortfolio = sumBalances(renterBuckets) + renterSurplus;
     const ownerFinal = netSaleProceeds + ownerLiquid;
+    const ownerExtraFinal = homeValue - sellCost - balanceExtra + ownerExtraLiquidFinal;
     const renterFinal = renterPortfolio + renterDeposit;
     const advantage = ownerFinal - renterFinal;
+    const advantageExtra = ownerExtraFinal - renterFinal;
 
     let breakEvenYear = null;
     for (const y of yearly) {
@@ -731,7 +812,10 @@
       renterInsurance: cumRenterIns,
       securityDeposit,
       assetWithdrawn: funding.withdrawn || 0,
-      assetShortfall: funding.shortfall || 0
+      assetShortfall: funding.shortfall || 0,
+      interestExtra: cumInterestExtra,
+      principalExtra: cumPrincipalExtra,
+      interestSaved: Math.max(0, cumInterest - cumInterestExtra)
     };
 
     return {
@@ -748,6 +832,22 @@
         withdrawn: funding.withdrawn || 0,
         shortfall: funding.shortfall || 0,
         useAssetBuckets: !!inp.useAssetBuckets
+      },
+      hasExtraPayment: extraM > 0,
+      extraPaymentMonthly: extraM,
+      finalExtra: {
+        homeValue,
+        loanBalance: balanceExtra,
+        sellCost,
+        ownerLiquid: ownerExtraLiquidFinal,
+        ownerNetWorth: ownerExtraFinal,
+        advantage: advantageExtra,
+        advantageVsKeep: ownerExtraFinal - ownerFinal,
+        payoffYear: payoffMonthExtra != null ? Math.ceil(payoffMonthExtra / 12) : null,
+        payoffMonth: payoffMonthExtra,
+        cumOwnerCash: cumOwnerExtraCash,
+        interestPaid: cumInterestExtra,
+        interestSaved: Math.max(0, cumInterest - cumInterestExtra)
       },
       final: {
         homeValue,
@@ -822,6 +922,16 @@
     let rent = inp.rentMonthly;
     let renterDeposit = securityDeposit;
 
+    const extraM = inp.extraMortgageMonthly || 0;
+    let balanceExtra = loan0;
+    let keepExtraBuckets = cloneBucketState(keepBuckets);
+    let keepExtraSurplus = 0;
+    let cumOwnerExtraCash = 0;
+    let yearOwnerExtraCash = 0;
+    let payoffMonthExtra = null;
+    let cumInterestExtra = 0;
+    let cumPrincipalExtra = 0;
+
     let cumOwnerCash = 0;
     let cumRenterCash = securityDeposit;
     let cumInterest = 0;
@@ -853,8 +963,10 @@
       homeValue *= 1 + appM;
       growBuckets(keepBuckets);
       growBuckets(sellBuckets);
+      growBuckets(keepExtraBuckets);
       keepSurplus *= 1 + investM;
       sellSurplus *= 1 + investM;
+      keepExtraSurplus *= 1 + investM;
       rent *= 1 + rentGrowthM;
 
       const propTax = (homeValue * (inp.propertyTaxAnnualPct / 100)) / 12;
@@ -873,6 +985,23 @@
         pAndI = interest + principal;
       }
 
+      let interestExtra = 0;
+      let principalExtra = 0;
+      let pAndIExtra = 0;
+      if (balanceExtra > 0.01) {
+        const amortExtra = amortizationMonth(balanceExtra, payment, monthlyRate);
+        interestExtra = amortExtra.interest;
+        const baseP = amortExtra.principal;
+        const remBal = amortExtra.balance;
+        const addExtraP = Math.min(remBal, extraM);
+        principalExtra = baseP + addExtraP;
+        balanceExtra = Math.max(0, remBal - addExtraP);
+        pAndIExtra = interestExtra + principalExtra;
+        if (balanceExtra <= 0.01 && payoffMonthExtra == null) {
+          payoffMonthExtra = m;
+        }
+      }
+
       const ltv = homeValue > 0 ? balance / homeValue : 0;
       let pmi = 0;
       // Own mode: PMI if still underwater LTV and rate configured
@@ -881,20 +1010,36 @@
         pmiMonths += 1;
       }
 
+      const ltvExtra = homeValue > 0 ? balanceExtra / homeValue : 0;
+      let pmiExtra = 0;
+      if (loan0 > 0 && ltvExtra > inp.pmiCancelLtv && inp.pmiAnnualPct > 0) {
+        pmiExtra = (loan0 * (inp.pmiAnnualPct / 100)) / 12;
+      }
+
       const grossOwner = pAndI + propTax + insurance + hoa + maint + pmi;
       const taxShield = (interest + propTax) * taxRate;
       const netOwner = Math.max(0, grossOwner - taxShield);
+
+      const grossOwnerExtra = pAndIExtra + propTax + insurance + hoa + maint + pmiExtra;
+      const taxShieldExtra = (interestExtra + propTax) * taxRate;
+      const netOwnerExtra = Math.max(0, grossOwnerExtra - taxShieldExtra);
 
       const renterIns = inp.renterInsuranceAnnual / 12;
       const netRenter = rent + renterIns;
 
       cumOwnerCash += netOwner;
+      cumOwnerExtraCash += netOwnerExtra;
       cumRenterCash += netRenter;
       yearOwnerCash += netOwner;
+      yearOwnerExtraCash += netOwnerExtra;
       yearRenterCash += netRenter;
+
+      keepExtraSurplus += (netOwner - netOwnerExtra);
 
       cumInterest += interest;
       cumPrincipal += principal;
+      cumInterestExtra += interestExtra;
+      cumPrincipalExtra += principalExtra;
       cumTax += propTax;
       cumInsurance += insurance;
       cumHoa += hoa;
@@ -922,31 +1067,46 @@
         keepSurplus += -delta;
       }
 
+      const deltaExtra = netOwnerExtra - netRenter;
+      if (deltaExtra > 0) {
+        keepExtraSurplus -= deltaExtra;
+      } else if (deltaExtra < 0) {
+        keepExtraSurplus += -deltaExtra;
+      }
+
       const ownerLiquid = sumBalances(keepBuckets) + keepSurplus;
+      const ownerExtraLiquid = sumBalances(keepExtraBuckets) + keepExtraSurplus;
       const renterPortfolio = sumBalances(sellBuckets) + sellSurplus;
       const equityMark = homeValue - balance;
       const ownerNW = equityMark + ownerLiquid;
+      const ownerExtraNW = (homeValue - balanceExtra) + ownerExtraLiquid;
       const renterNW = renterPortfolio + renterDeposit;
 
       if (m % 12 === 0) {
         const year = m / 12;
         const sellCostY = homeValue * (inp.sellingCostPct / 100);
         const ownerIfSold = homeValue - sellCostY - balance + ownerLiquid;
+        const ownerExtraIfSold = homeValue - sellCostY - balanceExtra + ownerExtraLiquid;
         yearly.push({
           year,
           homeValue,
           loanBalance: balance,
+          loanBalanceExtra: balanceExtra,
           equity: equityMark,
           equityAfterSell: homeValue - sellCostY - balance,
           ownerLiquid,
           ownerNetWorthMark: ownerNW,
           ownerNetWorthIfSold: ownerIfSold,
+          ownerNetWorthMarkExtra: ownerExtraNW,
+          ownerNetWorthIfSoldExtra: ownerExtraIfSold,
           renterPortfolio,
           renterDeposit,
           renterNetWorth: renterNW,
           advantageIfSold: ownerIfSold - renterNW,
+          advantageIfSoldExtra: ownerExtraIfSold - renterNW,
           advantageMark: ownerNW - renterNW,
           yearOwnerCash,
+          yearOwnerExtraCash,
           yearRenterCash,
           yearInterest,
           yearPrincipal,
@@ -962,7 +1122,7 @@
           pmiMonthly: pmi,
           ltv
         });
-        yearOwnerCash = yearRenterCash = 0;
+        yearOwnerCash = yearRenterCash = yearOwnerExtraCash = 0;
         yearInterest = yearPrincipal = yearTax = yearIns = yearHoa = yearMaint = yearPmi = yearShield = yearRent = 0;
       }
     }
@@ -970,10 +1130,13 @@
     const sellCost = homeValue * (inp.sellingCostPct / 100);
     const netSaleProceeds = homeValue - sellCost - balance;
     const ownerLiquid = sumBalances(keepBuckets) + keepSurplus;
+    const ownerExtraLiquidFinal = sumBalances(keepExtraBuckets) + keepExtraSurplus;
     const renterPortfolio = sumBalances(sellBuckets) + sellSurplus;
     const ownerFinal = netSaleProceeds + ownerLiquid;
+    const ownerExtraFinal = homeValue - sellCost - balanceExtra + ownerExtraLiquidFinal;
     const renterFinal = renterPortfolio + renterDeposit;
     const advantage = ownerFinal - renterFinal; // keep − sell&rent
+    const advantageExtra = ownerExtraFinal - renterFinal;
 
     let breakEvenYear = null;
     for (const y of yearly) {
@@ -1005,7 +1168,10 @@
       saleProceedsToday: netSaleProceeds0,
       gainsTaxToday: gainsTax,
       sellCostToday: sellCost0,
-      currentEquityNet: grossEquity
+      currentEquityNet: grossEquity,
+      interestExtra: cumInterestExtra,
+      principalExtra: cumPrincipalExtra,
+      interestSaved: Math.max(0, cumInterest - cumInterestExtra)
     };
 
     return {
@@ -1018,6 +1184,8 @@
       months,
       pmiMonths,
       totalLiquidAtStart: liquidSum0 + netSaleProceeds0,
+      hasExtraPayment: extraM > 0,
+      extraPaymentMonthly: extraM,
       ownSnapshot: {
         currentValue: homeValue0,
         loanBalance: loan0,
@@ -1028,6 +1196,20 @@
         taxableGain,
         yearsOwned: inp.yearsOwned,
         purchasePrice: inp.purchasePrice
+      },
+      finalExtra: {
+        homeValue,
+        loanBalance: balanceExtra,
+        sellCost,
+        ownerLiquid: ownerExtraLiquidFinal,
+        ownerNetWorth: ownerExtraFinal,
+        advantage: advantageExtra,
+        advantageVsKeep: ownerExtraFinal - ownerFinal,
+        payoffYear: payoffMonthExtra != null ? Math.ceil(payoffMonthExtra / 12) : null,
+        payoffMonth: payoffMonthExtra,
+        cumOwnerCash: cumOwnerExtraCash,
+        interestPaid: cumInterestExtra,
+        interestSaved: Math.max(0, cumInterest - cumInterestExtra)
       },
       final: {
         homeValue,
@@ -1172,6 +1354,96 @@
     return best;
   }
 
+  /**
+   * 2D Rent vs Home Price Decision Matrix (Heatmap).
+   * Generates a 2D grid of scenarios varying Home Price (X-axis) from minRatio to maxRatio
+   * and Monthly Rent (Y-axis) from minRatio to maxRatio.
+   */
+  function heatmapGrid(rawInputs, options) {
+    const inp = mergeInputs(rawInputs);
+    const opts = options || {};
+    const priceSteps = Math.max(3, Math.min(15, opts.priceSteps || 7));
+    const rentSteps = Math.max(3, Math.min(15, opts.rentSteps || 7));
+    const minRatio = Math.max(0.2, opts.minRatio || 0.5);
+    const maxRatio = Math.min(3.0, opts.maxRatio || 1.5);
+
+    const basePrice = inp.homePrice;
+    const baseRent = inp.rentMonthly;
+
+    const priceRatios = [];
+    for (let i = 0; i < priceSteps; i++) {
+      priceRatios.push(minRatio + ((maxRatio - minRatio) * i) / (priceSteps - 1));
+    }
+
+    const rentRatios = [];
+    for (let j = 0; j < rentSteps; j++) {
+      rentRatios.push(minRatio + ((maxRatio - minRatio) * j) / (rentSteps - 1));
+    }
+
+    let maxAdvantage = -Infinity;
+    let minAdvantage = Infinity;
+    const matrix = [];
+
+    for (let rIdx = 0; rIdx < rentSteps; rIdx++) {
+      const rRatio = rentRatios[rIdx];
+      const rentVal = baseRent * rRatio;
+      const row = [];
+      for (let pIdx = 0; pIdx < priceSteps; pIdx++) {
+        const pRatio = priceRatios[pIdx];
+        const priceVal = basePrice * pRatio;
+
+        const scenarioInputs = {
+          ...inp,
+          homePrice: priceVal,
+          rentMonthly: rentVal
+        };
+
+        const res = simulate(scenarioInputs);
+        const adv = res.final.advantage;
+        if (adv > maxAdvantage) maxAdvantage = adv;
+        if (adv < minAdvantage) minAdvantage = adv;
+
+        row.push({
+          priceIndex: pIdx,
+          rentIndex: rIdx,
+          priceRatio: pRatio,
+          rentRatio: rRatio,
+          homePrice: priceVal,
+          rentMonthly: rentVal,
+          ownerNetWorth: res.final.ownerNetWorth,
+          renterNetWorth: res.final.renterNetWorth,
+          advantage: adv,
+          winner: res.final.winner
+        });
+      }
+      matrix.push(row);
+    }
+
+    const baselinePriceIdx = priceRatios.reduce(
+      (closest, r, idx) => (Math.abs(r - 1.0) < Math.abs(priceRatios[closest] - 1.0) ? idx : closest),
+      0
+    );
+    const baselineRentIdx = rentRatios.reduce(
+      (closest, r, idx) => (Math.abs(r - 1.0) < Math.abs(rentRatios[closest] - 1.0) ? idx : closest),
+      0
+    );
+
+    return {
+      priceSteps,
+      rentSteps,
+      basePrice,
+      baseRent,
+      priceRatios,
+      rentRatios,
+      prices: priceRatios.map((r) => basePrice * r),
+      rents: rentRatios.map((r) => baseRent * r),
+      matrix,
+      maxAdvantage,
+      minAdvantage,
+      baselineCoords: { priceIndex: baselinePriceIdx, rentIndex: baselineRentIdx }
+    };
+  }
+
   return {
     DEFAULTS,
     PRESETS,
@@ -1185,6 +1457,7 @@
     sensitivity,
     sensitivityAround,
     topSensitivityLever,
-    indifferentRent
+    indifferentRent,
+    heatmapGrid
   };
 });
