@@ -1,0 +1,36 @@
+js/tools-data.js
+  h_925a6c7edf4f61 194-204
+sitemap.xml
+  h_925a6c7edf4f61 116-122
+tools/cad-viewer/app.js
+  h_925a6c7edf4f61 1-1126
+tools/cad-viewer/index.html
+  h_925a6c7edf4f61 1-457
+tools/cad-viewer/js/cad-engine.js
+  h_925a6c7edf4f61 1-617
+tools/cad-viewer/js/cad-engine.test.js
+  h_925a6c7edf4f61 1-209
+tools/cad-viewer/style.css
+  h_925a6c7edf4f61 1-819
+tools/rent-vs-buy/app.js
+  h_925a6c7edf4f61 38,236,406,1057-1064,1099-1102,1107,1117,1129,1136-1139,1156-1159,1175,1185-1203,1221-1240,1245,1247-1279,1283-1298,1318,1326-1358,1361,1379-1501
+tools/rent-vs-buy/index.html
+  h_925a6c7edf4f61 212,324,380-395
+tools/rent-vs-buy/js/physics.js
+  h_925a6c7edf4f61 55,336,441-443,448,451,486-496,561-570,604,607,626-642,650-655,660-663,668,671,674-675,678-679,706-712,714,718,730,735,741-742,747,750,766,774,777,780,815-818,836-851,925-934,966,969,988-1004,1013-1018,1023-1026,1031,1034,1037-1038,1041-1042,1070-1076,1078,1082,1089,1094,1100-1101,1106,1109,1125,1133,1136,1139,1171-1174,1187-1188,1200-1213,1357-1446,1460-1461
+tools/rent-vs-buy/js/physics.test.js
+  h_925a6c7edf4f61 296-316,318-341
+tools/rent-vs-buy/style.css
+  h_925a6c7edf4f61 851,894-899,948-949,959-960,969-973
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "525f76f3786571d9aaba25cceae810173e722be5",
+  "prompts": {},
+  "humans": {
+    "h_925a6c7edf4f61": {
+      "author": "Dhaval Palsana <dhaval_palsana@example.com>"
+    }
+  }
+}
