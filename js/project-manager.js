@@ -789,7 +789,6 @@ function bootProjectManager() {
       "fishbone-diagram": "Ishikawa Fishbone Creator",
       "beam-calculator": "Structural Beam Solver",
       "heatsink-simulator": "3D Heat Sink Simulator",
-      "drafting-board": "2D Engineering Drafting Board",
       "mcc-feeder-designer": "MCC Feeder & Motor Starter Designer",
       "mosfet-power-loss": "MOSFET Power Loss Calculator",
       "plot-extractor": "Plot Data Extractor",

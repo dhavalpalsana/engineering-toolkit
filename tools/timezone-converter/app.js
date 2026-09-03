@@ -63,7 +63,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ── Math: Julian Date / MJD Conversions ───────────────────────
-  const dateToJulian = (date) => {
+  const Phys = window.TimezonePhysics || {};
+  const dateToJulian = Phys.dateToJulian || ((date) => {
     let year = date.getUTCFullYear();
     let month = date.getUTCMonth() + 1;
     let day = date.getUTCDate();
@@ -87,9 +88,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const dayDecimal = day + (hours + minutes / 60 + (seconds + ms / 1000) / 3600) / 24;
 
     return C + dayDecimal + E + F - 1524.5;
-  };
+  });
 
-  const julianToDate = (jd) => {
+  const julianToDate = Phys.julianToDate || ((jd) => {
     const jdAdjusted = jd + 0.5;
     const Z = Math.floor(jdAdjusted);
     const F = jdAdjusted - Z;
@@ -121,17 +122,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Date object created in UTC
     return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds, ms));
-  };
+  });
 
-  const dateToMJD = (date) => {
+  const dateToMJD = Phys.dateToMJD || ((date) => {
     return dateToJulian(date) - 2400000.5;
-  };
+  });
 
-  const mjdToDate = (mjd) => {
+  const mjdToDate = Phys.mjdToDate || ((mjd) => {
     return julianToDate(mjd + 2400000.5);
-  };
+  });
 
-  const dateToOrdinal = (date) => {
+  const dateToOrdinal = Phys.dateToOrdinal || ((date) => {
     const y = date.getUTCFullYear();
     const start = Date.UTC(y, 0, 0);
     const diff = date.getTime() - start;
@@ -147,9 +148,9 @@ document.addEventListener("DOMContentLoaded", () => {
       yyyyddd: String(y) + dddStr,
       cyyddd: String(C) + yy + dddStr
     };
-  };
+  });
 
-  const ordinalToDate = (str) => {
+  const ordinalToDate = Phys.ordinalToDate || ((str) => {
     const clean = str.trim().replace(/\D/g, ""); // digits only
     let y, ddd;
     if (clean.length === 5) {
@@ -173,10 +174,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const date = new Date(Date.UTC(y, 0, 1));
     date.setUTCDate(ddd);
     return date;
-  };
+  });
 
   // ── Time offsets and Calculations ────────────────────────────
-  const getTimezoneOffsetMinutes = (date, timezone) => {
+  const getTimezoneOffsetMinutes = Phys.getTimezoneOffsetMinutes || ((date, timezone) => {
     if (timezone === "Local Time") {
       return -date.getTimezoneOffset(); // browser offset in minutes
     }
@@ -219,7 +220,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.warn(`Timezone format error for ${timezone}:`, e);
       return 0;
     }
-  };
+  });
 
   // ── Sync UI inputs ───────────────────────────────────────────
   const updateAllInputs = () => {

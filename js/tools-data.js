@@ -105,17 +105,6 @@ const TOOLS_DATA = [
     releaseDate: "2026-07-08T23:50:00Z"
   },
   {
-    id: "drafting-board",
-    name: "2D Engineering Drafting Board",
-    description: "Draw parts, blueprints, and layouts with vector snapping, dimension annotations, and distance meters. Saves drawings to your cloud account to load into solvers.",
-    tags: ["mechanical", "civil", "cad", "drafting", "vector", "blueprint"],
-    icon: "ruler",
-    path: "./tools/drafting-board/",
-    status: "beta",
-    physicsVersion: 1,
-    releaseDate: "2026-07-10T11:30:00Z"
-  },
-  {
     id: "mcc-feeder-designer",
     name: "MCC Feeder & Motor Starter Designer",
     description: "Design Single Line Diagrams of Motor Control Centers. Drag & drop DOL starters, VFDs, soft starters, and cables, with real-time automatic sizing and compliance checks.",

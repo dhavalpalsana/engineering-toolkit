@@ -117,33 +117,7 @@
                 <option value="circ-hollow">Hollow Round Tube / Pipe</option>
                 <option value="i-beam">I-Beam (Standard W-Shape)</option>
                 <option value="custom">Custom Properties (Direct Input)</option>
-                <option value="import-drafting">Import from 2D Engineering Drafting Board</option>
               </select>
-            </div>
-            
-            <!-- Import drafting board fields (shown when import-drafting is selected) -->
-            <div id="import-drafting-fields" class="shape-input-group full-width hidden" style="grid-column: span 2; width: 100%;">
-              <div class="form-group" style="margin-bottom: 8px;">
-                <label for="import-drawing-select">Select Saved CAD Drawing (cloud)</label>
-                <select id="import-drawing-select" style="width: 100%;">
-                  <option value="">Loading your drawings...</option>
-                </select>
-              </div>
-              <div style="display: flex; gap: 8px; align-items: center; width: 100%; flex-wrap: wrap;">
-                <button type="button" id="load-drawing-btn" class="add-row-btn" style="flex: 1; min-width: 120px;" onclick="loadSelectedDraftingDrawing()">
-                  <i data-lucide="download"></i> Load Section
-                </button>
-                <button type="button" class="add-row-btn" style="flex: 1; min-width: 120px;" onclick="document.getElementById('drafting-local-json').click()">
-                  <i data-lucide="upload"></i> Local JSON
-                </button>
-                <input type="file" id="drafting-local-json" accept=".json,application/json" style="display:none" onchange="importDraftingJsonFile(event)" />
-                <a href="../drafting-board/" target="_blank" class="hdr-btn" style="height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; text-decoration: none;" title="Open 2D Engineering Drafting Board in new tab">
-                  <i data-lucide="external-link"></i> Launch Board
-                </a>
-              </div>
-              <p id="drafting-import-status" style="font-size: 11px; color: var(--text-muted); margin: 8px 0 0; line-height: 1.4;">
-                Import a closed polygon profile from the drafting board (cloud project or exported JSON) to compute A, Iz, and height.
-              </p>
             </div>
             
             <!-- Shape specific inputs (toggled in JS) -->

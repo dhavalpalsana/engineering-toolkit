@@ -10,7 +10,7 @@
  *  - ToolExports / projectManagerConfig contracts
  *  - no banned leftovers (units.js, img src="#")
  *  - node --check syntax on JS sources
- *  - unit tests (node --test + legacy drafting runners)
+ *  - unit tests (node --test)
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -41,8 +41,7 @@ const NO_EXPORT_REGISTER = new Set(["unit-converter"]);
 const NO_PM_CONFIG = new Set(["unit-converter"]); // still may load PM for auth only
 
 // Standard packaging: tools/<id>/{index.html, app.js, style.css}
-// style.css may be deferred for a few tools that still embed CSS in HTML (warn only).
-const PACKAGING_CSS_WARN_OK = new Set(["fishbone-diagram", "wire-gauge"]);
+const PACKAGING_CSS_WARN_OK = new Set();
 
 let failures = 0;
 let warnings = 0;
@@ -254,7 +253,6 @@ for (const tool of live) {
       if (!ent.isFile() || !ent.name.endsWith(".js") || ent.name.endsWith(".test.js")) continue;
       const base = ent.name.replace(/\.js$/, "");
       const testPath = path.join(jsDir, `${base}.test.js`);
-      // drafting solver/dxf use non-node:test runners still named *.test.js
       if (!fileExists(testPath)) {
         // allow db.js, renderer.js etc. without tests
         const src = readText(path.join(jsDir, ent.name));

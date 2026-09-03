@@ -3,7 +3,7 @@
 | Command | What it does |
 |---------|----------------|
 | `npm run check` | Structural contracts, syntax (`node --check`), unit tests |
-| `npm test` | Unit tests only (`node --test` + legacy drafting runners via check) |
+| `npm test` | Unit tests only (`node --test`) |
 | `npm run smoke` | Playwright: hub + every active/beta tool |
 | `npm run verify` | check → test → smoke (full gate) |
 

@@ -1154,6 +1154,9 @@ function toggleWireAutosize(wireId, val) {
 // ==========================================================================
 
 function getNECMotorFLA(hp, voltage) {
+  if (window.MccPhysics && window.MccPhysics.getNECMotorFLA) {
+    return window.MccPhysics.getNECMotorFLA(hp, voltage);
+  }
   // Table values for 460V, 3-Phase induction motors:
   const hpTable = {
     0.5: 1.1, 0.75: 1.6, 1: 2.1, 1.5: 3.0, 2: 3.4, 3: 4.8, 5: 7.6,
@@ -1182,6 +1185,16 @@ function getNECMotorFLA(hp, voltage) {
 }
 
 function calculateMotorFLA(motor) {
+  if (window.MccPhysics && window.MccPhysics.calculateMotorFLA) {
+    return window.MccPhysics.calculateMotorFLA({
+      power: motor.params.power,
+      unit: motor.params.unit,
+      efficiency: motor.params.efficiency,
+      pf: motor.params.pf,
+      standard: systemGlobals.standard,
+      voltage: systemGlobals.voltage
+    });
+  }
   const eff = motor.params.efficiency / 100;
   const pf = motor.params.pf;
   const V = systemGlobals.voltage;
@@ -1239,6 +1252,9 @@ function getConnectedBranchStats(startNodeId) {
 
 // Standard sizing lookups
 function selectVfdSize(amps) {
+  if (window.MccPhysics && window.MccPhysics.selectVfdSize) {
+    return window.MccPhysics.selectVfdSize(amps);
+  }
   for (const v of VFD_RATINGS) {
     if (v.rating >= amps) return v.rating;
   }
@@ -1246,6 +1262,9 @@ function selectVfdSize(amps) {
 }
 
 function calculateVfdLoss(vfdAmps, loadAmps) {
+  if (window.MccPhysics && window.MccPhysics.calculateVfdLoss) {
+    return window.MccPhysics.calculateVfdLoss(vfdAmps, loadAmps, systemGlobals.voltage, systemGlobals.pfTarget);
+  }
   // Approximate VFD losses as 2.5% of running load capacity plus static losses
   const pf = systemGlobals.pfTarget;
   const v = systemGlobals.voltage;
@@ -1254,6 +1273,9 @@ function calculateVfdLoss(vfdAmps, loadAmps) {
 }
 
 function selectContactorSize(amps) {
+  if (window.MccPhysics && window.MccPhysics.selectContactorSize) {
+    return window.MccPhysics.selectContactorSize(amps);
+  }
   for (const c of CONTACTOR_RATINGS) {
     if (c >= amps) return c;
   }
@@ -1261,6 +1283,9 @@ function selectContactorSize(amps) {
 }
 
 function selectSoftStarterSize(amps) {
+  if (window.MccPhysics && window.MccPhysics.selectSoftStarterSize) {
+    return window.MccPhysics.selectSoftStarterSize(amps);
+  }
   for (const s of SOFTSTARTER_RATINGS) {
     if (s >= amps) return s;
   }
@@ -1268,6 +1293,9 @@ function selectSoftStarterSize(amps) {
 }
 
 function selectBreakerSize(amps) {
+  if (window.MccPhysics && window.MccPhysics.selectBreakerSize) {
+    return window.MccPhysics.selectBreakerSize(amps);
+  }
   for (const b of BREAKER_RATINGS) {
     if (b >= amps) return b;
   }

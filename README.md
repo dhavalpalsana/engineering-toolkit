@@ -21,7 +21,6 @@ The toolkit runs entirely client-side as a static site with optional user authen
 
 | Tool | Domain | Key Features |
 | :--- | :--- | :--- |
-| [**2D Engineering Drafting Board**](tools/drafting-board/) | Mechanical / Civil | Draw parametric vector parts with snaps (endpoints, intersections, tangents, perpendiculars), Levenberg-Marquardt geometric constraint solver, and ASCII DXF import/export pipeline. |
 | [**Structural Beam Solver**](tools/beam-calculator/) | Mechanical / Civil | 1D Finite Element Analysis (FEA) solver, custom materials & shapes (I-Beam, Box, pipe), support presets, and live interactive SFD/BMD/Deflection diagrams. |
 | [**Ishikawa Fishbone Diagram**](tools/fishbone-diagram/) | Quality & Systems | Pre-built templates (6M, 8P, 4S), auto-scaling dynamic SVG, PNG/SVG exports, and Cloud Project Manager sync. |
 | [**Dynamic Cable Thermal Solver**](tools/wire-gauge/) | Electrical / Thermo | Real-time proportional SVG heat maps, multi-segment series derating, NEC/IEC limit checks, and gauge optimization. |
@@ -36,6 +35,7 @@ The toolkit runs entirely client-side as a static site with optional user authen
 | [**MOSFET Power Loss Calculator**](tools/mosfet-power-loss/) | Electrical / Thermo | Physics-based semiconductor power loss modeler. Calculate and compare conduction, switching, gate charge, dead-time, and Coss losses side-by-side for multiple devices. |
 | [**Risk Management Dashboard**](tools/risk-management/) | Management / Quality | Capture, score, and visualise project risks with heat-map, category filters, top-5 view, and weekly trend charts. Cloud sync for signed-in users. |
 | [**True Rent vs Buy Calculator**](tools/rent-vs-buy/) | Personal Finance (US) | Apples-to-apples wealth model: %/$ inputs, liquid asset buckets, keep-vs-sell mode, opportunity cost, PMI, tax shield, break-even, sensitivity (**beta**). |
+| [**3D CAD Viewer & Converter**](tools/cad-viewer/) | Mechanical / CAD | In-browser 3D CAD viewer and converter for STEP, IGES, STL, and OBJ models with client-side bounding box, metrology, and format conversion (**beta**). |
 
 ---
 
@@ -100,7 +100,8 @@ CI does more than “page loads.” Pure engines under `tools/*/js/` are covered
 | Heatsink helpers | `heatsink-simulator/js/physics.js` | \(D_h\), Darcy \(\Delta p\), film \(\rho\) |
 | Risk | `risk-management/js/scoring.js` | 5×5 matrix thresholds, residual score |
 | Units | `unit-converter/js/convert.js` | Temperature + NIST-style factors |
-| Drafting | `solver.js` / `dxf.js` | Constraints + DXF round-trip |
+| MCC Feeder | `mcc-feeder-designer/js/physics.js` | Motor FLA, breaker & contactor sizing, voltage drop |
+| Timezone | `timezone-converter/js/physics.js` | Julian Date (JD/MJD), ordinal day, timezone offsets |
 
 When you change a formula, **update the golden test** and **increment `physicsVersion`** in `tools-data.js` for that tool so share links and support reports stay coherent.
 
